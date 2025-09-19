@@ -10,7 +10,7 @@ import 'dart:async';
 
 import 'package:time_tracker_pro/settings_screen.dart';
 import 'package:time_tracker_pro/client_and_project_screen.dart';
-
+import 'package:time_tracker_pro/timer_add_form.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -31,40 +31,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<Employee> _employees = [];
   List<Client> _clients = [];
 
-  Project? selectedProject;
-  Employee? selectedEmployee;
-  final TextEditingController _workDetailsController = TextEditingController();
-
+  final GlobalKey<TimerAddFormState> _timerFormKey = GlobalKey<TimerAddFormState>();
   List<TimeEntry> _activeEntries = [];
   final Map<int, Timer> _activeTimers = {};
   final Map<int, Duration> _currentDurations = {};
 
-  // start method: _onItemTapped
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
   }
-  // end method: _onItemTapped
 
-  // start method: initState
   @override
   void initState() {
     super.initState();
     _loadData();
     _loadActiveTimers();
   }
-  // end method: initState
 
-  // start method: dispose
   @override
   void dispose() {
     _activeTimers.values.forEach((timer) => timer.cancel());
     super.dispose();
   }
-  // end method: dispose
 
-  // start method: _loadData
   Future<void> _loadData() async {
     final projects = await _projectRepo.getProjects();
     final employees = await _employeeRepo.getEmployees();
@@ -75,9 +65,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _clients = clients;
     });
   }
-  // end method: _loadData
 
-  // start method: _loadActiveTimers
   Future<void> _loadActiveTimers() async {
     final activeEntries = await _timeEntryRepo.getActiveTimeEntries();
     for (var entry in activeEntries) {
@@ -92,46 +80,72 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _activeEntries = activeEntries;
     });
   }
-  // end method: _loadActiveTimers
 
-  // start method: _startTimer
-  Future<void> _startTimer() async {
-    if (selectedProject == null) {
+  Future<void> _startTimer({
+    Project? project,
+    Employee? employee,
+    String? workDetails,
+    DateTime? startTime,
+    DateTime? stopTime,
+  }) async {
+    if (project == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a project to start a timer.')),
       );
       return;
     }
 
-    final newEntry = TimeEntry(
-      projectId: selectedProject!.id!,
-      employeeId: selectedEmployee?.id,
-      startTime: DateTime.now(),
-      workDetails: _workDetailsController.text,
-    );
+    TimeEntry newEntry;
+    if (startTime != null && stopTime != null) {
+      // Logic for manual time entry
+      final duration = stopTime.difference(startTime);
 
-    final id = await _timeEntryRepo.insertTimeEntry(newEntry);
-    final insertedEntry = await _timeEntryRepo.getTimeEntryById(id);
+      newEntry = TimeEntry(
+        projectId: project.id!,
+        employeeId: employee?.id,
+        startTime: startTime,
+        endTime: stopTime,
+        workDetails: workDetails,
+        finalBilledDurationSeconds: duration.inSeconds.toDouble(),
+      );
 
-    if (insertedEntry != null) {
-      setState(() {
-        _activeEntries.add(insertedEntry);
-        _currentDurations[insertedEntry.id!] = Duration.zero;
-      });
-      _startTimerUpdate(insertedEntry);
+      await _timeEntryRepo.insertTimeEntry(newEntry);
+      _loadData();
+      _timerFormKey.currentState?.resetForm();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Manual time entry added.')),
+      );
+    } else {
+      // Logic for live timer
+      newEntry = TimeEntry(
+        projectId: project.id!,
+        employeeId: employee?.id,
+        startTime: DateTime.now(),
+        workDetails: workDetails,
+      );
+
+      final id = await _timeEntryRepo.insertTimeEntry(newEntry);
+      final insertedEntry = await _timeEntryRepo.getTimeEntryById(id);
+
+      if (insertedEntry != null) {
+        setState(() {
+          _activeEntries.add(insertedEntry);
+          _currentDurations[insertedEntry.id!] = Duration.zero;
+        });
+        _startTimerUpdate(insertedEntry);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Timer started.')),
+        );
+      }
     }
   }
-  // end method: _startTimer
 
-  // start method: _startTimerUpdate
   void _startTimerUpdate(TimeEntry entry) {
     _activeTimers[entry.id!] = Timer.periodic(const Duration(seconds: 1), (timer) {
       _updateTimerDisplay(entry.id!);
     });
   }
-  // end method: _startTimerUpdate
 
-  // start method: _updateTimerDisplay
   void _updateTimerDisplay(int entryId) {
     final entry = _activeEntries.firstWhere((e) => e.id == entryId);
     if (!entry.isPaused) {
@@ -141,9 +155,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       });
     }
   }
-  // end method: _updateTimerDisplay
 
-  // start method: _stopTimer
   Future<void> _stopTimer(int entryId) async {
     final entry = _activeEntries.firstWhere((e) => e.id == entryId);
 
@@ -166,9 +178,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _activeTimers[entryId]?.cancel();
     _activeTimers.remove(entryId);
   }
-  // end method: _stopTimer
 
-  // start method: _pauseTimer
   Future<void> _pauseTimer(int entryId) async {
     final entry = _activeEntries.firstWhere((e) => e.id == entryId);
     if (entry.isPaused) return;
@@ -187,9 +197,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _activeEntries[index] = pausedEntry;
     });
   }
-  // end method: _pauseTimer
 
-  // start method: _resumeTimer
   Future<void> _resumeTimer(int entryId) async {
     final entry = _activeEntries.firstWhere((e) => e.id == entryId);
     if (!entry.isPaused) return;
@@ -209,9 +217,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _activeEntries[index] = resumedEntry;
     });
   }
-  // end method: _resumeTimer
 
-  // start method: _formatDuration
   String _formatDuration(Duration duration) {
     String twoDigits(int n) => n.toString().padLeft(2, '0');
     final hours = twoDigits(duration.inHours);
@@ -219,9 +225,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final seconds = twoDigits(duration.inSeconds.remainder(60));
     return '$hours:$minutes:$seconds';
   }
-  // end method: _formatDuration
 
-  // start method: _getClientName
   String _getClientName(int clientId) {
     final client = _clients.firstWhere(
           (c) => c.id == clientId,
@@ -229,7 +233,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
     return client.name;
   }
-  // end method: _getClientName
 
   @override
   Widget build(BuildContext context) {
@@ -258,7 +261,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               leading: const Icon(Icons.settings),
               title: const Text('Settings'),
               onTap: () {
-                Navigator.pop(context); // Close the drawer
+                Navigator.pop(context);
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (context) => const SettingsScreen()),
                 );
@@ -268,7 +271,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               leading: const Icon(Icons.person_pin_circle),
               title: const Text('Clients'),
               onTap: () {
-                Navigator.pop(context); // Close the drawer
+                Navigator.pop(context);
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (context) => const ClientAndProjectScreen()),
                 );
@@ -278,7 +281,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               leading: const Icon(Icons.construction),
               title: const Text('Projects'),
               onTap: () {
-                Navigator.pop(context); // Close the drawer
+                Navigator.pop(context);
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (context) => const ClientAndProjectScreen()),
                 );
@@ -293,67 +296,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              DropdownButtonFormField<Project>(
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12),
-                  label: Text('Select Project'),
-                ),
-                value: selectedProject,
-                items: _projects.map((project) {
-                  return DropdownMenuItem<Project>(
-                    value: project,
-                    child: Text(project.projectName),
+              TimerAddForm(
+                key: _timerFormKey,
+                projects: _projects,
+                employees: _employees,
+                onSubmit: (project, employee, workDetails, startTime, stopTime) {
+                  _startTimer(
+                    project: project,
+                    employee: employee,
+                    workDetails: workDetails,
+                    startTime: startTime,
+                    stopTime: stopTime,
                   );
-                }).toList(),
-                onChanged: (Project? newValue) {
-                  setState(() {
-                    selectedProject = newValue;
-                  });
                 },
-                hint: const Text('Select a project'),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<Employee>(
-                decoration: const InputDecoration(
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12),
-                  label: Text('Select Employee'),
-                ),
-                value: selectedEmployee,
-                items: _employees.map((employee) {
-                  return DropdownMenuItem<Employee>(
-                    value: employee,
-                    child: Text(employee.name),
-                  );
-                }).toList(),
-                onChanged: (Employee? newValue) {
-                  setState(() {
-                    selectedEmployee = newValue;
-                  });
-                },
-                hint: const Text('Select an employee'),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _workDetailsController,
-                decoration: const InputDecoration(
-                  hintText: "Enter details about work performed...",
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                  label: Text('Work Details'),
-                ),
-                maxLines: 3,
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _startTimer,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).primaryColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                ),
-                child: const Text('Start New Timer'),
               ),
               const SizedBox(height: 24),
               const Text(
@@ -373,52 +328,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 itemBuilder: (context, index) {
                   final entry = _activeEntries[index];
                   final duration = _currentDurations[entry.id] ?? Duration.zero;
-                  return SizedBox(
-                    height: 60,
-                    child: Card(
-                      color: Theme.of(context).cardColor,
-                      margin: const EdgeInsets.symmetric(vertical: 2.0),
-                      child: ListTile(
-                        visualDensity: VisualDensity.compact,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16.0),
-                        title: Text(
-                          '${_projects.firstWhere((p) => p.id == entry.projectId, orElse: () => Project(projectName: 'Unknown', clientId: 0)).projectName} - ${_formatDuration(duration)}',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                        ),
-                        subtitle: Text(
-                          'Emp: ${_employees.firstWhere((e) => e.id == entry.employeeId, orElse: () => Employee(name: 'Unknown')).name} | Details: ${entry.workDetails ?? "N/A"}',
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SizedBox(
-                              width: 80,
-                              child: IconButton(
-                                icon: Icon(
-                                  entry.isPaused ? Icons.play_arrow : Icons.pause,
-                                  color: entry.isPaused ? Colors.green : Colors.amber,
-                                  size: 24,
-                                ),
-                                onPressed: () {
-                                  if (entry.isPaused) {
-                                    _resumeTimer(entry.id!);
-                                  } else {
-                                    _pauseTimer(entry.id!);
-                                  }
-                                },
+                  return Card(
+                    color: Theme.of(context).cardColor,
+                    margin: const EdgeInsets.symmetric(vertical: 2.0),
+                    child: ListTile(
+                      visualDensity: VisualDensity.compact,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      title: Text(
+                        '${_projects.firstWhere((p) => p.id == entry.projectId, orElse: () => Project(projectName: 'Unknown', clientId: 0)).projectName} - ${_formatDuration(duration)}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      subtitle: Text(
+                        'Emp: ${_employees.firstWhere((e) => e.id == entry.employeeId, orElse: () => Employee(name: 'Unknown')).name} | Details: ${entry.workDetails ?? "N/A"}',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 80,
+                            child: IconButton(
+                              icon: Icon(
+                                entry.isPaused ? Icons.play_arrow : Icons.pause,
+                                color: entry.isPaused ? Colors.green : Colors.amber,
+                                size: 24,
                               ),
+                              onPressed: () {
+                                if (entry.isPaused) {
+                                  _resumeTimer(entry.id!);
+                                } else {
+                                  _pauseTimer(entry.id!);
+                                }
+                              },
                             ),
-                            SizedBox(
-                              width: 40,
-                              child: IconButton(
-                                icon: const Icon(Icons.stop, color: Colors.red, size: 24),
-                                onPressed: () => _stopTimer(entry.id!),
-                              ),
+                          ),
+                          SizedBox(
+                            width: 40,
+                            child: IconButton(
+                              icon: const Icon(Icons.stop, color: Colors.red, size: 24),
+                              onPressed: () => _stopTimer(entry.id!),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   );
