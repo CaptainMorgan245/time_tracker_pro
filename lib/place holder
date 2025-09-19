@@ -1,0 +1,218 @@
+// lib/settings_screen.dart
+
+import 'package:flutter/material.dart';
+import 'package:time_tracker_pro/settings_model.dart';
+import 'package:time_tracker_pro/settings_service.dart';
+import 'package:time_tracker_pro/employee_list_screen.dart';
+import 'package:time_tracker_pro/models.dart';
+import 'package:time_tracker_pro/role_repository.dart';
+import 'package:time_tracker_pro/input_formatters.dart';
+
+class SettingsScreen extends StatefulWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  final SettingsService _settingsService = SettingsService();
+  final RoleRepository _roleRepo = RoleRepository();
+
+  late SettingsModel _settings;
+  final TextEditingController _employeeNumberPrefixController = TextEditingController();
+  final TextEditingController _nextEmployeeNumberController = TextEditingController();
+
+  List<Role> _roles = [];
+  final TextEditingController _roleNameController = TextEditingController();
+  final TextEditingController _roleRateController = TextEditingController();
+  bool _isLoadingRoles = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 5, vsync: this);
+    _loadSettings();
+    _loadRoles();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    _employeeNumberPrefixController.dispose();
+    _nextEmployeeNumberController.dispose();
+    _roleNameController.dispose();
+    _roleRateController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadSettings() async {
+    final loadedSettings = await _settingsService.loadSettings();
+    setState(() {
+      _settings = loadedSettings ?? SettingsModel();
+      _employeeNumberPrefixController.text = _settings.employeeNumberPrefix ?? '';
+      _nextEmployeeNumberController.text = _settings.nextEmployeeNumber?.toString() ?? '1';
+    });
+  }
+
+  Future<void> _saveSettings() async {
+    final updatedSettings = _settings.copyWith(
+      employeeNumberPrefix: _employeeNumberPrefixController.text.isNotEmpty ? _employeeNumberPrefixController.text : null,
+      nextEmployeeNumber: int.tryParse(_nextEmployeeNumberController.text),
+    );
+    await _settingsService.saveSettings(updatedSettings);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Settings saved successfully!')),
+    );
+  }
+
+  Future<void> _loadRoles() async {
+    final roles = await _roleRepo.getRoles();
+    setState(() {
+      _roles = roles;
+      _isLoadingRoles = false;
+    });
+  }
+
+  Future<void> _addRole() async {
+    if (_roleNameController.text.isNotEmpty) {
+      final newRole = Role(
+        name: _roleNameController.text,
+        standardRate: double.tryParse(_roleRateController.text) ?? 0.0,
+      );
+      await _roleRepo.insertRole(newRole);
+      _roleNameController.clear();
+      _roleRateController.clear();
+      _loadRoles();
+    }
+  }
+
+  Future<void> _deleteRole(int id) async {
+    await _roleRepo.deleteRole(id);
+    _loadRoles();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Settings'),
+        bottom: TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          tabs: const [
+            Tab(text: 'General & Reports'),
+            Tab(text: 'Personnel'),
+            Tab(text: 'Expenses'),
+            Tab(text: 'Email'),
+            Tab(text: 'Burden Rate'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          // General & Reports Tab
+          const Center(child: Text('General and Reports settings coming soon...')),
+
+          // Personnel Tab - Now has the two-section layout
+          Row(
+            children: [
+              // Left side: Employee Management
+              Expanded(
+                child: EmployeeListScreen(
+                  roles: _roles,
+                ),
+              ),
+              // Right side: Role Management
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Employee Numbering',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      TextFormField(
+                        controller: _employeeNumberPrefixController,
+                        decoration: const InputDecoration(labelText: 'Number Prefix'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _nextEmployeeNumberController,
+                        decoration: const InputDecoration(labelText: 'Next Employee Number'),
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _saveSettings,
+                        child: const Text('Save Employee Settings'),
+                      ),
+                      const Divider(height: 32),
+                      const Text(
+                        'Manage Company Roles',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      TextFormField(
+                        controller: _roleNameController,
+                        inputFormatters: [CapitalizeEachWordInputFormatter()],
+                        decoration: const InputDecoration(labelText: 'Role Name'),
+                      ),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _roleRateController,
+                        decoration: const InputDecoration(labelText: 'Standard Rate/hr'),
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: _addRole,
+                        child: const Text('Add Role'),
+                      ),
+                      const Divider(height: 32),
+                      const Text(
+                        'Current Roles',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      ),
+                      _isLoadingRoles
+                          ? const CircularProgressIndicator()
+                          : ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: _roles.length,
+                        itemBuilder: (context, index) {
+                          final role = _roles[index];
+                          return ListTile(
+                            title: Text(role.name),
+                            subtitle: Text('\$${role.standardRate} / hr'),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => _deleteRole(role.id!),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+
+          // Expenses Tab
+          const Center(child: Text('Expenses Settings')),
+
+          // Email Tab
+          const Center(child: Text('Email Settings')),
+
+          // Burden Rate Tab
+          const Center(child: Text('Burden Rate Settings')),
+        ],
+      ),
+    );
+  }
+}
