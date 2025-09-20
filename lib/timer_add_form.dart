@@ -8,12 +8,14 @@ class TimerAddForm extends StatefulWidget {
   final List<Project> projects;
   final List<Employee> employees;
   final Function(Project?, Employee?, String, DateTime?, DateTime?) onSubmit;
+  final bool isLiveTimerForm;
 
   const TimerAddForm({
     super.key,
     required this.projects,
     required this.employees,
     required this.onSubmit,
+    this.isLiveTimerForm = true,
   });
 
   @override
@@ -40,6 +42,14 @@ class TimerAddFormState extends State<TimerAddForm> {
       _workDetailsController.clear();
       _selectedStartTime = null;
       _selectedStopTime = null;
+    });
+  }
+
+  void populateForm(Project project, Employee employee, String workDetails) {
+    setState(() {
+      _selectedProject = project;
+      _selectedEmployee = employee;
+      _workDetailsController.text = workDetails;
     });
   }
 
@@ -153,35 +163,13 @@ class TimerAddFormState extends State<TimerAddForm> {
     );
   }
 
-  void _submitLiveTimer() {
+  void _submit() {
     widget.onSubmit(
       _selectedProject,
       _selectedEmployee,
       _workDetailsController.text,
-      null,
-      null,
-    );
-  }
-
-  void _submitManualEntry() {
-    if (_selectedProject == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a project to add a time entry.')),
-      );
-      return;
-    }
-    if (_selectedStartTime == null || _selectedStopTime == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please set both start and stop times.')),
-      );
-      return;
-    }
-    widget.onSubmit(
-      _selectedProject,
-      _selectedEmployee,
-      _workDetailsController.text,
-      _selectedStartTime,
-      _selectedStopTime,
+      widget.isLiveTimerForm ? null : _selectedStartTime,
+      widget.isLiveTimerForm ? null : _selectedStopTime,
     );
   }
 
@@ -197,12 +185,9 @@ class TimerAddFormState extends State<TimerAddForm> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            Wrap(
-              spacing: 16.0,
-              runSpacing: 16.0,
+            Row(
               children: [
-                SizedBox(
-                  width: 250,
+                Expanded(
                   child: DropdownButtonFormField<Project>(
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
@@ -224,8 +209,8 @@ class TimerAddFormState extends State<TimerAddForm> {
                     hint: const Text('Select a project'),
                   ),
                 ),
-                SizedBox(
-                  width: 250,
+                const SizedBox(width: 16),
+                Expanded(
                   child: DropdownButtonFormField<Employee>(
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
@@ -247,8 +232,12 @@ class TimerAddFormState extends State<TimerAddForm> {
                     hint: const Text('Select an employee'),
                   ),
                 ),
-                SizedBox(
-                  width: 300,
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
                   child: TextFormField(
                     controller: _workDetailsController,
                     decoration: const InputDecoration(
@@ -260,59 +249,78 @@ class TimerAddFormState extends State<TimerAddForm> {
                     maxLines: 1,
                   ),
                 ),
-                Column(
-                  children: [
-                    SizedBox(
-                      width: 250,
-                      child: ElevatedButton(
-                        onPressed: () => _selectDateTime(context, true),
-                        child: const Text('Set Start Time'),
+              ],
+            ),
+            if (!widget.isLiveTimerForm) ...[
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => _selectDateTime(context, true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       ),
+                      child: const Text('Set Start Time'),
                     ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => _selectDateTime(context, false),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      ),
+                      child: const Text('Set Stop Time'),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: _submit,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      ),
+                      child: const Text('Add Time Record'),
+                    ),
+                  ),
+                ],
+              ),
+              if (_selectedStartTime != null || _selectedStopTime != null) ...[
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  children: [
                     Text(
-                      _formatDateTime(_selectedStartTime),
+                      'Start: ${_formatDateTime(_selectedStartTime)}',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: 250,
-                      child: ElevatedButton(
-                        onPressed: () => _selectDateTime(context, false),
-                        child: const Text('Set Stop Time'),
-                      ),
-                    ),
                     Text(
-                      _formatDateTime(_selectedStopTime),
+                      'Stop: ${_formatDateTime(_selectedStopTime)}',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ],
                 ),
               ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                ElevatedButton(
-                  onPressed: _submitLiveTimer,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).primaryColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  ),
-                  child: const Text('Start New Timer'),
+            ],
+            if (widget.isLiveTimerForm) ...[
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _submit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).colorScheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 ),
-                ElevatedButton(
-                  onPressed: _submitManualEntry,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).primaryColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  ),
-                  child: const Text('Add Manual Entry'),
-                ),
-              ],
-            ),
+                child: const Text('Start New Timer'),
+              ),
+            ],
           ],
         ),
       ),

@@ -11,6 +11,8 @@ import 'dart:async';
 import 'package:time_tracker_pro/settings_screen.dart';
 import 'package:time_tracker_pro/client_and_project_screen.dart';
 import 'package:time_tracker_pro/timer_add_form.dart';
+import 'package:time_tracker_pro/time_tracker_page.dart';
+import 'package:intl/intl.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -30,6 +32,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<Project> _projects = [];
   List<Employee> _employees = [];
   List<Client> _clients = [];
+  List<TimeEntry> _recentEntries = [];
 
   final GlobalKey<TimerAddFormState> _timerFormKey = GlobalKey<TimerAddFormState>();
   List<TimeEntry> _activeEntries = [];
@@ -59,10 +62,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final projects = await _projectRepo.getProjects();
     final employees = await _employeeRepo.getEmployees();
     final clients = await _clientRepo.getClients();
+    final recentEntries = await _timeEntryRepo.getRecentTimeEntries(limit: 10);
     setState(() {
       _projects = projects;
       _employees = employees;
       _clients = clients;
+      _recentEntries = recentEntries;
     });
   }
 
@@ -96,27 +101,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     TimeEntry newEntry;
-    if (startTime != null && stopTime != null) {
-      // Logic for manual time entry
-      final duration = stopTime.difference(startTime);
-
-      newEntry = TimeEntry(
-        projectId: project.id!,
-        employeeId: employee?.id,
-        startTime: startTime,
-        endTime: stopTime,
-        workDetails: workDetails,
-        finalBilledDurationSeconds: duration.inSeconds.toDouble(),
-      );
-
-      await _timeEntryRepo.insertTimeEntry(newEntry);
-      _loadData();
-      _timerFormKey.currentState?.resetForm();
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Manual time entry added.')),
-      );
-    } else {
-      // Logic for live timer
+    if (startTime == null && stopTime == null) {
       newEntry = TimeEntry(
         projectId: project.id!,
         employeeId: employee?.id,
@@ -234,6 +219,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return client.name;
   }
 
+  void _populateForm(TimeEntry entry) {
+    final project = _projects.firstWhere((p) => p.id == entry.projectId);
+    final employee = _employees.firstWhere((e) => e.id == entry.employeeId, orElse: () => Employee(name: 'N/A', isDeleted: true));
+
+    _timerFormKey.currentState?.populateForm(project, employee, entry.workDetails ?? '');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -287,98 +279,149 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 );
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.access_time),
+              title: const Text('Time Tracker'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => const TimeTrackerPage()),
+                );
+              },
+            ),
           ],
         ),
       ),
-      body: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TimerAddForm(
-                key: _timerFormKey,
-                projects: _projects,
-                employees: _employees,
-                onSubmit: (project, employee, workDetails, startTime, stopTime) {
-                  _startTimer(
-                    project: project,
-                    employee: employee,
-                    workDetails: workDetails,
-                    startTime: startTime,
-                    stopTime: stopTime,
-                  );
-                },
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                "Currently Active Timers",
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 10),
-              _activeEntries.isEmpty
-                  ? const Center(child: Text("No active timers."))
-                  : ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _activeEntries.length,
-                itemBuilder: (context, index) {
-                  final entry = _activeEntries[index];
-                  final duration = _currentDurations[entry.id] ?? Duration.zero;
-                  return Card(
-                    color: Theme.of(context).cardColor,
-                    margin: const EdgeInsets.symmetric(vertical: 2.0),
-                    child: ListTile(
-                      visualDensity: VisualDensity.compact,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16.0),
-                      title: Text(
-                        '${_projects.firstWhere((p) => p.id == entry.projectId, orElse: () => Project(projectName: 'Unknown', clientId: 0)).projectName} - ${_formatDuration(duration)}',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                      subtitle: Text(
-                        'Emp: ${_employees.firstWhere((e) => e.id == entry.employeeId, orElse: () => Employee(name: 'Unknown')).name} | Details: ${entry.workDetails ?? "N/A"}',
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 80,
-                            child: IconButton(
-                              icon: Icon(
-                                entry.isPaused ? Icons.play_arrow : Icons.pause,
-                                color: entry.isPaused ? Colors.green : Colors.amber,
-                                size: 24,
-                              ),
-                              onPressed: () {
-                                if (entry.isPaused) {
-                                  _resumeTimer(entry.id!);
-                                } else {
-                                  _pauseTimer(entry.id!);
-                                }
-                              },
-                            ),
-                          ),
-                          SizedBox(
-                            width: 40,
-                            child: IconButton(
-                              icon: const Icon(Icons.stop, color: Colors.red, size: 24),
-                              onPressed: () => _stopTimer(entry.id!),
-                            ),
-                          ),
-                        ],
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: TimerAddForm(
+              key: _timerFormKey,
+              projects: _projects.where((p) => !p.isCompleted).toList(),
+              employees: _employees.where((e) => !e.isDeleted).toList(),
+              isLiveTimerForm: true,
+              onSubmit: (project, employee, workDetails, startTime, stopTime) {
+                _startTimer(
+                  project: project,
+                  employee: employee,
+                  workDetails: workDetails,
+                );
+              },
+            ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 24),
+                    const Text(
+                      "Currently Active Timers",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
                       ),
                     ),
-                  );
-                },
+                    const SizedBox(height: 10),
+                    _activeEntries.isEmpty
+                        ? const Center(child: Text("No active timers."))
+                        : ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _activeEntries.length,
+                      itemBuilder: (context, index) {
+                        final entry = _activeEntries[index];
+                        final duration = _currentDurations[entry.id] ?? Duration.zero;
+                        return Card(
+                          color: Theme.of(context).cardColor,
+                          margin: const EdgeInsets.symmetric(vertical: 2.0),
+                          child: ListTile(
+                            visualDensity: VisualDensity.compact,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 16.0),
+                            title: Text(
+                              '${_projects.firstWhere((p) => p.id == entry.projectId, orElse: () => Project(projectName: 'Unknown', clientId: 0)).projectName} - ${_formatDuration(duration)}',
+                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                            ),
+                            subtitle: Text(
+                              'Emp: ${_employees.firstWhere((e) => e.id == entry.employeeId, orElse: () => Employee(name: 'Unknown', isDeleted: true)).name} | Details: ${entry.workDetails ?? "N/A"}',
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                SizedBox(
+                                  width: 80,
+                                  child: IconButton(
+                                    icon: Icon(
+                                      entry.isPaused ? Icons.play_arrow : Icons.pause,
+                                      color: entry.isPaused ? Colors.green : Colors.amber,
+                                      size: 24,
+                                    ),
+                                    onPressed: () {
+                                      if (entry.isPaused) {
+                                        _resumeTimer(entry.id!);
+                                      } else {
+                                        _pauseTimer(entry.id!);
+                                      }
+                                    },
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 40,
+                                  child: IconButton(
+                                    icon: const Icon(Icons.stop, color: Colors.red, size: 24),
+                                    onPressed: () => _stopTimer(entry.id!),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 32),
+                    const Text(
+                      'Recent Activities',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 10),
+                    _recentEntries.isEmpty
+                        ? const Center(child: Text('No recent activities found.'))
+                        : ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: _recentEntries.length,
+                      itemBuilder: (context, index) {
+                        final entry = _recentEntries[index];
+                        return Card(
+                          child: ListTile(
+                            title: Text(
+                              _projects.firstWhere((p) => p.id == entry.projectId, orElse: () => Project(projectName: 'Unknown', clientId: 0)).projectName,
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            subtitle: Text(
+                              'Emp: ${_employees.firstWhere((e) => e.id == entry.employeeId, orElse: () => Employee(name: 'Unknown', isDeleted: true)).name} | ${DateFormat('MMM d, yyyy').format(entry.startTime)}',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                            trailing: Text(
+                              _formatDuration(Duration(seconds: entry.finalBilledDurationSeconds?.toInt() ?? 0)),
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                            onTap: () => _populateForm(entry),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
               ),
-            ],
+            ),
           ),
-        ),
+        ],
       ),
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
