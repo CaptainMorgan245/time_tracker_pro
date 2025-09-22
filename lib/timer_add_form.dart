@@ -9,12 +9,14 @@ class TimerAddForm extends StatefulWidget {
   final List<Employee> employees;
   final Function(Project?, Employee?, String, DateTime?, DateTime?) onSubmit;
   final bool isLiveTimerForm;
+  final Function(String, Project?, Employee?, String, DateTime?, DateTime?) onUpdate;
 
   const TimerAddForm({
     super.key,
     required this.projects,
     required this.employees,
     required this.onSubmit,
+    required this.onUpdate,
     this.isLiveTimerForm = true,
   });
 
@@ -28,6 +30,7 @@ class TimerAddFormState extends State<TimerAddForm> {
   final TextEditingController _workDetailsController = TextEditingController();
   DateTime? _selectedStartTime;
   DateTime? _selectedStopTime;
+  String? _editingRecordId;
 
   @override
   void dispose() {
@@ -42,14 +45,26 @@ class TimerAddFormState extends State<TimerAddForm> {
       _workDetailsController.clear();
       _selectedStartTime = null;
       _selectedStopTime = null;
+      _editingRecordId = null;
     });
   }
 
-  void populateForm(Project project, Employee employee, String workDetails) {
+  void populateForm(TimeEntry record) {
     setState(() {
-      _selectedProject = project;
-      _selectedEmployee = employee;
-      _workDetailsController.text = workDetails;
+      _editingRecordId = record.id.toString();
+      _selectedProject = widget.projects.firstWhere(
+            (p) => p.id == record.projectId,
+        orElse: () => Project(projectName: 'Unknown', clientId: 0),
+      );
+      _selectedEmployee = record.employeeId != null
+          ? widget.employees.firstWhere(
+            (e) => e.id == record.employeeId,
+        orElse: () => Employee(name: 'Unknown'),
+      )
+          : null;
+      _workDetailsController.text = record.workDetails ?? '';
+      _selectedStartTime = record.startTime;
+      _selectedStopTime = record.endTime;
     });
   }
 
@@ -164,13 +179,52 @@ class TimerAddFormState extends State<TimerAddForm> {
   }
 
   void _submit() {
-    widget.onSubmit(
-      _selectedProject,
-      _selectedEmployee,
-      _workDetailsController.text,
-      widget.isLiveTimerForm ? null : _selectedStartTime,
-      widget.isLiveTimerForm ? null : _selectedStopTime,
-    );
+    if (_selectedProject == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a project.')),
+      );
+      return;
+    }
+    if (_selectedEmployee == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an employee.')),
+      );
+      return;
+    }
+
+    if (!widget.isLiveTimerForm) {
+      if (_selectedStartTime == null || _selectedStopTime == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please set both a start and stop time.')),
+        );
+        return;
+      }
+      if (_selectedStopTime!.isBefore(_selectedStartTime!)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Stop time cannot be before start time.')),
+        );
+        return;
+      }
+    }
+
+    if (_editingRecordId != null) {
+      widget.onUpdate(
+        _editingRecordId!,
+        _selectedProject,
+        _selectedEmployee,
+        _workDetailsController.text,
+        _selectedStartTime,
+        _selectedStopTime,
+      );
+    } else {
+      widget.onSubmit(
+        _selectedProject,
+        _selectedEmployee,
+        _workDetailsController.text,
+        _selectedStartTime,
+        _selectedStopTime,
+      );
+    }
   }
 
   String _formatDateTime(DateTime? dateTime) {
@@ -180,6 +234,12 @@ class TimerAddFormState extends State<TimerAddForm> {
 
   @override
   Widget build(BuildContext context) {
+    final employeeList = List<Employee>.from(widget.employees);
+    final isUnrecognized = _selectedEmployee != null &&
+        !employeeList.any((e) => e.id == _selectedEmployee!.id);
+    if (isUnrecognized) {
+      employeeList.insert(0, _selectedEmployee!);
+    }
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -211,19 +271,25 @@ class TimerAddFormState extends State<TimerAddForm> {
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: DropdownButtonFormField<Employee>(
+                  child: DropdownButtonFormField<Employee?>(
                     decoration: const InputDecoration(
                       border: OutlineInputBorder(),
                       contentPadding: EdgeInsets.symmetric(horizontal: 12),
                       label: Text('Select Employee'),
                     ),
                     value: _selectedEmployee,
-                    items: widget.employees.map((employee) {
-                      return DropdownMenuItem<Employee>(
-                        value: employee,
-                        child: Text(employee.name),
-                      );
-                    }).toList(),
+                    items: [
+                      const DropdownMenuItem<Employee?>(
+                        value: null,
+                        child: Text('None Selected'),
+                      ),
+                      ...employeeList.map((employee) {
+                        return DropdownMenuItem<Employee?>(
+                          value: employee,
+                          child: Text(employee.name),
+                        );
+                      }).toList(),
+                    ],
                     onChanged: (Employee? newValue) {
                       setState(() {
                         _selectedEmployee = newValue;
@@ -281,17 +347,41 @@ class TimerAddFormState extends State<TimerAddForm> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: ElevatedButton(
-                      onPressed: _submit,
+                      onPressed: resetForm,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Theme.of(context).colorScheme.primary,
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       ),
-                      child: const Text('Add Time Record'),
+                      child: const Text('Clear / Cancel'),
                     ),
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+              if (_editingRecordId != null) ...[
+                ElevatedButton(
+                  onPressed: _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    minimumSize: const Size(double.infinity, 50),
+                  ),
+                  child: const Text('Update Time Record'),
+                ),
+              ] else ...[
+                ElevatedButton(
+                  onPressed: _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    minimumSize: const Size(double.infinity, 50),
+                  ),
+                  child: const Text('Add Time Record'),
+                ),
+              ],
               if (_selectedStartTime != null || _selectedStopTime != null) ...[
                 const SizedBox(height: 8),
                 Row(
@@ -311,14 +401,17 @@ class TimerAddFormState extends State<TimerAddForm> {
             ],
             if (widget.isLiveTimerForm) ...[
               const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).colorScheme.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
+                  child: const Text('Start New Timer'),
                 ),
-                child: const Text('Start New Timer'),
               ),
             ],
           ],

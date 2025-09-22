@@ -6,14 +6,11 @@ import 'package:path/path.dart';
 import 'package:time_tracker_pro/models.dart';
 
 class DatabaseHelper {
-  static final DatabaseHelper _instance = DatabaseHelper._internal();
+  // Make this a private constructor and expose a static instance
+  DatabaseHelper._privateConstructor();
+  static final DatabaseHelper instance = DatabaseHelper._privateConstructor();
+
   static Database? _database;
-
-  factory DatabaseHelper() {
-    return _instance;
-  }
-
-  DatabaseHelper._internal();
 
   Future<Database> get database async {
     if (_database != null) {
@@ -23,7 +20,6 @@ class DatabaseHelper {
     return _database!;
   }
 
-  // start method: _initDatabase
   Future<Database> _initDatabase() async {
     String path = join(await getDatabasesPath(), 'time_tracker_pro.db');
     return await openDatabase(
@@ -32,9 +28,7 @@ class DatabaseHelper {
       onCreate: _onCreate,
     );
   }
-  // end method: _initDatabase
 
-  // start method: _onCreate
   Future<void> _onCreate(Database db, int version) async {
     // Create Clients table
     await db.execute('''
@@ -143,5 +137,4 @@ class DatabaseHelper {
       )
     ''');
   }
-// end method: _onCreate
 }

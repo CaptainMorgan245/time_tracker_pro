@@ -5,7 +5,11 @@ import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/settings_model.dart';
 
 class SettingsService {
-  final _databaseHelper = DatabaseHelper();
+  // Add a private constructor and a static instance
+  SettingsService._privateConstructor();
+  static final SettingsService instance = SettingsService._privateConstructor();
+
+  final _databaseHelper = DatabaseHelper.instance;
   final String tableName = 'settings';
 
   Future<void> _createSettingsTable(Database db) async {

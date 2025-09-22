@@ -14,7 +14,7 @@ class ExpensesScreen extends StatefulWidget {
 
 class _ExpensesScreenState extends State<ExpensesScreen> {
   final ExpenseCategoryRepository _repo = ExpenseCategoryRepository();
-  final SettingsService _settingsService = SettingsService();
+  final SettingsService _settingsService = SettingsService.instance;
 
   final TextEditingController _categoryController = TextEditingController();
   final TextEditingController _vehicleController = TextEditingController();
@@ -30,16 +30,19 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     _loadData();
   }
 
+  // start method: _loadData
   Future<void> _loadData() async {
     final settings = await _settingsService.loadSettings();
     final cats = await _repo.getExpenseCategories();
     setState(() {
       _categories = cats;
-      _vehicles = List<String>.from(settings.vehicleDesignations ?? []);
-      _vendors = List<String>.from(settings.vendors ?? []);
+      _vehicles = List<String>.from(settings?.vehicleDesignations ?? []);
+      _vendors = List<String>.from(settings?.vendors ?? []);
     });
   }
+  // end method: _loadData
 
+  // start method: _addCategory
   Future<void> _addCategory() async {
     final name = _categoryController.text.trim();
     if (name.isEmpty) return;
@@ -47,46 +50,48 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     _categoryController.clear();
     _loadData();
   }
+  // end method: _addCategory
 
+  // start method: _deleteCategory
   Future<void> _deleteCategory(int id) async {
     await _repo.deleteExpenseCategory(id);
     _loadData();
   }
+  // end method: _deleteCategory
 
-  Future<void> _addVehicle() async {
-    final name = _vehicleController.text.trim();
+  // start method: _addOption
+  Future<void> _addOption(TextEditingController controller, List<String> list) async {
+    final name = controller.text.trim();
     if (name.isEmpty) return;
-    _vehicles.add(name);
-    _vehicleController.clear();
+    list.add(name);
+    controller.clear();
     await _saveSettings();
   }
+  // end method: _addOption
 
-  Future<void> _removeVehicle(int index) async {
-    _vehicles.removeAt(index);
+  // start method: _removeOption
+  Future<void> _removeOption(List<String> list, int index) async {
+    list.removeAt(index);
     await _saveSettings();
   }
+  // end method: _removeOption
 
-  Future<void> _addVendor() async {
-    final name = _vendorController.text.trim();
-    if (name.isEmpty) return;
-    _vendors.add(name);
-    _vendorController.clear();
-    await _saveSettings();
-  }
-
-  Future<void> _removeVendor(int index) async {
-    _vendors.removeAt(index);
-    await _saveSettings();
-  }
-
+  // start method: _saveSettings
   Future<void> _saveSettings() async {
     final settings = await _settingsService.loadSettings();
-    settings.vehicleDesignations = _vehicles;
-    settings.vendors = _vendors;
-    await _settingsService.saveSettings(settings);
+    final updatedSettings = settings?.copyWith(
+      vehicleDesignations: _vehicles,
+      vendors: _vendors,
+    );
+
+    if (updatedSettings != null) {
+      await _settingsService.saveSettings(updatedSettings);
+    }
     setState(() {});
   }
+  // end method: _saveSettings
 
+  // start method: _buildListSection
   Widget _buildListSection(String title, List<String> items, TextEditingController controller, VoidCallback onAdd, Function(int) onRemove) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -119,6 +124,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       ],
     );
   }
+  // end method: _buildListSection
 
   @override
   Widget build(BuildContext context) {
@@ -149,9 +155,9 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
               ),
             )),
             const Divider(height: 30),
-            _buildListSection('Vehicle Designations', _vehicles, _vehicleController, _addVehicle, _removeVehicle),
+            _buildListSection('Vehicle Designations', _vehicles, _vehicleController, () => _addOption(_vehicleController, _vehicles), (index) => _removeOption(_vehicles, index)),
             const Divider(height: 30),
-            _buildListSection('Vendors / Subtrades', _vendors, _vendorController, _addVendor, _removeVendor),
+            _buildListSection('Vendors / Subtrades', _vendors, _vendorController, () => _addOption(_vendorController, _vendors), (index) => _removeOption(_vendors, index)),
           ],
         ),
       ),

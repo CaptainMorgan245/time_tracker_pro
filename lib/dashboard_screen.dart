@@ -59,39 +59,70 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadData() async {
-    final projects = await _projectRepo.getProjects();
-    final employees = await _employeeRepo.getEmployees();
-    final clients = await _clientRepo.getClients();
-    final recentEntries = await _timeEntryRepo.getRecentTimeEntries(limit: 10);
-    setState(() {
-      _projects = projects;
-      _employees = employees;
-      _clients = clients;
-      _recentEntries = recentEntries;
-    });
+    try {
+      final projects = await _projectRepo.getProjects();
+      final employees = await _employeeRepo.getEmployees();
+      final clients = await await _clientRepo.getClients();
+      final allEntries = await _timeEntryRepo.getRecentTimeEntries(limit: 10);
+
+      final filteredEntries = allEntries.where((entry) {
+        final project = projects.firstWhere(
+              (p) => p.id == entry.projectId,
+          orElse: () => Project(projectName: 'Unknown', clientId: 0, isCompleted: true),
+        );
+        return !entry.isDeleted && !project.isCompleted;
+      }).toList();
+
+      setState(() {
+        _projects = projects;
+        _employees = employees;
+        _clients = clients;
+        _recentEntries = filteredEntries;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load data: $e')),
+      );
+    }
   }
 
   Future<void> _loadActiveTimers() async {
-    final activeEntries = await _timeEntryRepo.getActiveTimeEntries();
-    for (var entry in activeEntries) {
-      if (!_activeTimers.containsKey(entry.id)) {
-        final initialDuration = DateTime.now().difference(entry.startTime) -
-            Duration(seconds: entry.pausedDuration.toInt());
-        _currentDurations[entry.id!] = initialDuration;
-        _startTimerUpdate(entry);
+    try {
+      final activeEntries = await _timeEntryRepo.getActiveTimeEntries();
+      final projects = await _projectRepo.getProjects();
+      final employees = await _employeeRepo.getEmployees();
+
+      final filteredEntries = activeEntries.where((entry) {
+        final project = projects.firstWhere(
+              (p) => p.id == entry.projectId,
+          orElse: () => Project(projectName: 'Unknown', clientId: 0, isCompleted: true),
+        );
+        return !entry.isDeleted && !project.isCompleted;
+      }).toList();
+
+      for (var entry in filteredEntries) {
+        if (!_activeTimers.containsKey(entry.id)) {
+          final now = DateTime.now();
+          final elapsed = now.difference(entry.startTime!);
+          final initialDuration = elapsed - Duration(seconds: entry.pausedDuration?.toInt() ?? 0);
+          _currentDurations[entry.id!] = initialDuration;
+          _startTimerUpdate(entry);
+        }
       }
+      setState(() {
+        _activeEntries = filteredEntries;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load active timers: $e')),
+      );
     }
-    setState(() {
-      _activeEntries = activeEntries;
-    });
   }
 
   Future<void> _startTimer({
     Project? project,
     Employee? employee,
     String? workDetails,
-    DateTime? startTime,
-    DateTime? stopTime,
   }) async {
     if (project == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -100,15 +131,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return;
     }
 
-    TimeEntry newEntry;
-    if (startTime == null && stopTime == null) {
-      newEntry = TimeEntry(
-        projectId: project.id!,
-        employeeId: employee?.id,
-        startTime: DateTime.now(),
-        workDetails: workDetails,
-      );
-
+    TimeEntry newEntry = TimeEntry(
+      projectId: project.id!,
+      employeeId: employee?.id,
+      startTime: DateTime.now(),
+      workDetails: workDetails,
+      pausedDuration: 0.0,
+    );
+    try {
       final id = await _timeEntryRepo.insertTimeEntry(newEntry);
       final insertedEntry = await _timeEntryRepo.getTimeEntryById(id);
 
@@ -121,86 +151,148 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Timer started.')),
         );
+        _timerFormKey.currentState?.resetForm();
       }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to start timer: $e')),
+      );
+    }
+  }
+
+  Future<void> _updateLiveEntry(
+      String id,
+      Project? project,
+      Employee? employee,
+      String? workDetails,
+      DateTime? startTime,
+      DateTime? stopTime,
+      ) async {
+    final entryId = int.tryParse(id);
+    if (entryId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid record ID.')),
+      );
+      return;
+    }
+
+    try {
+      final existingEntry = _activeEntries.firstWhere((e) => e.id == entryId);
+
+      final updatedEntry = existingEntry.copyWith(
+        projectId: project?.id,
+        employeeId: employee?.id,
+        workDetails: workDetails,
+      );
+
+      await _timeEntryRepo.updateTimeEntry(updatedEntry);
+
+      setState(() {
+        final index = _activeEntries.indexWhere((e) => e.id == entryId);
+        if (index != -1) {
+          _activeEntries[index] = updatedEntry;
+        }
+      });
+      _timerFormKey.currentState?.resetForm();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Live timer updated.')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update live timer: $e')),
+      );
     }
   }
 
   void _startTimerUpdate(TimeEntry entry) {
     _activeTimers[entry.id!] = Timer.periodic(const Duration(seconds: 1), (timer) {
-      _updateTimerDisplay(entry.id!);
+      if (!entry.isPaused) {
+        final elapsed = DateTime.now().difference(entry.startTime!);
+        setState(() {
+          _currentDurations[entry.id!] = elapsed - Duration(seconds: entry.pausedDuration?.toInt() ?? 0);
+        });
+      }
     });
-  }
-
-  void _updateTimerDisplay(int entryId) {
-    final entry = _activeEntries.firstWhere((e) => e.id == entryId);
-    if (!entry.isPaused) {
-      final elapsed = DateTime.now().difference(entry.startTime);
-      setState(() {
-        _currentDurations[entryId] = elapsed - Duration(seconds: entry.pausedDuration.toInt());
-      });
-    }
   }
 
   Future<void> _stopTimer(int entryId) async {
-    final entry = _activeEntries.firstWhere((e) => e.id == entryId);
+    try {
+      final entry = _activeEntries.firstWhere((e) => e.id == entryId);
+      final duration = DateTime.now().difference(entry.startTime!) - Duration(seconds: entry.pausedDuration?.toInt() ?? 0);
 
-    final duration = DateTime.now().difference(entry.startTime) -
-        Duration(seconds: entry.pausedDuration.toInt());
+      final stoppedEntry = entry.copyWith(
+        endTime: DateTime.now(),
+        isPaused: false,
+        finalBilledDurationSeconds: duration.inSeconds.toDouble(),
+      );
 
-    final stoppedEntry = entry.copyWith(
-      endTime: DateTime.now(),
-      isPaused: false,
-      finalBilledDurationSeconds: duration.inSeconds.toDouble(),
-    );
+      await _timeEntryRepo.updateTimeEntry(stoppedEntry);
 
-    await _timeEntryRepo.updateTimeEntry(stoppedEntry);
+      setState(() {
+        _activeEntries.removeWhere((e) => e.id == entryId);
+        _currentDurations.remove(entryId);
+      });
 
-    setState(() {
-      _activeEntries.removeWhere((e) => e.id == entryId);
-      _currentDurations.remove(entryId);
-    });
-
-    _activeTimers[entryId]?.cancel();
-    _activeTimers.remove(entryId);
+      _activeTimers[entryId]?.cancel();
+      _activeTimers.remove(entryId);
+      _loadData();
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to stop timer: $e')),
+      );
+    }
   }
 
   Future<void> _pauseTimer(int entryId) async {
-    final entry = _activeEntries.firstWhere((e) => e.id == entryId);
-    if (entry.isPaused) return;
+    try {
+      final entry = _activeEntries.firstWhere((e) => e.id == entryId);
+      if (entry.isPaused) return;
 
-    final now = DateTime.now();
+      final pausedEntry = entry.copyWith(
+        isPaused: true,
+        pauseStartTime: DateTime.now(),
+      );
 
-    final pausedEntry = entry.copyWith(
-      isPaused: true,
-      pauseStartTime: now,
-    );
+      await _timeEntryRepo.updateTimeEntry(pausedEntry);
 
-    await _timeEntryRepo.updateTimeEntry(pausedEntry);
-
-    setState(() {
-      final index = _activeEntries.indexWhere((e) => e.id == entryId);
-      _activeEntries[index] = pausedEntry;
-    });
+      setState(() {
+        final index = _activeEntries.indexWhere((e) => e.id == entryId);
+        _activeEntries[index] = pausedEntry;
+        _activeTimers[entryId]?.cancel();
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to pause timer: $e')),
+      );
+    }
   }
 
   Future<void> _resumeTimer(int entryId) async {
-    final entry = _activeEntries.firstWhere((e) => e.id == entryId);
-    if (!entry.isPaused) return;
+    try {
+      final entry = _activeEntries.firstWhere((e) => e.id == entryId);
+      if (!entry.isPaused) return;
 
-    final now = DateTime.now();
-    final pauseDuration = now.difference(entry.pauseStartTime!).inSeconds.toDouble();
+      final now = DateTime.now();
+      final pauseDuration = now.difference(entry.pauseStartTime!).inSeconds.toDouble();
 
-    final resumedEntry = entry.copyWith(
-      isPaused: false,
-      pausedDuration: entry.pausedDuration + pauseDuration,
-    );
+      final resumedEntry = entry.copyWith(
+        isPaused: false,
+        pausedDuration: (entry.pausedDuration ?? 0) + pauseDuration,
+        pauseStartTime: null,
+      );
 
-    await _timeEntryRepo.updateTimeEntry(resumedEntry);
+      await _timeEntryRepo.updateTimeEntry(resumedEntry);
 
-    setState(() {
-      final index = _activeEntries.indexWhere((e) => e.id == entryId);
-      _activeEntries[index] = resumedEntry;
-    });
+      setState(() {
+        final index = _activeEntries.indexWhere((e) => e.id == entryId);
+        _activeEntries[index] = resumedEntry;
+      });
+      _startTimerUpdate(resumedEntry);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to resume timer: $e')),
+      );
+    }
   }
 
   String _formatDuration(Duration duration) {
@@ -219,11 +311,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return client.name;
   }
 
-  void _populateForm(TimeEntry entry) {
-    final project = _projects.firstWhere((p) => p.id == entry.projectId);
-    final employee = _employees.firstWhere((e) => e.id == entry.employeeId, orElse: () => Employee(name: 'N/A', isDeleted: true));
+  String _getProjectName(int projectId) {
+    try {
+      return _projects.firstWhere((p) => p.id == projectId).projectName;
+    } catch (e) {
+      return 'Unknown';
+    }
+  }
 
-    _timerFormKey.currentState?.populateForm(project, employee, entry.workDetails ?? '');
+  String _getEmployeeName(int? employeeId) {
+    if (employeeId == null) return 'N/A';
+    try {
+      return _employees.firstWhere((e) => e.id == employeeId).name;
+    } catch (e) {
+      return 'Unknown';
+    }
+  }
+
+  void _populateForm(TimeEntry entry) {
+    try {
+      final project = _projects.firstWhere((p) => p.id == entry.projectId);
+      final employee = entry.employeeId != null
+          ? _employees.firstWhere((e) => e.id == entry.employeeId)
+          : null;
+
+      _timerFormKey.currentState?.populateForm(entry);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot populate form with a completed or deleted record.')),
+      );
+    }
   }
 
   @override
@@ -308,6 +425,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   workDetails: workDetails,
                 );
               },
+              onUpdate: (id, project, employee, workDetails, startTime, stopTime) {
+                _updateLiveEntry(
+                  id,
+                  project,
+                  employee,
+                  workDetails,
+                  startTime,
+                  stopTime,
+                );
+              },
             ),
           ),
           Expanded(
@@ -342,11 +469,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             visualDensity: VisualDensity.compact,
                             contentPadding: const EdgeInsets.symmetric(horizontal: 16.0),
                             title: Text(
-                              '${_projects.firstWhere((p) => p.id == entry.projectId, orElse: () => Project(projectName: 'Unknown', clientId: 0)).projectName} - ${_formatDuration(duration)}',
+                              '${_getProjectName(entry.projectId)} - ${_formatDuration(duration)}',
                               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                             ),
                             subtitle: Text(
-                              'Emp: ${_employees.firstWhere((e) => e.id == entry.employeeId, orElse: () => Employee(name: 'Unknown', isDeleted: true)).name} | Details: ${entry.workDetails ?? "N/A"}',
+                              'Emp: ${_getEmployeeName(entry.employeeId)} | Details: ${entry.workDetails ?? "N/A"}',
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(fontSize: 12),
                             ),
@@ -400,11 +527,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         return Card(
                           child: ListTile(
                             title: Text(
-                              _projects.firstWhere((p) => p.id == entry.projectId, orElse: () => Project(projectName: 'Unknown', clientId: 0)).projectName,
+                              _getProjectName(entry.projectId),
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
                             subtitle: Text(
-                              'Emp: ${_employees.firstWhere((e) => e.id == entry.employeeId, orElse: () => Employee(name: 'Unknown', isDeleted: true)).name} | ${DateFormat('MMM d, yyyy').format(entry.startTime)}',
+                              'Emp: ${_getEmployeeName(entry.employeeId)} | ${DateFormat('MMM d, yyyy').format(entry.startTime!)} | Details: ${entry.workDetails ?? "N/A"}',
                               style: Theme.of(context).textTheme.bodyMedium,
                             ),
                             trailing: Text(

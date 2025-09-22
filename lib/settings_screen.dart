@@ -9,6 +9,8 @@ import 'package:time_tracker_pro/role_repository.dart';
 import 'package:time_tracker_pro/input_formatters.dart';
 import 'package:time_tracker_pro/employee_add_form.dart';
 import 'package:time_tracker_pro/employee_repository.dart';
+import 'package:time_tracker_pro/dashboard_screen.dart';
+import 'package:time_tracker_pro/expenses_screen.dart'; // New import
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -20,11 +22,13 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  final SettingsService _settingsService = SettingsService();
+  final SettingsService _settingsService = SettingsService.instance;
   final RoleRepository _roleRepo = RoleRepository();
   final EmployeeRepository _employeeRepo = EmployeeRepository();
 
-  late SettingsModel _settings;
+  SettingsModel _settings = SettingsModel();
+  final TextEditingController _employeeNumberPrefixController = TextEditingController();
+  final TextEditingController _nextEmployeeNumberController = TextEditingController();
   final TextEditingController _roleNameController = TextEditingController();
   final TextEditingController _roleRateController = TextEditingController();
 
@@ -38,24 +42,47 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   void initState() {
     super.initState();
     _tabController = TabController(length: 5, vsync: this);
-    _loadSettings();
-    _loadRoles();
-    _loadEmployees();
+    _loadData();
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _employeeNumberPrefixController.dispose();
+    _nextEmployeeNumberController.dispose();
     _roleNameController.dispose();
     _roleRateController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadData() async {
+    await _loadSettings();
+    await _loadRoles();
+    await _loadEmployees();
   }
 
   Future<void> _loadSettings() async {
     final loadedSettings = await _settingsService.loadSettings();
     setState(() {
       _settings = loadedSettings ?? SettingsModel();
+      _employeeNumberPrefixController.text = _settings.employeeNumberPrefix ?? '';
+      _nextEmployeeNumberController.text = (_settings.nextEmployeeNumber ?? 1).toString();
     });
+  }
+
+  Future<void> _saveSettings() async {
+    final settings = SettingsModel(
+      employeeNumberPrefix: _employeeNumberPrefixController.text.isEmpty
+          ? null
+          : _employeeNumberPrefixController.text,
+      nextEmployeeNumber: int.tryParse(_nextEmployeeNumberController.text),
+    );
+
+    await _settingsService.saveSettings(settings);
+
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (context) => const DashboardScreen()),
+    );
   }
 
   Future<void> _loadRoles() async {
@@ -165,6 +192,8 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
           tabs: const [
             Tab(text: 'General & Reports'),
             Tab(text: 'Personnel'),
@@ -177,8 +206,38 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       body: TabBarView(
         controller: _tabController,
         children: [
-          const Center(child: Text('General and Reports settings coming soon...')),
-
+          SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'General & Reports Settings',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _employeeNumberPrefixController,
+                  decoration: const InputDecoration(labelText: 'Employee Number Prefix'),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: _nextEmployeeNumberController,
+                  decoration: const InputDecoration(labelText: 'Next Employee Number'),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 32),
+                ElevatedButton(
+                  onPressed: _saveSettings,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Save Settings'),
+                ),
+              ],
+            ),
+          ),
           Column(
             children: [
               SizedBox(
@@ -218,6 +277,10 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                             const SizedBox(height: 16),
                             ElevatedButton(
                               onPressed: _addRole,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Theme.of(context).colorScheme.primary,
+                                foregroundColor: Colors.white,
+                              ),
                               child: const Text('Add Role'),
                             ),
                           ],
@@ -279,7 +342,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             ],
           ),
 
-          const Center(child: Text('Expenses settings coming soon...')),
+          const ExpensesScreen(),
           const Center(child: Text('Email settings coming soon...')),
           const Center(child: Text('Burden Rate settings coming soon...')),
         ],

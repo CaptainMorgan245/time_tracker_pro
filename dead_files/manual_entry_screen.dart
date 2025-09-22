@@ -55,7 +55,7 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
   String _getClientName(int clientId) {
     try {
       return _clients.firstWhere((c) => c.id == clientId).name;
-    } catch (e) {
+    } catch (_) {
       return 'Unknown';
     }
   }
@@ -63,25 +63,22 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
   String _getProjectName(int projectId) {
     try {
       return _projects.firstWhere((p) => p.id == projectId).projectName;
-    } catch (e) {
+    } catch (_) {
       return 'Unknown';
     }
   }
 
   String _getEmployeeName(int? employeeId) {
-    if (employeeId == null) return 'N/A';
+    if (employeeId == null) return 'Unassigned';
     try {
       return _employees.firstWhere((e) => e.id == employeeId).name;
-    } catch (e) {
+    } catch (_) {
       return 'Unknown';
     }
   }
 
   void _populateForm(TimeEntry entry) {
-    final project = _projects.firstWhere((p) => p.id == entry.projectId);
-    final employee = _employees.firstWhere((e) => e.id == entry.employeeId, orElse: () => Employee(name: 'N/A', isDeleted: true));
-
-    _timerFormKey.currentState?.populateForm(project, employee, entry.workDetails ?? '');
+    _timerFormKey.currentState?.populateForm(entry);
   }
 
   Future<void> _submitManualEntry({
@@ -123,6 +120,41 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
     );
   }
 
+  Future<void> _updateManualEntry({
+    required String id,
+    required Project? project,
+    required Employee? employee,
+    required String? workDetails,
+    required DateTime? startTime,
+    required DateTime? stopTime,
+  }) async {
+    if (project == null || startTime == null || stopTime == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill out all required fields.')),
+      );
+      return;
+    }
+
+    final duration = stopTime.difference(startTime);
+
+    final updatedEntry = TimeEntry(
+      id: int.parse(id),
+      projectId: project.id!,
+      employeeId: employee?.id,
+      startTime: startTime,
+      endTime: stopTime,
+      workDetails: workDetails,
+      finalBilledDurationSeconds: duration.inSeconds.toDouble(),
+    );
+
+    await _timeEntryRepo.updateTimeEntry(updatedEntry);
+    await _loadData();
+    _timerFormKey.currentState?.resetForm();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Time record updated.')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -140,9 +172,19 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
               key: _timerFormKey,
               projects: _projects.where((p) => !p.isCompleted).toList(),
               employees: _employees.where((e) => !e.isDeleted).toList(),
-              isManualEntryForm: true,
+              isLiveTimerForm: false,
               onSubmit: (project, employee, workDetails, startTime, stopTime) {
                 _submitManualEntry(
+                  project: project,
+                  employee: employee,
+                  workDetails: workDetails,
+                  startTime: startTime,
+                  stopTime: stopTime,
+                );
+              },
+              onUpdate: (id, project, employee, workDetails, startTime, stopTime) {
+                _updateManualEntry(
+                  id: id,
                   project: project,
                   employee: employee,
                   workDetails: workDetails,
@@ -165,20 +207,33 @@ class _ManualEntryScreenState extends State<ManualEntryScreen> {
               itemCount: _recentEntries.length,
               itemBuilder: (context, index) {
                 final entry = _recentEntries[index];
+                final project = _projects.firstWhere((p) => p.id == entry.projectId, orElse: () => Project(projectName: 'Unknown', isCompleted: true));
+                final clientName = _getClientName(project.clientId);
+                final employeeName = _getEmployeeName(entry.employeeId);
+
                 return Card(
                   child: ListTile(
                     title: Text(
-                      _getProjectName(entry.projectId),
+                      project.projectName,
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     subtitle: Text(
-                      'Client: ${_getClientName(_projects.firstWhere((p) => p.id == entry.projectId).clientId)} | Emp: ${_getEmployeeName(entry.employeeId)}',
+                      'Client: $clientName | Emp: $employeeName',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
-                    trailing: Text(
-                      '${DateFormat('MM/dd').format(entry.startTime)}\n${_formatDuration(Duration(seconds: entry.finalBilledDurationSeconds?.toInt() ?? 0))}',
-                      textAlign: TextAlign.right,
-                      style: Theme.of(context).textTheme.bodySmall,
+                    trailing: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          DateFormat('MM/dd').format(entry.startTime!),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        Text(
+                          _formatDuration(Duration(seconds: entry.finalBilledDurationSeconds?.toInt() ?? 0)),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
                     ),
                     onTap: () => _populateForm(entry),
                   ),

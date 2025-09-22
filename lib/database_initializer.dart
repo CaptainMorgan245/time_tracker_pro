@@ -5,7 +5,7 @@ import 'package:time_tracker_pro/models.dart';
 import 'package:sqflite/sqflite.dart';
 
 class DatabaseInitializer {
-  final DatabaseHelper _databaseHelper = DatabaseHelper();
+  final DatabaseHelper _databaseHelper = DatabaseHelper.instance;
 
   // start method: insertInitialData
   Future<void> insertInitialData(Database db) async {

@@ -32,11 +32,12 @@ class TrialApp extends StatelessWidget {
         ),
       ),
       home: FutureBuilder<bool>(
-        future: SettingsService().hasSettings(),
+        future: SettingsService.instance.hasSettings(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
+            return Scaffold(
+              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              body: const Center(child: CircularProgressIndicator()),
             );
           }
           if (snapshot.hasData && snapshot.data!) {

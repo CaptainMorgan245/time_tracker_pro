@@ -1,25 +1,29 @@
 // lib/time_entry_repository.dart
 
 import 'package:sqflite/sqflite.dart';
-import 'package:time_tracker_pro/database_helper.dart';
+import 'package:path/path.dart';
 import 'package:time_tracker_pro/models.dart';
+import 'package:time_tracker_pro/database_helper.dart';
 
 class TimeEntryRepository {
-  Future<Database> get _db async => await DatabaseHelper().database;
+  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
 
   Future<int> insertTimeEntry(TimeEntry entry) async {
-    final db = await _db;
-    return await db.insert('time_entries', entry.toMap());
+    Database db = await _dbHelper.database;
+    return await db.insert(
+      'time_entries',
+      entry.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   Future<TimeEntry?> getTimeEntryById(int id) async {
-    final db = await _db;
-    final List<Map<String, dynamic>> maps = await db.query(
+    Database db = await _dbHelper.database;
+    List<Map<String, dynamic>> maps = await db.query(
       'time_entries',
       where: 'id = ?',
       whereArgs: [id],
     );
-
     if (maps.isNotEmpty) {
       return TimeEntry.fromMap(maps.first);
     }
@@ -27,21 +31,11 @@ class TimeEntryRepository {
   }
 
   Future<List<TimeEntry>> getActiveTimeEntries() async {
-    final db = await _db;
-    final List<Map<String, dynamic>> maps = await db.query(
+    Database db = await _dbHelper.database;
+    List<Map<String, dynamic>> maps = await db.query(
       'time_entries',
-      where: 'end_time IS NULL',
-    );
-    return List.generate(maps.length, (i) {
-      return TimeEntry.fromMap(maps[i]);
-    });
-  }
-
-  Future<List<TimeEntry>> getAllTimeEntries() async {
-    final db = await _db;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'time_entries',
-      orderBy: 'start_time DESC',
+      where: 'end_time IS NULL AND is_paused = ?',
+      whereArgs: [0],
     );
     return List.generate(maps.length, (i) {
       return TimeEntry.fromMap(maps[i]);
@@ -49,12 +43,26 @@ class TimeEntryRepository {
   }
 
   Future<List<TimeEntry>> getRecentTimeEntries({int limit = 10}) async {
-    final db = await _db;
-    final List<Map<String, dynamic>> maps = await db.query(
+    Database db = await _dbHelper.database;
+    List<Map<String, dynamic>> maps = await db.query(
       'time_entries',
+      where: 'is_deleted = ?',
+      whereArgs: [0],
       orderBy: 'start_time DESC',
       limit: limit,
-      where: 'end_time IS NOT NULL',
+    );
+    return List.generate(maps.length, (i) {
+      return TimeEntry.fromMap(maps[i]);
+    });
+  }
+
+  Future<List<TimeEntry>> getAllTimeEntries() async {
+    Database db = await _dbHelper.database;
+    List<Map<String, dynamic>> maps = await db.query(
+      'time_entries',
+      where: 'is_deleted = ?',
+      whereArgs: [0],
+      orderBy: 'start_time DESC',
     );
     return List.generate(maps.length, (i) {
       return TimeEntry.fromMap(maps[i]);
@@ -62,7 +70,7 @@ class TimeEntryRepository {
   }
 
   Future<void> updateTimeEntry(TimeEntry entry) async {
-    final db = await _db;
+    Database db = await _dbHelper.database;
     await db.update(
       'time_entries',
       entry.toMap(),
@@ -72,9 +80,19 @@ class TimeEntryRepository {
   }
 
   Future<void> deleteTimeEntry(int id) async {
-    final db = await _db;
+    Database db = await _dbHelper.database;
     await db.delete(
       'time_entries',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> softDeleteTimeEntry(int id) async {
+    Database db = await _dbHelper.database;
+    await db.update(
+      'time_entries',
+      {'is_deleted': 1},
       where: 'id = ?',
       whereArgs: [id],
     );

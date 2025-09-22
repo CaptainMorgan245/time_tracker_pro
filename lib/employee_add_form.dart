@@ -106,6 +106,10 @@ class _AddEmployeeFormState extends State<AddEmployeeForm> {
           alignment: Alignment.centerLeft,
           child: ElevatedButton(
             onPressed: _isSubmitting ? null : _submit,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Colors.white,
+            ),
             child: _isSubmitting ? const CircularProgressIndicator() : const Text('Add Employee'),
           ),
         ),

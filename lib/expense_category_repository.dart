@@ -1,11 +1,10 @@
-// lib/expense_category_repository.dart
-
 import 'package:sqflite/sqflite.dart';
 import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/models.dart';
 
 class ExpenseCategoryRepository {
-  final _databaseHelper = DatabaseHelper();
+  // Corrected to use the singleton instance
+  final _databaseHelper = DatabaseHelper.instance;
 
   // start method: insertExpenseCategory
   Future<int> insertExpenseCategory(ExpenseCategory category) async {

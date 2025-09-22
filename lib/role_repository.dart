@@ -5,7 +5,7 @@ import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/models.dart';
 
 class RoleRepository {
-  final _databaseHelper = DatabaseHelper();
+  final _databaseHelper = DatabaseHelper.instance;
 
   // start method: insertRole
   Future<int> insertRole(Role role) async {

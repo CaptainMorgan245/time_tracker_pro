@@ -7,8 +7,8 @@ import 'package:time_tracker_pro/settings_service.dart';
 import 'package:time_tracker_pro/settings_model.dart';
 
 class EmployeeRepository {
-  final _databaseHelper = DatabaseHelper();
-  final _settingsService = SettingsService();
+  final _databaseHelper = DatabaseHelper.instance;
+  final _settingsService = SettingsService.instance;
 
   Future<int> insertEmployee(Employee employee) async {
     final db = await _databaseHelper.database;

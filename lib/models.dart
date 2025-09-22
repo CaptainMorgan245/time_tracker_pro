@@ -211,7 +211,7 @@ class TimeEntry {
   final int? id;
   final int projectId;
   final int? employeeId;
-  final DateTime startTime;
+  final DateTime? startTime;
   final DateTime? endTime;
   final double pausedDuration;
   final double? finalBilledDurationSeconds;
@@ -224,7 +224,7 @@ class TimeEntry {
     this.id,
     required this.projectId,
     this.employeeId,
-    required this.startTime,
+    this.startTime,
     this.endTime,
     this.pausedDuration = 0.0,
     this.finalBilledDurationSeconds,
@@ -240,7 +240,7 @@ class TimeEntry {
       'id': id,
       'project_id': projectId,
       'employee_id': employeeId,
-      'start_time': startTime.toIso8601String(),
+      'start_time': startTime?.toIso8601String(),
       'end_time': endTime?.toIso8601String(),
       'paused_duration': pausedDuration,
       'final_billed_duration_seconds': finalBilledDurationSeconds,
@@ -258,7 +258,7 @@ class TimeEntry {
       id: map['id'],
       projectId: map['project_id'],
       employeeId: map['employee_id'],
-      startTime: DateTime.parse(map['start_time']),
+      startTime: map['start_time'] != null ? DateTime.parse(map['start_time']) : null,
       endTime: map['end_time'] != null ? DateTime.parse(map['end_time']) : null,
       pausedDuration: map['paused_duration'],
       finalBilledDurationSeconds: map['final_billed_duration_seconds'],
