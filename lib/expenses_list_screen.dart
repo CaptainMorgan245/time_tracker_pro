@@ -9,19 +9,20 @@ import 'package:time_tracker_pro/settings_service.dart';
 import 'package:time_tracker_pro/project_repository.dart';
 import 'package:time_tracker_pro/expense_category_repository.dart';
 
-class MaterialRepository {
+// The MaterialRepository has been renamed to JobMaterialsRepository
+class JobMaterialsRepository {
   final DatabaseHelper _databaseHelper = DatabaseHelper.instance;
 
-  Future<int> insertMaterial(app_models.Material material) async {
+  Future<int> insertJobMaterial(app_models.JobMaterials jobMaterial) async {
     final db = await _databaseHelper.database;
-    return await db.insert('materials', material.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    return await db.insert('materials', jobMaterial.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  Future<List<app_models.Material>> getMaterials() async {
+  Future<List<app_models.JobMaterials>> getJobMaterials() async {
     final db = await _databaseHelper.database;
     final List<Map<String, dynamic>> maps = await db.query('materials');
     return List.generate(maps.length, (i) {
-      return app_models.Material.fromMap(maps[i]);
+      return app_models.JobMaterials.fromMap(maps[i]);
     });
   }
 }
@@ -34,12 +35,14 @@ class ExpensesListScreen extends StatefulWidget {
 }
 
 class _ExpensesListScreenState extends State<ExpensesListScreen> {
-  final MaterialRepository _repo = MaterialRepository();
+  // Renamed MaterialRepository to JobMaterialsRepository
+  final JobMaterialsRepository _repo = JobMaterialsRepository();
   final ProjectRepository _projectRepo = ProjectRepository();
   final ExpenseCategoryRepository _categoryRepo = ExpenseCategoryRepository();
   final SettingsService _settingsService = SettingsService.instance;
 
-  List<app_models.Material> _expenses = [];
+  // Updated the list to use JobMaterials
+  List<app_models.JobMaterials> _expenses = [];
   List<app_models.Project> _projects = [];
   List<String> _expenseCategories = [];
   List<String> _vehicleDesignations = [];
@@ -59,7 +62,8 @@ class _ExpensesListScreenState extends State<ExpensesListScreen> {
     });
 
     try {
-      final expenses = await _repo.getMaterials();
+      // Updated getMaterials to getJobMaterials
+      final expenses = await _repo.getJobMaterials();
       final projects = await _projectRepo.getProjects();
       final categories = await _categoryRepo.getExpenseCategories();
       final settings = await _settingsService.loadSettings();
@@ -80,8 +84,9 @@ class _ExpensesListScreenState extends State<ExpensesListScreen> {
     }
   }
 
-  Future<void> _addExpense(app_models.Material newExpense) async {
-    await _repo.insertMaterial(newExpense);
+  // Updated the parameter type to JobMaterials
+  Future<void> _addExpense(app_models.JobMaterials newExpense) async {
+    await _repo.insertJobMaterial(newExpense);
     await _loadData();
   }
 

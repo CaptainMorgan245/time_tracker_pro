@@ -268,7 +268,7 @@ class TimeEntry {
       workDetails: map['work_details'],
     );
   }
-  // end method: fromMap
+// end method: fromMap
   // start method: copyWith
   TimeEntry copyWith({
     int? id,
@@ -301,8 +301,8 @@ class TimeEntry {
 }
 // end class: TimeEntry
 
-// start class: Material
-class Material {
+// start class: JobMaterials
+class JobMaterials {
   final int? id;
   final int projectId;
   final String itemName;
@@ -319,7 +319,7 @@ class Material {
   final String? vehicleDesignation;
   final String? vendorOrSubtrade;
 
-  Material({
+  JobMaterials({
     this.id,
     required this.projectId,
     required this.itemName,
@@ -360,8 +360,8 @@ class Material {
   // end method: toMap
 
   // start method: fromMap
-  factory Material.fromMap(Map<String, dynamic> map) {
-    return Material(
+  factory JobMaterials.fromMap(Map<String, dynamic> map) {
+    return JobMaterials(
       id: map['id'],
       projectId: map['project_id'],
       itemName: map['item_name'],
@@ -382,7 +382,7 @@ class Material {
 // end method: fromMap
 
   // start method: copyWith
-  Material copyWith({
+  JobMaterials copyWith({
     int? id,
     int? projectId,
     String? itemName,
@@ -399,7 +399,7 @@ class Material {
     String? vehicleDesignation,
     String? vendorOrSubtrade,
   }) {
-    return Material(
+    return JobMaterials(
       id: id ?? this.id,
       projectId: projectId ?? this.projectId,
       itemName: itemName ?? this.itemName,
@@ -419,7 +419,7 @@ class Material {
   }
 // end method: copyWith
 }
-// end class: Material
+// end class: JobMaterials
 
 // start class: AppSettings
 class AppSettings {

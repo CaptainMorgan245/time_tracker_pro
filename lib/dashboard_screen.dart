@@ -1,18 +1,19 @@
 // lib/dashboard_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/project_repository.dart';
 import 'package:time_tracker_pro/employee_repository.dart';
 import 'package:time_tracker_pro/time_entry_repository.dart';
 import 'package:time_tracker_pro/client_repository.dart';
 import 'dart:async';
-
 import 'package:time_tracker_pro/settings_screen.dart';
 import 'package:time_tracker_pro/client_and_project_screen.dart';
 import 'package:time_tracker_pro/timer_add_form.dart';
 import 'package:time_tracker_pro/time_tracker_page.dart';
 import 'package:intl/intl.dart';
+import 'package:time_tracker_pro/expenses_list_screen.dart';
+import 'package:time_tracker_pro/models.dart' as app_models;
+import 'package:time_tracker_pro/analytics_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -29,13 +30,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final TimeEntryRepository _timeEntryRepo = TimeEntryRepository();
   final ClientRepository _clientRepo = ClientRepository();
 
-  List<Project> _projects = [];
-  List<Employee> _employees = [];
-  List<Client> _clients = [];
-  List<TimeEntry> _recentEntries = [];
+  List<app_models.Project> _projects = [];
+  List<app_models.Employee> _employees = [];
+  List<app_models.Client> _clients = [];
+  List<app_models.TimeEntry> _recentEntries = [];
 
   final GlobalKey<TimerAddFormState> _timerFormKey = GlobalKey<TimerAddFormState>();
-  List<TimeEntry> _activeEntries = [];
+  List<app_models.TimeEntry> _activeEntries = [];
   final Map<int, Timer> _activeTimers = {};
   final Map<int, Duration> _currentDurations = {};
 
@@ -45,9 +46,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
+  late final List<Widget> _widgetOptions;
+
   @override
   void initState() {
     super.initState();
+    _widgetOptions = [
+      _buildDashboardContent(),
+      const ExpensesListScreen(),
+      const AnalyticsScreen(),
+    ];
     _loadData();
     _loadActiveTimers();
   }
@@ -62,13 +70,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       final projects = await _projectRepo.getProjects();
       final employees = await _employeeRepo.getEmployees();
-      final clients = await await _clientRepo.getClients();
+      final clients = await _clientRepo.getClients();
       final allEntries = await _timeEntryRepo.getRecentTimeEntries(limit: 10);
 
       final filteredEntries = allEntries.where((entry) {
         final project = projects.firstWhere(
               (p) => p.id == entry.projectId,
-          orElse: () => Project(projectName: 'Unknown', clientId: 0, isCompleted: true),
+          orElse: () => app_models.Project(projectName: 'Unknown', clientId: 0, isCompleted: true),
         );
         return !entry.isDeleted && !project.isCompleted;
       }).toList();
@@ -95,7 +103,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final filteredEntries = activeEntries.where((entry) {
         final project = projects.firstWhere(
               (p) => p.id == entry.projectId,
-          orElse: () => Project(projectName: 'Unknown', clientId: 0, isCompleted: true),
+          orElse: () => app_models.Project(projectName: 'Unknown', clientId: 0, isCompleted: true),
         );
         return !entry.isDeleted && !project.isCompleted;
       }).toList();
@@ -120,8 +128,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _startTimer({
-    Project? project,
-    Employee? employee,
+    app_models.Project? project,
+    app_models.Employee? employee,
     String? workDetails,
   }) async {
     if (project == null) {
@@ -131,7 +139,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return;
     }
 
-    TimeEntry newEntry = TimeEntry(
+    app_models.TimeEntry newEntry = app_models.TimeEntry(
       projectId: project.id!,
       employeeId: employee?.id,
       startTime: DateTime.now(),
@@ -162,8 +170,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _updateLiveEntry(
       String id,
-      Project? project,
-      Employee? employee,
+      app_models.Project? project,
+      app_models.Employee? employee,
       String? workDetails,
       DateTime? startTime,
       DateTime? stopTime,
@@ -198,13 +206,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         const SnackBar(content: Text('Live timer updated.')),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update live timer: $e')),
-      );
+      // If the timer is not found (Bad state: No element), we assume it's a new timer.
+      _startTimer(project: project, employee: employee, workDetails: workDetails);
+      _timerFormKey.currentState?.resetForm();
     }
   }
 
-  void _startTimerUpdate(TimeEntry entry) {
+  void _startTimerUpdate(app_models.TimeEntry entry) {
     _activeTimers[entry.id!] = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!entry.isPaused) {
         final elapsed = DateTime.now().difference(entry.startTime!);
@@ -306,7 +314,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String _getClientName(int clientId) {
     final client = _clients.firstWhere(
           (c) => c.id == clientId,
-      orElse: () => Client(name: 'Unknown', id: 0),
+      orElse: () => app_models.Client(name: 'Unknown', id: 0),
     );
     return client.name;
   }
@@ -328,7 +336,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  void _populateForm(TimeEntry entry) {
+  void _populateForm(app_models.TimeEntry entry) {
     try {
       final project = _projects.firstWhere((p) => p.id == entry.projectId);
       final employee = entry.employeeId != null
@@ -343,8 +351,157 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  Widget _buildDashboardContent() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: TimerAddForm(
+            key: _timerFormKey,
+            projects: _projects.where((p) => !p.isCompleted).toList(),
+            employees: _employees.where((e) => !e.isDeleted).toList(),
+            isLiveTimerForm: true,
+            onSubmit: (project, employee, workDetails, startTime, stopTime) {
+              _startTimer(
+                project: project,
+                employee: employee,
+                workDetails: workDetails,
+              );
+            },
+            onUpdate: (id, project, employee, workDetails, startTime, stopTime) {
+              _updateLiveEntry(
+                id,
+                project,
+                employee,
+                workDetails,
+                startTime,
+                stopTime,
+              );
+            },
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 24),
+                  const Text(
+                    "Currently Active Timers",
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  _activeEntries.isEmpty
+                      ? const Center(child: Text("No active timers."))
+                      : ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _activeEntries.length,
+                    itemBuilder: (context, index) {
+                      final entry = _activeEntries[index];
+                      final duration = _currentDurations[entry.id] ?? Duration.zero;
+                      return Card(
+                        color: Theme.of(context).cardColor,
+                        margin: const EdgeInsets.symmetric(vertical: 2.0),
+                        child: ListTile(
+                          visualDensity: VisualDensity.compact,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          title: Text(
+                            '${_getProjectName(entry.projectId)} - ${_formatDuration(duration)}',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                          subtitle: Text(
+                            'Emp: ${_getEmployeeName(entry.employeeId)} | Details: ${entry.workDetails ?? "N/A"}',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              SizedBox(
+                                width: 80,
+                                child: IconButton(
+                                  icon: Icon(
+                                    entry.isPaused ? Icons.play_arrow : Icons.pause,
+                                    color: entry.isPaused ? Colors.green : Colors.amber,
+                                    size: 24,
+                                  ),
+                                  onPressed: () {
+                                    if (entry.isPaused) {
+                                      _resumeTimer(entry.id!);
+                                    } else {
+                                      _pauseTimer(entry.id!);
+                                    }
+                                  },
+                                ),
+                              ),
+                              SizedBox(
+                                width: 40,
+                                child: IconButton(
+                                  icon: const Icon(Icons.stop, color: Colors.red, size: 24),
+                                  onPressed: () => _stopTimer(entry.id!),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 32),
+                  const Text(
+                    'Recent Activities',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 10),
+                  _recentEntries.isEmpty
+                      ? const Center(child: Text('No recent activities found.'))
+                      : ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _recentEntries.length,
+                    itemBuilder: (context, index) {
+                      final entry = _recentEntries[index];
+                      return Card(
+                        child: ListTile(
+                          title: Text(
+                            _getProjectName(entry.projectId),
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          subtitle: Text(
+                            'Emp: ${_getEmployeeName(entry.employeeId)} | ${DateFormat('MMM d, yyyy').format(entry.startTime!)} | Details: ${entry.workDetails ?? "N/A"}',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          trailing: Text(
+                            _formatDuration(Duration(seconds: entry.finalBilledDurationSeconds?.toInt() ?? 0)),
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          onTap: () => _populateForm(entry),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final List<Widget> widgetOptions = [
+      _buildDashboardContent(),
+      const ExpensesListScreen(),
+      const AnalyticsScreen(),
+    ];
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
@@ -409,146 +566,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-            child: TimerAddForm(
-              key: _timerFormKey,
-              projects: _projects.where((p) => !p.isCompleted).toList(),
-              employees: _employees.where((e) => !e.isDeleted).toList(),
-              isLiveTimerForm: true,
-              onSubmit: (project, employee, workDetails, startTime, stopTime) {
-                _startTimer(
-                  project: project,
-                  employee: employee,
-                  workDetails: workDetails,
-                );
-              },
-              onUpdate: (id, project, employee, workDetails, startTime, stopTime) {
-                _updateLiveEntry(
-                  id,
-                  project,
-                  employee,
-                  workDetails,
-                  startTime,
-                  stopTime,
-                );
-              },
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 24),
-                    const Text(
-                      "Currently Active Timers",
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _activeEntries.isEmpty
-                        ? const Center(child: Text("No active timers."))
-                        : ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _activeEntries.length,
-                      itemBuilder: (context, index) {
-                        final entry = _activeEntries[index];
-                        final duration = _currentDurations[entry.id] ?? Duration.zero;
-                        return Card(
-                          color: Theme.of(context).cardColor,
-                          margin: const EdgeInsets.symmetric(vertical: 2.0),
-                          child: ListTile(
-                            visualDensity: VisualDensity.compact,
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 16.0),
-                            title: Text(
-                              '${_getProjectName(entry.projectId)} - ${_formatDuration(duration)}',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                            ),
-                            subtitle: Text(
-                              'Emp: ${_getEmployeeName(entry.employeeId)} | Details: ${entry.workDetails ?? "N/A"}',
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                SizedBox(
-                                  width: 80,
-                                  child: IconButton(
-                                    icon: Icon(
-                                      entry.isPaused ? Icons.play_arrow : Icons.pause,
-                                      color: entry.isPaused ? Colors.green : Colors.amber,
-                                      size: 24,
-                                    ),
-                                    onPressed: () {
-                                      if (entry.isPaused) {
-                                        _resumeTimer(entry.id!);
-                                      } else {
-                                        _pauseTimer(entry.id!);
-                                      }
-                                    },
-                                  ),
-                                ),
-                                SizedBox(
-                                  width: 40,
-                                  child: IconButton(
-                                    icon: const Icon(Icons.stop, color: Colors.red, size: 24),
-                                    onPressed: () => _stopTimer(entry.id!),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 32),
-                    const Text(
-                      'Recent Activities',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 10),
-                    _recentEntries.isEmpty
-                        ? const Center(child: Text('No recent activities found.'))
-                        : ListView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _recentEntries.length,
-                      itemBuilder: (context, index) {
-                        final entry = _recentEntries[index];
-                        return Card(
-                          child: ListTile(
-                            title: Text(
-                              _getProjectName(entry.projectId),
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                            subtitle: Text(
-                              'Emp: ${_getEmployeeName(entry.employeeId)} | ${DateFormat('MMM d, yyyy').format(entry.startTime!)} | Details: ${entry.workDetails ?? "N/A"}',
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                            trailing: Text(
-                              _formatDuration(Duration(seconds: entry.finalBilledDurationSeconds?.toInt() ?? 0)),
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                            onTap: () => _populateForm(entry),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ],
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: widgetOptions,
       ),
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
@@ -557,8 +577,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             label: 'Dashboard',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.access_time),
-            label: 'Time',
+            icon: Icon(Icons.receipt_long),
+            label: 'Expenses',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.analytics),

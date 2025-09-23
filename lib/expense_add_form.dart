@@ -1,15 +1,16 @@
 // lib/expense_add_form.dart
 
 import 'package:flutter/material.dart';
-import 'package:time_tracker_pro/models.dart';
+import 'package:time_tracker_pro/models.dart' as app_models;
 import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
 
 class ExpenseAddForm extends StatefulWidget {
-  final List<Project> projects;
+  final List<app_models.Project> projects;
   final List<String> expenseCategories;
   final List<String> vehicleDesignations;
   final List<String> vendors;
-  final Function(Material) onSubmit;
+  final Function(app_models.JobMaterials) onSubmit;
 
   const ExpenseAddForm({
     super.key,
@@ -36,7 +37,7 @@ class _ExpenseAddFormState extends State<ExpenseAddForm> {
   final TextEditingController _odometerReadingController = TextEditingController();
 
   // Selected values for dropdowns and date picker
-  Project? _selectedProject;
+  app_models.Project? _selectedProject;
   DateTime? _selectedPurchaseDate;
   String? _selectedExpenseCategory;
   String? _selectedVehicleDesignation;
@@ -69,8 +70,9 @@ class _ExpenseAddFormState extends State<ExpenseAddForm> {
   }
 
   void _submitForm() {
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
     if (_formKey.currentState!.validate()) {
-      final newExpense = Material(
+      final newExpense = app_models.JobMaterials(
         projectId: _selectedProject!.id!,
         itemName: _itemNameController.text,
         cost: double.parse(_costController.text),
@@ -98,16 +100,16 @@ class _ExpenseAddFormState extends State<ExpenseAddForm> {
             shrinkWrap: true,
             children: [
               // Project Dropdown
-              DropdownButtonFormField<Project>(
+              DropdownButtonFormField<app_models.Project>(
                 decoration: const InputDecoration(labelText: 'Select Project *'),
                 value: _selectedProject,
                 items: widget.projects.map((project) {
-                  return DropdownMenuItem<Project>(
+                  return DropdownMenuItem<app_models.Project>(
                     value: project,
                     child: Text(project.projectName),
                   );
                 }).toList(),
-                onChanged: (Project? newValue) {
+                onChanged: (app_models.Project? newValue) {
                   setState(() {
                     _selectedProject = newValue;
                   });

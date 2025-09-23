@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/project_repository.dart';
+import 'package:flutter/services.dart';
 
 class ProjectAddForm extends StatefulWidget {
   final List<Client> clients;
@@ -37,6 +38,7 @@ class _ProjectAddFormState extends State<ProjectAddForm> {
   }
 
   Future<void> _submit() async {
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
     final projectName = _projectNameController.text.trim();
     final client = _selectedClient;
 

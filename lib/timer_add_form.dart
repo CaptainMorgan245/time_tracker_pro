@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/services.dart';
 
 class TimerAddForm extends StatefulWidget {
   final List<Project> projects;
@@ -179,6 +180,7 @@ class TimerAddFormState extends State<TimerAddForm> {
   }
 
   void _submit() {
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
     if (_selectedProject == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a project.')),
@@ -324,11 +326,6 @@ class TimerAddFormState extends State<TimerAddForm> {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () => _selectDateTime(context, true),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      ),
                       child: const Text('Set Start Time'),
                     ),
                   ),
@@ -336,23 +333,13 @@ class TimerAddFormState extends State<TimerAddForm> {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () => _selectDateTime(context, false),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      ),
                       child: const Text('Set Stop Time'),
                     ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: ElevatedButton(
+                    child: OutlinedButton(
                       onPressed: resetForm,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).colorScheme.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      ),
                       child: const Text('Clear / Cancel'),
                     ),
                   ),
@@ -362,23 +349,11 @@ class TimerAddFormState extends State<TimerAddForm> {
               if (_editingRecordId != null) ...[
                 ElevatedButton(
                   onPressed: _submit,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    minimumSize: const Size(double.infinity, 50),
-                  ),
                   child: const Text('Update Time Record'),
                 ),
               ] else ...[
                 ElevatedButton(
                   onPressed: _submit,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                    minimumSize: const Size(double.infinity, 50),
-                  ),
                   child: const Text('Add Time Record'),
                 ),
               ],
@@ -405,11 +380,6 @@ class TimerAddFormState extends State<TimerAddForm> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _submit,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  ),
                   child: const Text('Start New Timer'),
                 ),
               ),
