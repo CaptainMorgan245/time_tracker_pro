@@ -128,12 +128,14 @@ class DatabaseHelper {
       )
     ''');
 
-    // Create Settings table
+    // Rebuilt Settings table with hard-coded columns
     await db.execute('''
       CREATE TABLE settings (
         id INTEGER PRIMARY KEY,
         employee_number_prefix TEXT,
-        next_employee_number INTEGER
+        next_employee_number INTEGER,
+        vehicle_designations TEXT,
+        vendors TEXT
       )
     ''');
   }
