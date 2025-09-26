@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/expense_category_repository.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/settings_service.dart';
+import 'package:time_tracker_pro/input_formatters.dart';
+import 'package:time_tracker_pro/settings_model.dart';
 
 class ExpensesScreen extends StatefulWidget {
   const ExpensesScreen({super.key});
@@ -32,18 +34,27 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
 
   // start method: _loadData
   Future<void> _loadData() async {
-    final settings = await _settingsService.loadSettings();
+    final rawSettings = await _settingsService.loadSettings();
+
+    // FIX 1: Use explicit casting (as Map<String, dynamic>) within the conditional
+    // to satisfy the compiler that the parameter is the correct type.
+    final settings = (rawSettings is Map<String, dynamic>)
+        ? SettingsModel.fromMap(rawSettings as Map<String, dynamic>)
+        : (rawSettings is SettingsModel ? rawSettings : SettingsModel());
+
     final cats = await _repo.getExpenseCategories();
+
     setState(() {
       _categories = cats;
-      _vehicles = List<String>.from(settings?.vehicleDesignations ?? []);
-      _vendors = List<String>.from(settings?.vendors ?? []);
+      _vehicles = List<String>.from(settings.vehicleDesignations);
+      _vendors = List<String>.from(settings.vendors);
     });
   }
   // end method: _loadData
 
   // start method: _addCategory
   Future<void> _addCategory() async {
+    FocusScope.of(context).unfocus();
     final name = _categoryController.text.trim();
     if (name.isEmpty) return;
     await _repo.insertExpenseCategory(ExpenseCategory(name: name));
@@ -59,72 +70,171 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   }
   // end method: _deleteCategory
 
+  // start method: _updateCategory
+  Future<void> _updateCategory(ExpenseCategory category) async {
+    await _repo.updateExpenseCategory(category);
+    _loadData();
+  }
+  // end method: _updateCategory
+
   // start method: _addOption
   Future<void> _addOption(TextEditingController controller, List<String> list) async {
+    FocusScope.of(context).unfocus();
     final name = controller.text.trim();
     if (name.isEmpty) return;
+
     list.add(name);
     controller.clear();
+
     await _saveSettings();
+    _loadData();
   }
   // end method: _addOption
+
+  // start method: _updateOption
+  Future<void> _updateOption(List<String> list, int index, String newValue) async {
+    list[index] = newValue;
+    await _saveSettings();
+    _loadData();
+  }
+  // end method: _updateOption
 
   // start method: _removeOption
   Future<void> _removeOption(List<String> list, int index) async {
     list.removeAt(index);
     await _saveSettings();
+    _loadData();
   }
   // end method: _removeOption
 
   // start method: _saveSettings
   Future<void> _saveSettings() async {
-    final settings = await _settingsService.loadSettings();
-    final updatedSettings = settings?.copyWith(
+    final rawSettings = await _settingsService.loadSettings();
+
+    // FIX 2: Apply explicit casting for the conversion in _saveSettings as well.
+    final currentSettings = (rawSettings is Map<String, dynamic>)
+        ? SettingsModel.fromMap(rawSettings as Map<String, dynamic>)
+        : (rawSettings is SettingsModel ? rawSettings : SettingsModel());
+
+    final updatedSettings = currentSettings.copyWith(
       vehicleDesignations: _vehicles,
       vendors: _vendors,
     );
 
-    if (updatedSettings != null) {
-      await _settingsService.saveSettings(updatedSettings);
-    }
-    setState(() {});
+    await _settingsService.saveSettings(updatedSettings);
   }
   // end method: _saveSettings
 
-  // start method: _buildListSection
-  Widget _buildListSection(String title, List<String> items, TextEditingController controller, VoidCallback onAdd, Function(int) onRemove) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
+  // start method: _buildForm
+  Widget _buildForm(String label, TextEditingController controller, VoidCallback onAdd) {
+    // FIX 1: Correctly set the flag to exclude Vehicle Designation
+    final bool applyCapitalization = label != 'Vehicle Designation';
+
+    return Expanded(
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            children: [
+              TextField(
                 controller: controller,
-                decoration: InputDecoration(hintText: 'Add $title'),
+                // FIX 2: Use the conditional logic to either apply the formatter or an empty list.
+                inputFormatters: applyCapitalization
+                    ? [CapitalizeEachWordInputFormatter()]
+                    : [],
+                decoration: InputDecoration(labelText: label),
               ),
-            ),
-            IconButton(icon: const Icon(Icons.add), onPressed: onAdd),
-          ],
+              const SizedBox(height: 8),
+              ElevatedButton(onPressed: onAdd, child: const Text('Add')),
+            ],
+          ),
         ),
-        const SizedBox(height: 10),
-        ...items.asMap().entries.map((entry) {
-          final index = entry.key;
-          final value = entry.value;
-          return ListTile(
-            title: Text(value),
-            trailing: IconButton(
-              icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: () => onRemove(index),
-            ),
-          );
-        }).toList(),
-        const SizedBox(height: 20),
-      ],
+      ),
     );
   }
-  // end method: _buildListSection
+// end method: _buildForm
+
+  // start method: _buildList
+  Widget _buildList(String title, List<String> items, Function(int) onRemove, Function(int) onEdit) {
+    return Expanded(
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 16.0),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              Expanded(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: items.length,
+                  itemBuilder: (context, index) {
+                    final value = items[index];
+                    return ListTile(
+                      title: Text(value),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit, color: Colors.blue),
+                            onPressed: () => onEdit(index),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () => onRemove(index),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  // end method: _buildList
+
+  void _showEditDialog(
+      BuildContext context,
+      String title,
+      String currentValue,
+      Function(String) onSave,
+      ) {
+    final TextEditingController controller = TextEditingController(text: currentValue);
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Edit $title'),
+          content: TextField(
+            controller: controller,
+            decoration: InputDecoration(labelText: title),
+          ),
+          actions: [
+            TextButton(
+              child: const Text('Cancel'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            ElevatedButton(
+              child: const Text('Save'),
+              onPressed: () {
+                if (controller.text.isNotEmpty) {
+                  onSave(controller.text.trim());
+                  Navigator.of(context).pop();
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -134,30 +244,80 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            const Text('Expense Categories', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _categoryController,
-                    decoration: const InputDecoration(hintText: 'Add new category'),
-                  ),
-                ),
-                IconButton(icon: const Icon(Icons.add), onPressed: _addCategory),
-              ],
-            ),
-            const SizedBox(height: 10),
-            ..._categories.map((cat) => ListTile(
-              title: Text(cat.name),
-              trailing: IconButton(
-                icon: const Icon(Icons.delete, color: Colors.red),
-                onPressed: () => _deleteCategory(cat.id!),
+            // Top row: pinned input forms
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildForm('Expense Category', _categoryController, _addCategory),
+                  const SizedBox(width: 16),
+                  _buildForm('Vehicle Designation', _vehicleController, () async => _addOption(_vehicleController, _vehicles)),
+                  const SizedBox(width: 16),
+                  _buildForm('Vendor / Subtrade', _vendorController, () async => _addOption(_vendorController, _vendors)),
+                ],
               ),
-            )),
-            const Divider(height: 30),
-            _buildListSection('Vehicle Designations', _vehicles, _vehicleController, () => _addOption(_vehicleController, _vehicles), (index) => _removeOption(_vehicles, index)),
-            const Divider(height: 30),
-            _buildListSection('Vendors / Subtrades', _vendors, _vendorController, () => _addOption(_vendorController, _vendors), (index) => _removeOption(_vendors, index)),
+            ),
+            const Divider(height: 1),
+            // Bottom row: scrollable lists side-by-side
+            SizedBox(
+              height: 400,
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildList(
+                      'Expense Categories',
+                      _categories.map((cat) => cat.name).toList(),
+                          (index) => _deleteCategory(_categories[index].id!),
+                          (index) {
+                        final category = _categories[index];
+                        _showEditDialog(
+                          context,
+                          'Expense Category',
+                          category.name,
+                              (newValue) {
+                            final updatedCategory = category.copyWith(name: newValue);
+                            _updateCategory(updatedCategory);
+                          },
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 16),
+                    _buildList(
+                      'Vehicle Designations',
+                      _vehicles,
+                          (index) => _removeOption(_vehicles, index),
+                          (index) {
+                        final currentValue = _vehicles[index];
+                        _showEditDialog(
+                          context,
+                          'Vehicle Designation',
+                          currentValue,
+                              (newValue) => _updateOption(_vehicles, index, newValue),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 16),
+                    _buildList(
+                      'Vendors / Subtrades',
+                      _vendors,
+                          (index) => _removeOption(_vendors, index),
+                          (index) {
+                        final currentValue = _vendors[index];
+                        _showEditDialog(
+                          context,
+                          'Vendor / Subtrade',
+                          currentValue,
+                              (newValue) => _updateOption(_vendors, index, newValue),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),

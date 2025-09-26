@@ -526,6 +526,17 @@ class ExpenseCategory {
     );
   }
 // end method: fromMap
+  // start method: copyWith
+  ExpenseCategory copyWith({
+    int? id,
+    String? name,
+  }) {
+    return ExpenseCategory(
+      id: id ?? this.id,
+      name: name ?? this.name,
+    );
+  }
+// end method: copyWith
 }
 // end class: ExpenseCategory
 

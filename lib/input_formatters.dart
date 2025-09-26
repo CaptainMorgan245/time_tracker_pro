@@ -14,18 +14,15 @@ class CapitalizeEachWordInputFormatter extends TextInputFormatter {
 
     final formattedText = newValue.text.split(' ').map((word) {
       if (word.isEmpty) return '';
-      return word[0].toUpperCase() + word.substring(1);
+      return word[0].toUpperCase() + word.substring(1).toLowerCase();
     }).join(' ');
-
-    // Preserve the cursor position
-    final newSelection = newValue.selection.copyWith(
-      baseOffset: newValue.selection.baseOffset + (formattedText.length - newValue.text.length),
-      extentOffset: newValue.selection.extentOffset + (formattedText.length - newValue.text.length),
-    );
 
     return newValue.copyWith(
       text: formattedText,
-      selection: newSelection,
+      selection: newValue.selection.copyWith(
+        baseOffset: formattedText.length,
+        extentOffset: formattedText.length,
+      ),
     );
   }
 }
@@ -42,15 +39,12 @@ class CapitalizeFirstWordInputFormatter extends TextInputFormatter {
 
     final formattedText = newValue.text[0].toUpperCase() + newValue.text.substring(1);
 
-    // Preserve the cursor position
-    final newSelection = newValue.selection.copyWith(
-      baseOffset: newValue.selection.baseOffset + (formattedText.length - newValue.text.length),
-      extentOffset: newValue.selection.extentOffset + (formattedText.length - newValue.text.length),
-    );
-
     return newValue.copyWith(
       text: formattedText,
-      selection: newSelection,
+      selection: newValue.selection.copyWith(
+        baseOffset: formattedText.length,
+        extentOffset: formattedText.length,
+      ),
     );
   }
 }

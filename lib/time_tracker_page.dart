@@ -48,7 +48,8 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
             (p) => p.id == entry.projectId,
         orElse: () => Project(projectName: 'Unknown', clientId: 0, isCompleted: true),
       );
-      return !entry.isDeleted && !project.isCompleted;
+      // Ensure entry.endTime is NOT null to filter out active timers
+      return entry.endTime != null && !entry.isDeleted && !project.isCompleted;
     }).toList();
 
     setState(() {
@@ -165,9 +166,15 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
 
   @override
   Widget build(BuildContext context) {
+    // FIX 1: Define the theme variable here to apply styles consistently.
+    final theme = Theme.of(context);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Time Records'),
+        // FIX 2: Apply primary color to AppBar for global consistency.
+        backgroundColor: theme.primaryColor,
+        foregroundColor: Colors.white,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -222,19 +229,24 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
                     itemBuilder: (context, index) {
                       final entry = _allEntries[index];
                       return Card(
+                        // FIX 3: Apply Theme CardColor for consistency
+                        color: theme.cardColor,
                         child: ListTile(
                           title: Text(
                             _getProjectName(entry.projectId),
-                            style: Theme.of(context).textTheme.titleLarge,
+                            // FIX 4: Apply Theme titleLarge style
+                            style: theme.textTheme.titleLarge,
                           ),
                           subtitle: Text(
                             'Client: ${_getClientName(_projects.firstWhere((p) => p.id == entry.projectId).clientId)} | Emp: ${_getEmployeeName(entry.employeeId)} | Details: ${entry.workDetails ?? "N/A"}',
-                            style: Theme.of(context).textTheme.bodyMedium,
+                            // FIX 5: Apply Theme bodyMedium style
+                            style: theme.textTheme.bodyMedium,
                           ),
                           trailing: Text(
                             '${DateFormat('MM/dd').format(entry.startTime!)}\n${_formatDuration(Duration(seconds: entry.finalBilledDurationSeconds?.toInt() ?? 0))}',
                             textAlign: TextAlign.right,
-                            style: Theme.of(context).textTheme.bodySmall,
+                            // FIX 6: Apply Theme bodySmall style
+                            style: theme.textTheme.bodySmall,
                           ),
                           onTap: () => _populateForm(entry),
                         ),

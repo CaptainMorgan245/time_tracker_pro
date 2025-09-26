@@ -1,4 +1,4 @@
-// settings_screen.dart
+// lib/settings_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/settings_model.dart';
@@ -71,7 +71,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   }
 
   Future<void> _saveSettings() async {
-    final settings = SettingsModel(
+    final settings = _settings.copyWith(
       employeeNumberPrefix: _employeeNumberPrefixController.text.isEmpty
           ? null
           : _employeeNumberPrefixController.text,
@@ -112,6 +112,8 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
 
   Future<void> _addRole() async {
     if (_roleNameController.text.isNotEmpty) {
+      // Dismiss keyboard before submitting
+      FocusScope.of(context).unfocus();
       final newRole = Role(
         name: _roleNameController.text,
         standardRate: double.tryParse(_roleRateController.text) ?? 0.0,
@@ -184,6 +186,44 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     );
   }
 
+  // New helper method to build the Roles list in a unified Card/ListTile style
+  Widget _buildRolesList() {
+    final theme = Theme.of(context);
+
+    if (_isLoadingRoles) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // The list itself
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _roles.length,
+          itemBuilder: (context, index) {
+            final role = _roles[index];
+            return Card(
+              color: theme.cardColor,
+              margin: const EdgeInsets.symmetric(vertical: 4.0),
+              child: ListTile(
+                title: Text(role.name),
+                subtitle: Text('\$${role.standardRate.toStringAsFixed(2)} / hr'),
+                trailing: IconButton(
+                  icon: const Icon(Icons.edit, color: Colors.blue),
+                  onPressed: () => _showEditRoleDialog(role),
+                ),
+                onTap: () => _showEditRoleDialog(role),
+              ),
+            );
+          },
+        ),
+      ],
+    );
+  }
+  // END _buildRolesList
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -203,6 +243,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           ],
         ),
       ),
+      // FIX 6: Removed the FloatingActionButton from the Scaffold's build method (it must be in the body)
       body: TabBarView(
         controller: _tabController,
         children: [
@@ -238,6 +279,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               ],
             ),
           ),
+          // Personnel Tab Content (Employees and Roles)
           Column(
             children: [
               SizedBox(
@@ -293,47 +335,27 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
 
               const Divider(height: 1, thickness: 1),
 
+              // Employee and Roles Lists
               Expanded(
                 child: Row(
                   children: [
+                    // Employee List (Draws the Employee Cards)
                     Expanded(
-                      child: EmployeeListScreen(
-                        employees: _employees,
-                        roles: _roles,
-                        isLoading: _isLoadingEmployees,
-                        onUpdate: _loadEmployees,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: EmployeeListScreen(
+                          employees: _employees,
+                          roles: _roles,
+                          isLoading: _isLoadingEmployees,
+                          onUpdate: _loadEmployees,
+                        ),
                       ),
                     ),
+                    // Roles List (Draws the Role Cards)
                     Expanded(
-                      child: SingleChildScrollView(
+                      child: Padding(
                         padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Current Roles',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                            ),
-                            _isLoadingRoles
-                                ? const CircularProgressIndicator()
-                                : ListView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: _roles.length,
-                              itemBuilder: (context, index) {
-                                final role = _roles[index];
-                                return ListTile(
-                                  title: Text(role.name),
-                                  subtitle: Text('\$${role.standardRate} / hr'),
-                                  trailing: IconButton(
-                                    icon: const Icon(Icons.edit, color: Colors.blue),
-                                    onPressed: () => _showEditRoleDialog(role),
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
+                        child: _buildRolesList(),
                       ),
                     ),
                   ],
@@ -347,6 +369,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           const Center(child: Text('Burden Rate settings coming soon...')),
         ],
       ),
+      // FIX 7: Remove the FloatingActionButton property from the Scaffold if it existed here.
     );
   }
 }

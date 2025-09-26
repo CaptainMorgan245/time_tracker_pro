@@ -18,21 +18,42 @@ class SettingsService {
     return maps.isNotEmpty;
   }
 
-  Future<SettingsModel?> loadSettings() async {
+  // start method: loadSettings
+  // FIX 1: Change return type to non-nullable (SettingsModel)
+  Future<SettingsModel> loadSettings() async {
     final db = await _databaseHelper.database;
     final List<Map<String, dynamic>> maps = await db.query(tableName);
+
     if (maps.isNotEmpty) {
       return SettingsModel.fromMap(maps.first);
     }
-    return null;
+    // FIX 2: Return a default SettingsModel instance when empty,
+    // preventing all null-related crashes in the calling screen.
+    return SettingsModel();
   }
+  // end method: loadSettings
 
+  // start method: saveSettings
   Future<void> saveSettings(SettingsModel settings) async {
     final db = await _databaseHelper.database;
-    await db.insert(
-      tableName,
-      settings.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+
+    // FIX 3: Use robust update-or-insert logic for the single settings row.
+    final exists = await hasSettings();
+    if (exists) {
+      await db.update(
+        tableName,
+        settings.toMap(),
+        where: 'id = ?',
+        whereArgs: [1], // Targets the single settings row
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    } else {
+      await db.insert(
+        tableName,
+        settings.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
   }
+// end method: saveSettings
 }

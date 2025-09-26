@@ -66,6 +66,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
+  // start method: _loadData
   Future<void> _loadData() async {
     try {
       final projects = await _projectRepo.getProjects();
@@ -78,7 +79,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
               (p) => p.id == entry.projectId,
           orElse: () => app_models.Project(projectName: 'Unknown', clientId: 0, isCompleted: true),
         );
-        return !entry.isDeleted && !project.isCompleted;
+        // FIX: Only include entries that have an endTime (i.e., are completed)
+        return !entry.isDeleted && !project.isCompleted && entry.endTime != null;
       }).toList();
 
       setState(() {
@@ -88,12 +90,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _recentEntries = filteredEntries;
       });
     } catch (e) {
+      // If loading fails, clear all lists to prevent crashes and log the error
+      setState(() {
+        _projects = [];
+        _employees = [];
+        _clients = [];
+        _recentEntries = [];
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to load data: $e')),
       );
     }
   }
+  // end method: _loadData
 
+  // start method: _loadActiveTimers
   Future<void> _loadActiveTimers() async {
     try {
       final activeEntries = await _timeEntryRepo.getActiveTimeEntries();
@@ -108,6 +119,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return !entry.isDeleted && !project.isCompleted;
       }).toList();
 
+      // Clear old timers before loading new ones to prevent duplicate timers
+      _activeTimers.values.forEach((timer) => timer.cancel());
+      _activeTimers.clear();
+      _currentDurations.clear();
+
       for (var entry in filteredEntries) {
         if (!_activeTimers.containsKey(entry.id)) {
           final now = DateTime.now();
@@ -121,11 +137,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _activeEntries = filteredEntries;
       });
     } catch (e) {
+      // If loading fails, clear active entries and timers
+      _activeTimers.values.forEach((timer) => timer.cancel());
+      _activeTimers.clear();
+      _currentDurations.clear();
+      setState(() {
+        _activeEntries = [];
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to load active timers: $e')),
       );
     }
   }
+  // end method: _loadActiveTimers
 
   Future<void> _startTimer({
     app_models.Project? project,

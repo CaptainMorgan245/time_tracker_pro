@@ -4,13 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter/services.dart';
+import 'package:time_tracker_pro/input_formatters.dart';
 
 class TimerAddForm extends StatefulWidget {
   final List<Project> projects;
   final List<Employee> employees;
-  final Function(Project?, Employee?, String, DateTime?, DateTime?) onSubmit;
+  final Function(Project?, Employee?, String?, DateTime?, DateTime?) onSubmit;
   final bool isLiveTimerForm;
-  final Function(String, Project?, Employee?, String, DateTime?, DateTime?) onUpdate;
+  final Function(String, Project?, Employee?, String?, DateTime?, DateTime?) onUpdate;
 
   const TimerAddForm({
     super.key,
@@ -187,12 +188,6 @@ class TimerAddFormState extends State<TimerAddForm> {
       );
       return;
     }
-    if (_selectedEmployee == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select an employee.')),
-      );
-      return;
-    }
 
     if (!widget.isLiveTimerForm) {
       if (_selectedStartTime == null || _selectedStopTime == null) {
@@ -236,6 +231,11 @@ class TimerAddFormState extends State<TimerAddForm> {
 
   @override
   Widget build(BuildContext context) {
+    // Define theme variables to apply styles and colors
+    final theme = Theme.of(context);
+    final primaryColor = theme.primaryColor;
+    final inputBorder = const OutlineInputBorder();
+
     final employeeList = List<Employee>.from(widget.employees);
     final isUnrecognized = _selectedEmployee != null &&
         !employeeList.any((e) => e.id == _selectedEmployee!.id);
@@ -243,6 +243,8 @@ class TimerAddFormState extends State<TimerAddForm> {
       employeeList.insert(0, _selectedEmployee!);
     }
     return Card(
+      // Apply theme card color
+      color: theme.cardColor,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -251,10 +253,10 @@ class TimerAddFormState extends State<TimerAddForm> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<Project>(
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12),
-                      label: Text('Select Project'),
+                    decoration: InputDecoration( // Use InputDecoration for theme
+                      border: inputBorder,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                      labelText: 'Select Project',
                     ),
                     value: _selectedProject,
                     items: widget.projects.map((project) {
@@ -274,10 +276,10 @@ class TimerAddFormState extends State<TimerAddForm> {
                 const SizedBox(width: 16),
                 Expanded(
                   child: DropdownButtonFormField<Employee?>(
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12),
-                      label: Text('Select Employee'),
+                    decoration: InputDecoration( // Use InputDecoration for theme
+                      border: inputBorder,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                      labelText: 'Select Employee',
                     ),
                     value: _selectedEmployee,
                     items: [
@@ -308,11 +310,13 @@ class TimerAddFormState extends State<TimerAddForm> {
                 Expanded(
                   child: TextFormField(
                     controller: _workDetailsController,
-                    decoration: const InputDecoration(
+                    // Restore capitalization functionality
+                    inputFormatters: [CapitalizeFirstWordInputFormatter()],
+                    decoration: InputDecoration(
                       hintText: "Enter details about work performed...",
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                      label: Text('Work Details'),
+                      border: inputBorder,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                      labelText: 'Work Details',
                     ),
                     maxLines: 1,
                   ),
@@ -326,6 +330,12 @@ class TimerAddFormState extends State<TimerAddForm> {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () => _selectDateTime(context, true),
+                      // Apply theme color
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
                       child: const Text('Set Start Time'),
                     ),
                   ),
@@ -333,13 +343,26 @@ class TimerAddFormState extends State<TimerAddForm> {
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () => _selectDateTime(context, false),
+                      // Apply theme color
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
                       child: const Text('Set Stop Time'),
                     ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    child: OutlinedButton(
+                    // FIX 6: Convert OutlinedButton to ElevatedButton to make it a solid color
+                    child: ElevatedButton(
                       onPressed: resetForm,
+                      // FIX 7: Apply the standard solid color style
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
                       child: const Text('Clear / Cancel'),
                     ),
                   ),
@@ -349,11 +372,22 @@ class TimerAddFormState extends State<TimerAddForm> {
               if (_editingRecordId != null) ...[
                 ElevatedButton(
                   onPressed: _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
                   child: const Text('Update Time Record'),
                 ),
               ] else ...[
                 ElevatedButton(
                   onPressed: _submit,
+                  // Apply theme color for the main Add button
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
                   child: const Text('Add Time Record'),
                 ),
               ],
@@ -364,11 +398,11 @@ class TimerAddFormState extends State<TimerAddForm> {
                   children: [
                     Text(
                       'Start: ${_formatDateTime(_selectedStartTime)}',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: theme.textTheme.bodySmall,
                     ),
                     Text(
                       'Stop: ${_formatDateTime(_selectedStopTime)}',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: theme.textTheme.bodySmall,
                     ),
                   ],
                 ),
@@ -380,6 +414,11 @@ class TimerAddFormState extends State<TimerAddForm> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _submit,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  ),
                   child: const Text('Start New Timer'),
                 ),
               ),
