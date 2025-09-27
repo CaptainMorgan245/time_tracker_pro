@@ -6,14 +6,20 @@ import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/settings_service.dart';
 import 'package:time_tracker_pro/input_formatters.dart';
 import 'package:time_tracker_pro/settings_model.dart';
+import 'package:time_tracker_pro/widgets/app_setting_list_card.dart'; // Import reusable list component
 
+// start class: ExpensesScreen
 class ExpensesScreen extends StatefulWidget {
+  // start method: constructor
   const ExpensesScreen({super.key});
+  // end method: constructor
 
   @override
   State<ExpensesScreen> createState() => _ExpensesScreenState();
 }
+// end class: ExpensesScreen
 
+// start class: _ExpensesScreenState
 class _ExpensesScreenState extends State<ExpensesScreen> {
   final ExpenseCategoryRepository _repo = ExpenseCategoryRepository();
   final SettingsService _settingsService = SettingsService.instance;
@@ -26,18 +32,28 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   List<String> _vehicles = [];
   List<String> _vendors = [];
 
+  // start method: initState
   @override
   void initState() {
     super.initState();
     _loadData();
   }
+  // end method: initState
+
+  // start method: dispose
+  @override
+  void dispose() {
+    _categoryController.dispose();
+    _vehicleController.dispose();
+    _vendorController.dispose();
+    super.dispose();
+  }
+  // end method: _dispose
 
   // start method: _loadData
   Future<void> _loadData() async {
     final rawSettings = await _settingsService.loadSettings();
 
-    // FIX 1: Use explicit casting (as Map<String, dynamic>) within the conditional
-    // to satisfy the compiler that the parameter is the correct type.
     final settings = (rawSettings is Map<String, dynamic>)
         ? SettingsModel.fromMap(rawSettings as Map<String, dynamic>)
         : (rawSettings is SettingsModel ? rawSettings : SettingsModel());
@@ -111,7 +127,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   Future<void> _saveSettings() async {
     final rawSettings = await _settingsService.loadSettings();
 
-    // FIX 2: Apply explicit casting for the conversion in _saveSettings as well.
     final currentSettings = (rawSettings is Map<String, dynamic>)
         ? SettingsModel.fromMap(rawSettings as Map<String, dynamic>)
         : (rawSettings is SettingsModel ? rawSettings : SettingsModel());
@@ -127,7 +142,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
 
   // start method: _buildForm
   Widget _buildForm(String label, TextEditingController controller, VoidCallback onAdd) {
-    // FIX 1: Correctly set the flag to exclude Vehicle Designation
     final bool applyCapitalization = label != 'Vehicle Designation';
 
     return Expanded(
@@ -138,7 +152,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             children: [
               TextField(
                 controller: controller,
-                // FIX 2: Use the conditional logic to either apply the formatter or an empty list.
                 inputFormatters: applyCapitalization
                     ? [CapitalizeEachWordInputFormatter()]
                     : [],
@@ -152,58 +165,15 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       ),
     );
   }
-// end method: _buildForm
+  // end method: _buildForm
 
-  // start method: _buildList
-  Widget _buildList(String title, List<String> items, Function(int) onRemove, Function(int) onEdit) {
-    return Expanded(
-      child: Card(
-        margin: const EdgeInsets.only(bottom: 16.0),
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 10),
-              Expanded(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: items.length,
-                  itemBuilder: (context, index) {
-                    final value = items[index];
-                    return ListTile(
-                      title: Text(value),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.edit, color: Colors.blue),
-                            onPressed: () => onEdit(index),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: () => onRemove(index),
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-  // end method: _buildList
-
+  // start method: _showEditDialog
   void _showEditDialog(
       BuildContext context,
       String title,
       String currentValue,
       Function(String) onSave,
+      VoidCallback onDelete,
       ) {
     final TextEditingController controller = TextEditingController(text: currentValue);
 
@@ -221,6 +191,14 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
               child: const Text('Cancel'),
               onPressed: () => Navigator.of(context).pop(),
             ),
+            // FIX: Safe Deletion UX: Delete button inside the dialog
+            TextButton(
+              child: const Text('Delete', style: TextStyle(color: Colors.red)),
+              onPressed: () {
+                onDelete();
+                Navigator.of(context).pop();
+              },
+            ),
             ElevatedButton(
               child: const Text('Save'),
               onPressed: () {
@@ -235,92 +213,122 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       },
     );
   }
+  // end method: _showEditDialog
 
+  // start method: build
   @override
   Widget build(BuildContext context) {
+    // Helper function for the repeatable action logic
+    void openEditDialog(String title, String currentValue, Function(String) onSave, VoidCallback onDelete) {
+      _showEditDialog(context, title, currentValue, onSave, onDelete);
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Expenses')),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            // Top row: pinned input forms
-            Padding(
+      body: Column( // Main vertical alignment for FIXED TOP / EXPANDED BOTTOM
+        children: [
+          // Top row: pinned input forms (FIXED SECTION)
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildForm('Expense Category', _categoryController, _addCategory),
+                const SizedBox(width: 16),
+                _buildForm('Vehicle Designation', _vehicleController, () async => _addOption(_vehicleController, _vehicles)),
+                const SizedBox(width: 16),
+                _buildForm('Vendor / Subtrade', _vendorController, () async => _addOption(_vendorController, _vendors)),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+
+          // Bottom row: scrollable lists side-by-side (EXPANDED SCROLLABLE SECTION)
+          Expanded( // Uses Expanded to fill remaining space
+            child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildForm('Expense Category', _categoryController, _addCategory),
+                  // Expense Categories List (Individual Scroll Container)
+                  Flexible(
+                    child: Column( // Must use Column to support Expanded child
+                      children: [
+                        Expanded( // Forces the list to use available space and scroll internally
+                          child: AppSettingListCard(
+                            title: 'Expense Categories', // Title added back for context
+                            items: _categories.map((cat) => cat.name).toList(),
+                            onEdit: (index) {
+                              final category = _categories[index];
+                              openEditDialog(
+                                'Expense Category',
+                                category.name,
+                                    (newValue) {
+                                  final updatedCategory = category.copyWith(name: newValue);
+                                  _updateCategory(updatedCategory);
+                                },
+                                    () => _deleteCategory(category.id!),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(width: 16),
-                  _buildForm('Vehicle Designation', _vehicleController, () async => _addOption(_vehicleController, _vehicles)),
+                  // Vehicle Designations List (Individual Scroll Container)
+                  Flexible(
+                    child: Column( // Must use Column to support Expanded child
+                      children: [
+                        Expanded( // Forces the list to use available space and scroll internally
+                          child: AppSettingListCard(
+                            title: 'Vehicle Designations', // Title added back for context
+                            items: _vehicles,
+                            onEdit: (index) {
+                              final currentValue = _vehicles[index];
+                              openEditDialog(
+                                'Vehicle Designation',
+                                currentValue,
+                                    (newValue) => _updateOption(_vehicles, index, newValue),
+                                    () => _removeOption(_vehicles, index),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(width: 16),
-                  _buildForm('Vendor / Subtrade', _vendorController, () async => _addOption(_vendorController, _vendors)),
+                  // Vendors List (Individual Scroll Container)
+                  Flexible(
+                    child: Column( // Must use Column to support Expanded child
+                      children: [
+                        Expanded( // Forces the list to use available space and scroll internally
+                          child: AppSettingListCard(
+                            title: 'Vendors / Subtrades', // Title added back for context
+                            items: _vendors,
+                            onEdit: (index) {
+                              final currentValue = _vendors[index];
+                              openEditDialog(
+                                'Vendor / Subtrade',
+                                currentValue,
+                                    (newValue) => _updateOption(_vendors, index, newValue),
+                                    () => _removeOption(_vendors, index),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
-            const Divider(height: 1),
-            // Bottom row: scrollable lists side-by-side
-            SizedBox(
-              height: 400,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _buildList(
-                      'Expense Categories',
-                      _categories.map((cat) => cat.name).toList(),
-                          (index) => _deleteCategory(_categories[index].id!),
-                          (index) {
-                        final category = _categories[index];
-                        _showEditDialog(
-                          context,
-                          'Expense Category',
-                          category.name,
-                              (newValue) {
-                            final updatedCategory = category.copyWith(name: newValue);
-                            _updateCategory(updatedCategory);
-                          },
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 16),
-                    _buildList(
-                      'Vehicle Designations',
-                      _vehicles,
-                          (index) => _removeOption(_vehicles, index),
-                          (index) {
-                        final currentValue = _vehicles[index];
-                        _showEditDialog(
-                          context,
-                          'Vehicle Designation',
-                          currentValue,
-                              (newValue) => _updateOption(_vehicles, index, newValue),
-                        );
-                      },
-                    ),
-                    const SizedBox(width: 16),
-                    _buildList(
-                      'Vendors / Subtrades',
-                      _vendors,
-                          (index) => _removeOption(_vendors, index),
-                          (index) {
-                        final currentValue = _vendors[index];
-                        _showEditDialog(
-                          context,
-                          'Vendor / Subtrade',
-                          currentValue,
-                              (newValue) => _updateOption(_vendors, index, newValue),
-                        );
-                      },
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
+// end method: build
 }
+// end class: _ExpensesScreenState

@@ -13,6 +13,7 @@ class EmployeeListScreen extends StatefulWidget {
   final bool isLoading;
   final VoidCallback onUpdate;
 
+  // start method: constructor
   const EmployeeListScreen({
     super.key,
     required this.roles,
@@ -20,6 +21,7 @@ class EmployeeListScreen extends StatefulWidget {
     required this.isLoading,
     required this.onUpdate,
   });
+  // end method: constructor
 
   @override
   State<EmployeeListScreen> createState() => _EmployeeListScreenState();
@@ -30,10 +32,12 @@ class EmployeeListScreen extends StatefulWidget {
 class _EmployeeListScreenState extends State<EmployeeListScreen> {
   final EmployeeRepository _employeeRepo = EmployeeRepository();
 
+  // start method: initState
   @override
   void initState() {
     super.initState();
   }
+  // end method: initState
 
   // start method: _loadEmployees
   Future<void> _loadEmployees() async {
@@ -163,79 +167,72 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
   }
   // end method: _showEditDialog
 
+  // start method: _buildEmployeeList
+  Widget _buildEmployeeList(List<Employee> list, Color color, {bool inactive = false}) {
+    if (list.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (inactive)
+          Padding(
+            padding: const EdgeInsets.only(top: 16.0, bottom: 8.0),
+            child: Text('Inactive Employees', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red.shade700)),
+          ),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: list.length,
+          itemBuilder: (context, index) {
+            final employee = list[index];
+            final role = widget.roles.firstWhere(
+                  (r) => r.id == employee.titleId,
+              orElse: () => Role(name: 'N/A'),
+            );
+            // FIX: Removed individual Card wrappers to enforce single-card look
+            return ListTile(
+              title: Text(employee.name,
+                  style: TextStyle(fontStyle: inactive ? FontStyle.italic : FontStyle.normal, color: color)),
+              subtitle: Text('Role: ${role.name} | Number: ${employee.employeeNumber ?? 'N/A'}'),
+              trailing: IconButton(
+                icon: const Icon(Icons.edit, color: Colors.blue),
+                onPressed: () => _showEditDialog(employee),
+              ),
+              onTap: () => _showEditDialog(employee),
+            );
+          },
+        ),
+      ],
+    );
+  }
+  // end method: _buildEmployeeList
+
+  // start method: build
   @override
   Widget build(BuildContext context) {
-    // Filter out deleted employees for the primary view
     final activeEmployees = widget.employees.where((e) => !e.isDeleted).toList();
-    final theme = Theme.of(context);
+    final inactiveEmployees = widget.employees.where((e) => e.isDeleted).toList();
 
     return widget.isLoading
         ? const Center(child: CircularProgressIndicator())
-        : SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+    // FIX: Wrapping the entire output in a single Card
+        : Card(
+      margin: EdgeInsets.zero,
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildEmployeeList(activeEmployees, Colors.black),
 
-
-          // FIX 5: Use a SingleChildScrollView with ListView.builder for clean, scrolling lists
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: activeEmployees.length,
-            itemBuilder: (context, index) {
-              final employee = activeEmployees[index];
-              final role = widget.roles.firstWhere(
-                    (r) => r.id == employee.titleId,
-                orElse: () => Role(name: 'N/A'),
-              );
-              return Card(
-                color: theme.cardColor,
-                margin: const EdgeInsets.symmetric(vertical: 4.0),
-                child: ListTile(
-                  title: Text(employee.name),
-                  subtitle: Text('Role: ${role.name} | Number: ${employee.employeeNumber ?? 'N/A'}'),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.edit, color: Colors.blue),
-                    onPressed: () => _showEditDialog(employee),
-                  ),
-                  onTap: () => _showEditDialog(employee),
-                ),
-              );
-            },
+              if (inactiveEmployees.isNotEmpty) ...[
+                const Divider(),
+                _buildEmployeeList(inactiveEmployees, Colors.grey, inactive: true),
+              ]
+            ],
           ),
-
-          // Display Deleted Employees separately
-          if (widget.employees.any((e) => e.isDeleted)) ...[
-            const SizedBox(height: 24),
-            const Text('Inactive/Deleted Employees',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.red)),
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: widget.employees.where((e) => e.isDeleted).length,
-              itemBuilder: (context, index) {
-                final employee = widget.employees.where((e) => e.isDeleted).toList()[index];
-                final role = widget.roles.firstWhere(
-                      (r) => r.id == employee.titleId,
-                  orElse: () => Role(name: 'N/A'),
-                );
-                return Card(
-                  color: Colors.grey[200],
-                  margin: const EdgeInsets.symmetric(vertical: 4.0),
-                  child: ListTile(
-                    title: Text('${employee.name} (INACTIVE)', style: const TextStyle(fontStyle: FontStyle.italic)),
-                    subtitle: Text('Role: ${role.name}'),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.edit, color: Colors.blue),
-                      onPressed: () => _showEditDialog(employee),
-                    ),
-                    onTap: () => _showEditDialog(employee),
-                  ),
-                );
-              },
-            ),
-          ],
-        ],
+        ),
       ),
     );
   }

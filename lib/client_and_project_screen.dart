@@ -5,14 +5,20 @@ import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/client_repository.dart';
 import 'package:time_tracker_pro/project_repository.dart';
 import 'package:time_tracker_pro/client_and_project_add_form.dart';
+// Import reusable components for structural consistency
+import 'package:time_tracker_pro/widgets/app_input_form_card.dart';
+import 'package:time_tracker_pro/widgets/app_setting_list_card.dart';
 
+// start class: ClientAndProjectScreen
 class ClientAndProjectScreen extends StatefulWidget {
   const ClientAndProjectScreen({super.key});
 
   @override
   State<ClientAndProjectScreen> createState() => _ClientAndProjectScreenState();
 }
+// end class: ClientAndProjectScreen
 
+// start class: _ClientAndProjectScreenState
 class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
   final ClientRepository _clientRepo = ClientRepository();
   final ProjectRepository _projectRepo = ProjectRepository();
@@ -21,12 +27,15 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
   List<Project> _projects = [];
   bool _isLoading = true;
 
+  // start method: initState
   @override
   void initState() {
     super.initState();
     _loadData();
   }
+  // end method: initState
 
+  // start method: _loadData
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     final clients = await _clientRepo.getClients();
@@ -37,17 +46,23 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
       _isLoading = false;
     });
   }
+  // end method: _loadData
 
+  // start method: _updateClient
   Future<void> _updateClient(Client client) async {
     await _clientRepo.updateClient(client);
     _loadData();
   }
+  // end method: _updateClient
 
+  // start method: _updateProject
   Future<void> _updateProject(Project project) async {
     await _projectRepo.updateProject(project);
     _loadData();
   }
+  // end method: _updateProject
 
+  // start method: _getClientName
   String _getClientName(int clientId) {
     try {
       return _clients.firstWhere((c) => c.id == clientId).name;
@@ -55,7 +70,9 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
       return 'Unknown';
     }
   }
+  // end method: _getClientName
 
+  // start method: _showEditClientDialog
   Future<void> _showEditClientDialog(Client client) async {
     final nameController = TextEditingController(text: client.name);
     final contactPersonController = TextEditingController(text: client.contactPerson);
@@ -115,7 +132,9 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
       },
     );
   }
+  // end method: _showEditClientDialog
 
+  // start method: _showEditProjectDialog
   Future<void> _showEditProjectDialog(Project project) async {
     final projectNameController = TextEditingController(text: project.projectName);
     final locationController = TextEditingController(text: project.location);
@@ -208,11 +227,60 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
       },
     );
   }
+  // end method: _showEditProjectDialog
 
+  // start method: _buildClientListTile
+  /// Helper widget to build a consistent ListTile for the Client list.
+  Widget _buildClientListTile(Client client, ThemeData theme) {
+    return Card(
+      child: ListTile(
+        title: Text(
+          client.name,
+          style: theme.textTheme.titleMedium, // Adjusted for consistency
+        ),
+        subtitle: Text(
+          'Contact: ${client.contactPerson ?? 'N/A'} | Phone: ${client.phoneNumber ?? 'N/A'}',
+          style: theme.textTheme.bodyMedium, // Adjusted for consistency
+        ),
+        trailing: IconButton(
+          icon: const Icon(Icons.edit, color: Colors.blue), // Standardized icon color
+          onPressed: () => _showEditClientDialog(client),
+        ),
+        onTap: () => _showEditClientDialog(client),
+      ),
+    );
+  }
+  // end method: _buildClientListTile
+
+  // start method: _buildProjectListTile
+  /// Helper widget to build a consistent ListTile for the Project list.
+  Widget _buildProjectListTile(Project project, ThemeData theme) {
+    return Card(
+      child: ListTile(
+        title: Text(
+          project.projectName,
+          style: theme.textTheme.titleMedium, // Adjusted for consistency
+        ),
+        subtitle: Text(
+          'Client: ${_getClientName(project.clientId)} | Pricing: ${project.pricingModel} | Rate: \$${project.billedHourlyRate?.toStringAsFixed(2) ?? 'N/A'}',
+          style: theme.textTheme.bodyMedium, // Adjusted for consistency
+        ),
+        trailing: IconButton(
+          icon: const Icon(Icons.edit, color: Colors.blue), // Standardized icon color
+          onPressed: () => _showEditProjectDialog(project),
+        ),
+        onTap: () => _showEditProjectDialog(project),
+      ),
+    );
+  }
+  // end method: _buildProjectListTile
+
+  // start method: build
   @override
   Widget build(BuildContext context) {
     final activeClients = _clients.where((c) => c.isActive).toList();
     final activeProjects = _projects.where((p) => !p.isCompleted).toList();
+    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -222,12 +290,13 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
           ? const Center(child: CircularProgressIndicator())
           : LayoutBuilder(
         builder: (context, constraints) {
+          // start logic: wide screen layout
           if (constraints.maxWidth > 800) {
-            // Wide screen layout
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
               child: Column(
                 children: [
+                  // ClientAndProjectAddForm is a separate component and remains untouched here
                   ClientAndProjectAddForm(
                     clients: _clients.where((c) => c.isActive).toList(),
                     onDataAdded: _loadData,
@@ -243,30 +312,14 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                           children: [
                             const Text(
                               'Current Clients',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold), // Consistent heading size
                             ),
                             ListView.builder(
                               shrinkWrap: true,
                               physics: const NeverScrollableScrollPhysics(),
                               itemCount: activeClients.length,
                               itemBuilder: (context, index) {
-                                final client = activeClients[index];
-                                return Card(
-                                  child: ListTile(
-                                    title: Text(
-                                      client.name,
-                                      style: Theme.of(context).textTheme.headlineSmall,
-                                    ),
-                                    subtitle: Text(
-                                      'Contact: ${client.contactPerson ?? 'N/A'} | Phone: ${client.phoneNumber ?? 'N/A'}',
-                                      style: Theme.of(context).textTheme.bodyLarge,
-                                    ),
-                                    trailing: IconButton(
-                                      icon: const Icon(Icons.edit),
-                                      onPressed: () => _showEditClientDialog(client),
-                                    ),
-                                  ),
-                                );
+                                return _buildClientListTile(activeClients[index], theme);
                               },
                             ),
                           ],
@@ -280,30 +333,14 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                           children: [
                             const Text(
                               'Current Projects',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold), // Consistent heading size
                             ),
                             ListView.builder(
                               shrinkWrap: true,
                               physics: const NeverScrollableScrollPhysics(),
                               itemCount: activeProjects.length,
                               itemBuilder: (context, index) {
-                                final project = activeProjects[index];
-                                return Card(
-                                  child: ListTile(
-                                    title: Text(
-                                      project.projectName,
-                                      style: Theme.of(context).textTheme.headlineSmall,
-                                    ),
-                                    subtitle: Text(
-                                      'Client: ${_getClientName(project.clientId)} | Pricing: ${project.pricingModel} | Rate: \$${project.billedHourlyRate?.toStringAsFixed(2) ?? 'N/A'}',
-                                      style: Theme.of(context).textTheme.bodyLarge,
-                                    ),
-                                    trailing: IconButton(
-                                      icon: const Icon(Icons.edit),
-                                      onPressed: () => _showEditProjectDialog(project),
-                                    ),
-                                  ),
-                                );
+                                return _buildProjectListTile(activeProjects[index], theme);
                               },
                             ),
                           ],
@@ -314,8 +351,11 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                 ],
               ),
             );
-          } else {
-            // Narrow screen layout
+          }
+          // end logic: wide screen layout
+
+          // start logic: narrow screen layout
+          else {
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
               child: Column(
@@ -330,67 +370,38 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                   const SizedBox(height: 16),
                   const Text(
                     'Current Clients',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold), // Consistent heading size
                   ),
                   ListView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: activeClients.length,
                     itemBuilder: (context, index) {
-                      final client = activeClients[index];
-                      return Card(
-                        child: ListTile(
-                          title: Text(
-                            client.name,
-                            style: Theme.of(context).textTheme.headlineSmall,
-                          ),
-                          subtitle: Text(
-                            'Contact: ${client.contactPerson ?? 'N/A'} | Phone: ${client.phoneNumber ?? 'N/A'}',
-                            style: Theme.of(context).textTheme.bodyLarge,
-                          ),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.edit),
-                            onPressed: () => _showEditClientDialog(client),
-                          ),
-                        ),
-                      );
+                      return _buildClientListTile(activeClients[index], theme);
                     },
                   ),
                   const SizedBox(height: 32),
                   const Text(
                     'Current Projects',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold), // Consistent heading size
                   ),
                   ListView.builder(
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: activeProjects.length,
                     itemBuilder: (context, index) {
-                      final project = activeProjects[index];
-                      return Card(
-                        child: ListTile(
-                          title: Text(
-                            project.projectName,
-                            style: Theme.of(context).textTheme.headlineSmall,
-                          ),
-                          subtitle: Text(
-                            'Client: ${_getClientName(project.clientId)} | Pricing: ${project.pricingModel} | Rate: \$${project.billedHourlyRate?.toStringAsFixed(2) ?? 'N/A'}',
-                            style: Theme.of(context).textTheme.bodyLarge,
-                          ),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.edit),
-                            onPressed: () => _showEditProjectDialog(project),
-                          ),
-                        ),
-                      );
+                      return _buildProjectListTile(activeProjects[index], theme);
                     },
                   ),
                 ],
               ),
             );
           }
+          // end logic: narrow screen layout
         },
       ),
     );
   }
+// end method: build
 }
+// end class: _ClientAndProjectScreenState
