@@ -64,6 +64,46 @@ class JobMaterialsRepository {
   }
   // end method: updateJobMaterial
 
+  // start method: getAllJobMaterials
+  Future<List<JobMaterials>> getAllJobMaterials() async {
+    final db = await _databaseHelper.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      _tableName,
+      orderBy: 'id DESC',
+    );
+
+    return List.generate(maps.length, (i) {
+      return JobMaterials.fromMap(maps[i]);
+    });
+  }
+  // end method: getAllJobMaterials
+
+  // start method: getCostSummaryByCategory
+  Future<List<CostSummary>> getCostSummaryByCategory() async {
+    final db = await _databaseHelper.database;
+
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT 
+        expense_category AS categoryName, 
+        SUM(cost) AS totalCost, 
+        COUNT(id) AS recordCount
+      FROM $_tableName
+      GROUP BY expense_category
+      HAVING totalCost IS NOT NULL AND totalCost > 0
+    ''');
+
+    return List.generate(maps.length, (i) {
+      // NOTE: We rely on the SQL query aliases (categoryName, totalCost, recordCount)
+      // matching the fields required by the CostSummary model constructor.
+      return CostSummary(
+        categoryName: maps[i]['categoryName'] as String,
+        totalCost: (maps[i]['totalCost'] as num).toDouble(),
+        recordCount: maps[i]['recordCount'] as int,
+      );
+    });
+  }
+  // end method: getCostSummaryByCategory
+
   // start method: deleteJobMaterial
   Future<int> deleteJobMaterial(int id) async {
     final db = await _databaseHelper.database;

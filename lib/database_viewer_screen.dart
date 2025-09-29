@@ -1,4 +1,4 @@
-// lib/expenses_list_screen.dart
+// lib/database_viewer_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
@@ -8,33 +8,40 @@ import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/settings_service.dart';
 import 'package:time_tracker_pro/project_repository.dart';
 import 'package:time_tracker_pro/expense_category_repository.dart';
+import 'package:intl/intl.dart'; // Needed for date formatting
 
-// The MaterialRepository has been renamed to JobMaterialsRepository
+// Ensure JobMaterialsRepository is correctly defined here or imported elsewhere
 class JobMaterialsRepository {
   final DatabaseHelper _databaseHelper = DatabaseHelper.instance;
+  final String _tableName = 'materials';
 
   Future<int> insertJobMaterial(app_models.JobMaterials jobMaterial) async {
     final db = await _databaseHelper.database;
-    return await db.insert('materials', jobMaterial.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    return await db.insert(_tableName, jobMaterial.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  Future<List<app_models.JobMaterials>> getJobMaterials() async {
+  // FIX: Renamed getJobMaterials to getAllJobMaterials for clarity in this viewer
+  Future<List<app_models.JobMaterials>> getAllJobMaterials() async {
     final db = await _databaseHelper.database;
-    final List<Map<String, dynamic>> maps = await db.query('materials');
+    final List<Map<String, dynamic>> maps = await db.query(_tableName, orderBy: 'id DESC');
     return List.generate(maps.length, (i) {
       return app_models.JobMaterials.fromMap(maps[i]);
     });
   }
 }
 
-class ExpensesListScreen extends StatefulWidget {
-  const ExpensesListScreen({super.key});
+class DatabaseViewerScreen extends StatefulWidget {
+  const DatabaseViewerScreen({super.key});
 
   @override
-  State<ExpensesListScreen> createState() => _ExpensesListScreenState();
+  // FIX: Corrected createState to use the full return block structure.
+  State<DatabaseViewerScreen> createState() {
+    return _DatabaseViewerScreenState();
+  }
 }
 
-class _ExpensesListScreenState extends State<ExpensesListScreen> {
+// FIX: Renamed the State class header to the correct private name.
+class _DatabaseViewerScreenState extends State<DatabaseViewerScreen> {
   // Renamed MaterialRepository to JobMaterialsRepository
   final JobMaterialsRepository _repo = JobMaterialsRepository();
   final ProjectRepository _projectRepo = ProjectRepository();
@@ -62,8 +69,8 @@ class _ExpensesListScreenState extends State<ExpensesListScreen> {
     });
 
     try {
-      // Updated getMaterials to getJobMaterials
-      final expenses = await _repo.getJobMaterials();
+      // FIX: Call the new getAllJobMaterials method
+      final expenses = await _repo.getAllJobMaterials();
       final projects = await _projectRepo.getProjects();
       final categories = await _categoryRepo.getExpenseCategories();
       final settings = await _settingsService.loadSettings();
@@ -84,12 +91,22 @@ class _ExpensesListScreenState extends State<ExpensesListScreen> {
     }
   }
 
-  // Updated the parameter type to JobMaterials
+  // Helper to resolve Project Name for display
+  String _getProjectName(int projectId) {
+    try {
+      return _projects.firstWhere((p) => p.id == projectId).projectName;
+    } catch (e) {
+      return 'ID: $projectId (Missing)';
+    }
+  }
+
+  // NOTE: This method is a remnant of the old Add Expense functionality, kept for compilation.
   Future<void> _addExpense(app_models.JobMaterials newExpense) async {
     await _repo.insertJobMaterial(newExpense);
     await _loadData();
   }
 
+  // NOTE: This method is a remnant of the old Add Expense FAB functionality, kept for compilation.
   void _showAddExpenseForm() {
     showModalBottomSheet(
       context: context,
@@ -118,29 +135,43 @@ class _ExpensesListScreenState extends State<ExpensesListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Expenses'),
+        title: const Text('Database Viewer'),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _expenses.isEmpty
-          ? const Center(child: Text('No expenses recorded.'))
+          ? const Center(child: Text('No expense records found in the database.'))
+      // FIX: Updated ListView to display all verification fields
           : ListView.builder(
         itemCount: _expenses.length,
         itemBuilder: (context, index) {
           final expense = _expenses[index];
-          return ListTile(
-            title: Text(expense.itemName),
-            subtitle: Text(expense.description ?? ''),
-            trailing: Text('\$${expense.cost.toStringAsFixed(2)}'),
-            onTap: () {
-              // TODO: Implement edit functionality
-            },
+          final projectName = _getProjectName(expense.projectId!);
+
+          return Card(
+            margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+            child: ListTile(
+              // Display Category and Item Name
+              title: Text('${expense.expenseCategory ?? 'N/A'}: ${expense.itemName}',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+
+              // Display verification fields in the subtitle
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Project: $projectName | Vendor: ${expense.vendorOrSubtrade ?? 'None'}'),
+                  Text('Date: ${DateFormat('MMM d, yyyy').format(expense.purchaseDate)} | Company: ${expense.isCompanyExpense ? 'Yes' : 'No'}'),
+                  if (expense.description != null && expense.description!.isNotEmpty)
+                    Text('Notes: ${expense.description}', style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 12)),
+                ],
+              ),
+
+              // Display Cost
+              trailing: Text('\$${expense.cost.toStringAsFixed(2)}',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).primaryColor)),
+            ),
           );
         },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddExpenseForm,
-        child: const Icon(Icons.add),
       ),
     );
   }

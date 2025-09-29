@@ -540,6 +540,21 @@ class ExpenseCategory {
 }
 // end class: ExpenseCategory
 
+// start cost summary class
+class CostSummary {
+  final String categoryName;
+  final double totalCost;
+  final int recordCount;
+
+  CostSummary({
+    required this.categoryName,
+    required this.totalCost,
+    required this.recordCount,
+  });
+}
+
+// end method: cost summary
+
 // start class: User
 class User {
   final int? id;

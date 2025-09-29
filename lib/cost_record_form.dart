@@ -20,8 +20,9 @@ class CostRecordFormState extends State<CostRecordForm> {
   Project? _selectedProject;
   DateTime _selectedPurchaseDate = DateTime.now();
   String? _selectedExpenseCategory;
+  String? _selectedVendorOrSubtrade; // <--- CRITICAL FIX: ENSURING DECLARATION
   String? _selectedVehicleDesignation;
-  // REMOVED: String? _selectedUnit;
+  // String? _selectedUnit is removed as per earlier request
 
   // IMPORTANT: Internal Company Project ID
   static const int _internalProjectId = 0;
@@ -46,6 +47,10 @@ class CostRecordFormState extends State<CostRecordForm> {
   @override
   void initState() {
     super.initState();
+    // Initialize _selectedVendorOrSubtrade to null, same as other selection fields.
+    // This is safe even if it was declared above.
+    _selectedVendorOrSubtrade = null;
+
     if (widget.isEditing) {
       _selectedProject = widget.availableProjects.cast<Project?>().firstWhere(
             (p) => p?.projectName == 'Internal Company Project',
@@ -96,12 +101,13 @@ class CostRecordFormState extends State<CostRecordForm> {
       _baseQuantityController.text = expense.baseQuantity?.toStringAsFixed(2) ?? '';
       _selectedPurchaseDate = expense.purchaseDate;
       _isCompanyExpense = expense.isCompanyExpense;
-      // REMOVED: _selectedUnit = expense.unit;
 
       _selectedExpenseCategory = expense.expenseCategory;
       _isFuelCategory = expense.expenseCategory == 'Fuel';
 
       _selectedVehicleDesignation = expense.vehicleDesignation;
+      // FIX: Populate the dedicated Vendor field
+      _selectedVendorOrSubtrade = expense.vendorOrSubtrade;
 
       _selectedProject = widget.availableProjects.cast<Project?>().firstWhere(
             (p) => p?.id == expense.projectId,
@@ -128,7 +134,8 @@ class CostRecordFormState extends State<CostRecordForm> {
       _isFuelCategory = false;
       _selectedExpenseCategory = null;
       _selectedVehicleDesignation = null;
-      // REMOVED: _selectedUnit = null;
+      // FIX: Reset the dedicated Vendor field
+      _selectedVendorOrSubtrade = null;
       _selectedProject = null;
     });
   }
@@ -169,9 +176,8 @@ class CostRecordFormState extends State<CostRecordForm> {
           ? _internalProjectId
           : _selectedProject!.id!;
 
-      // NOTE: The 'unit' variable must now be determined globally (Metric vs Imperial)
-      // For submission purposes, we will temporarily hardcode a default or rely on the repository to fill it later.
-      const String assumedUnit = 'Liters'; // Placeholder based on Metric default
+      // Placeholder unit for submission, assumed to be set globally later.
+      const String assumedUnit = 'Liters';
 
       final newExpense = JobMaterials(
         id: _editingExpenseId,
@@ -181,16 +187,14 @@ class CostRecordFormState extends State<CostRecordForm> {
         purchaseDate: _selectedPurchaseDate,
         description: _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
         expenseCategory: _selectedExpenseCategory,
-        unit: assumedUnit, // ASSUMED VALUE (Global setting integration needed later)
+        unit: assumedUnit, // ASSUMED VALUE
         quantity: _quantityController.text.isNotEmpty ? double.tryParse(_quantityController.text) : null,
         baseQuantity: _baseQuantityController.text.isNotEmpty ? double.tryParse(_baseQuantityController.text) : null,
         odometerReading: _odometerReadingController.text.isNotEmpty ? double.tryParse(_odometerReadingController.text) : null,
         isCompanyExpense: _isCompanyExpense,
         vehicleDesignation: _selectedVehicleDesignation,
-        vendorOrSubtrade: widget.vendors.cast<String?>().firstWhere(
-              (v) => v?.split('(').first.trim() == _selectedExpenseCategory,
-          orElse: () => null,
-        ),
+        // FIX: Use the directly selected vendor/subtrade (no more complex lookup needed!)
+        vendorOrSubtrade: _selectedVendorOrSubtrade,
       );
 
       widget.onAddExpense(newExpense, widget.isEditing);
@@ -350,7 +354,8 @@ class CostRecordFormState extends State<CostRecordForm> {
               Expanded(
                 child: DropdownButtonFormField<String>(
                   decoration: const InputDecoration(labelText: 'Vendor/Subtrade (Optional)'),
-                  value: widget.vendors.contains(_selectedExpenseCategory) ? _selectedExpenseCategory : null,
+                  // FIX: Use the new dedicated state variable
+                  value: _selectedVendorOrSubtrade,
                   items: widget.vendors.map((vendor) {
                     return DropdownMenuItem<String>(
                       value: vendor,
@@ -359,7 +364,8 @@ class CostRecordFormState extends State<CostRecordForm> {
                   }).toList(),
                   onChanged: (String? newValue) {
                     setState(() {
-                      // Note: We are not changing _selectedExpenseCategory here, only vendor
+                      // FIX: Update the new dedicated state variable
+                      _selectedVendorOrSubtrade = newValue;
                     });
                   },
                 ),
@@ -422,15 +428,15 @@ class CostRecordFormState extends State<CostRecordForm> {
 
           // Conditional Fuel Fields (Quantity, Odometer)
           if (_isFuelCategory) ...[
-            // Row 4a: Quantity and Odometer
+            // Row 4a: Quantity and Odometer (Unit removed)
             Row(
               children: [
                 Expanded(
-                  // Quantity field now takes the full width it shared with Unit previously
+                  // Quantity field now takes half the row (it shared space with Odometer)
                   child: TextFormField(
                     controller: _quantityController,
                     decoration: const InputDecoration(
-                      // Updated label to reflect the unit setting (placeholder)
+                      // Label updated to reflect the unit setting (placeholder)
                       labelText: 'Fuel Quantity (Liters)',
                     ),
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
@@ -440,7 +446,7 @@ class CostRecordFormState extends State<CostRecordForm> {
                 Expanded(
                   child: TextFormField(
                     controller: _odometerReadingController,
-                    // Updated label to reflect the unit setting (placeholder)
+                    // Label updated to reflect the unit setting (placeholder)
                     decoration: const InputDecoration(labelText: 'Odometer Reading (km)'),
                     keyboardType: TextInputType.number,
                   ),

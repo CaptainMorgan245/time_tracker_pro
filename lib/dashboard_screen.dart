@@ -11,7 +11,7 @@ import 'package:time_tracker_pro/client_and_project_screen.dart';
 import 'package:time_tracker_pro/timer_add_form.dart';
 import 'package:time_tracker_pro/time_tracker_page.dart';
 import 'package:intl/intl.dart';
-import 'package:time_tracker_pro/expenses_list_screen.dart';
+import 'package:time_tracker_pro/database_viewer_screen.dart';
 import 'package:time_tracker_pro/models.dart' as app_models;
 import 'package:time_tracker_pro/analytics_screen.dart';
 import 'package:time_tracker_pro/cost_entry_screen.dart';
@@ -72,11 +72,11 @@ class AppDrawer extends StatelessWidget {
           ),
           ListTile(
             leading: const Icon(Icons.receipt_long),
-            title: const Text('View Expense Records'),
+            title: const Text('Database Viewer'),
             onTap: () {
               Navigator.pop(context);
               Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) => const ExpensesListScreen()),
+                MaterialPageRoute(builder: (context) => const DatabaseViewerScreen()),
               );
             },
           ),
