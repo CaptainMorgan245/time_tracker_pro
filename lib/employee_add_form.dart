@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/employee_repository.dart';
+import 'package:time_tracker_pro/input_formatters.dart';
 
 // start class: AddEmployeeForm
 class AddEmployeeForm extends StatefulWidget {
@@ -78,8 +79,6 @@ class _AddEmployeeFormState extends State<AddEmployeeForm> {
   Widget build(BuildContext context) {
     final validRoles = widget.roles.where((r) => r.id != null).toList();
 
-    // The entire form is now wrapped in a single Card with padding,
-    // achieving the consistent look established in Layout B.
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -93,6 +92,7 @@ class _AddEmployeeFormState extends State<AddEmployeeForm> {
                 Expanded(
                   child: TextField(
                     controller: _nameController,
+                    inputFormatters: [CapitalizeEachWordInputFormatter()],
                     decoration: const InputDecoration(labelText: 'Employee Name'),
                   ),
                 ),

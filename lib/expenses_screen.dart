@@ -6,7 +6,7 @@ import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/settings_service.dart';
 import 'package:time_tracker_pro/input_formatters.dart';
 import 'package:time_tracker_pro/settings_model.dart';
-import 'package:time_tracker_pro/widgets/app_setting_list_card.dart'; // Import reusable list component
+import 'package:time_tracker_pro/widgets/app_setting_list_card.dart';
 
 // start class: ExpensesScreen
 class ExpensesScreen extends StatefulWidget {
@@ -149,6 +149,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
         child: Padding(
           padding: const EdgeInsets.all(12.0),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: controller,
@@ -191,7 +192,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
               child: const Text('Cancel'),
               onPressed: () => Navigator.of(context).pop(),
             ),
-            // FIX: Safe Deletion UX: Delete button inside the dialog
             TextButton(
               child: const Text('Delete', style: TextStyle(color: Colors.red)),
               onPressed: () {
@@ -218,45 +218,45 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   // start method: build
   @override
   Widget build(BuildContext context) {
-    // Helper function for the repeatable action logic
     void openEditDialog(String title, String currentValue, Function(String) onSave, VoidCallback onDelete) {
       _showEditDialog(context, title, currentValue, onSave, onDelete);
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Expenses')),
-      body: Column( // Main vertical alignment for FIXED TOP / EXPANDED BOTTOM
+      resizeToAvoidBottomInset: false,
+      body: Column(
         children: [
-          // Top row: pinned input forms (FIXED SECTION)
+          // Top forms section - fixed height, scrollable horizontally if needed
           Padding(
             padding: const EdgeInsets.all(16.0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildForm('Expense Category', _categoryController, _addCategory),
-                const SizedBox(width: 16),
-                _buildForm('Vehicle Designation', _vehicleController, () async => _addOption(_vehicleController, _vehicles)),
-                const SizedBox(width: 16),
-                _buildForm('Vendor / Subtrade', _vendorController, () async => _addOption(_vendorController, _vendors)),
-              ],
+            child: IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildForm('Expense Category', _categoryController, _addCategory),
+                  const SizedBox(width: 16),
+                  _buildForm('Vehicle Designation', _vehicleController, () async => _addOption(_vehicleController, _vehicles)),
+                  const SizedBox(width: 16),
+                  _buildForm('Vendor / Subtrade', _vendorController, () async => _addOption(_vendorController, _vendors)),
+                ],
+              ),
             ),
           ),
           const Divider(height: 1),
 
-          // Bottom row: scrollable lists side-by-side (EXPANDED SCROLLABLE SECTION)
-          Expanded( // Uses Expanded to fill remaining space
+          // Bottom lists section - each scrolls independently
+          Expanded(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Expense Categories List (Individual Scroll Container)
                   Flexible(
-                    child: Column( // Must use Column to support Expanded child
+                    child: Column(
                       children: [
-                        Expanded( // Forces the list to use available space and scroll internally
+                        Expanded(
                           child: AppSettingListCard(
-                            title: 'Expense Categories', // Title added back for context
+                            title: 'Expense Categories',
                             items: _categories.map((cat) => cat.name).toList(),
                             onEdit: (index) {
                               final category = _categories[index];
@@ -276,13 +276,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  // Vehicle Designations List (Individual Scroll Container)
                   Flexible(
-                    child: Column( // Must use Column to support Expanded child
+                    child: Column(
                       children: [
-                        Expanded( // Forces the list to use available space and scroll internally
+                        Expanded(
                           child: AppSettingListCard(
-                            title: 'Vehicle Designations', // Title added back for context
+                            title: 'Vehicle Designations',
                             items: _vehicles,
                             onEdit: (index) {
                               final currentValue = _vehicles[index];
@@ -299,13 +298,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                     ),
                   ),
                   const SizedBox(width: 16),
-                  // Vendors List (Individual Scroll Container)
                   Flexible(
-                    child: Column( // Must use Column to support Expanded child
+                    child: Column(
                       children: [
-                        Expanded( // Forces the list to use available space and scroll internally
+                        Expanded(
                           child: AppSettingListCard(
-                            title: 'Vendors / Subtrades', // Title added back for context
+                            title: 'Vendors / Subtrades',
                             items: _vendors,
                             onEdit: (index) {
                               final currentValue = _vendors[index];

@@ -8,14 +8,27 @@ class SettingsModel {
   final int? nextEmployeeNumber;
   final List<String> vehicleDesignations;
   final List<String> vendors;
+  final double? companyHourlyRate;
+
+  // New settings fields
+  final int timeRoundingInterval; // 0 = no rounding, 15 or 30 minutes
+  final int autoBackupReminderFrequency; // Show reminder every X app runs (0 = disabled)
+  final int appRunsSinceBackup; // Counter for backup reminder
+  final String measurementSystem; // 'metric' or 'imperial'
+  final int defaultReportMonths; // Default lookback period for reports
 
   SettingsModel({
     this.id = 1,
     this.employeeNumberPrefix,
     this.nextEmployeeNumber,
-    // Fix applied earlier: using non-nullable defaults
     List<String>? vehicleDesignations,
     List<String>? vendors,
+    this.companyHourlyRate,
+    this.timeRoundingInterval = 0,
+    this.autoBackupReminderFrequency = 10,
+    this.appRunsSinceBackup = 0,
+    this.measurementSystem = 'metric',
+    this.defaultReportMonths = 3,
   }) : vehicleDesignations = vehicleDesignations ?? [],
         vendors = vendors ?? [];
 
@@ -37,12 +50,19 @@ class SettingsModel {
       nextEmployeeNumber: map['next_employee_number'],
       vehicleDesignations: decodeList(map['vehicle_designations']),
       vendors: decodeList(map['vendors']),
+      companyHourlyRate: map['company_hourly_rate'] != null
+          ? (map['company_hourly_rate'] as num).toDouble()
+          : null,
+      timeRoundingInterval: map['time_rounding_interval'] ?? 15,
+      autoBackupReminderFrequency: map['auto_backup_reminder_frequency'] ?? 10,
+      appRunsSinceBackup: map['app_runs_since_backup'] ?? 0,
+      measurementSystem: map['measurement_system'] ?? 'metric',
+      defaultReportMonths: map['default_report_months'] ?? 3,
     );
   }
   // end method: fromMap
 
   // start method: toMap
-  // FIX: Explicitly ensuring lists are serialized to JSON. This is where the failure is most likely.
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -50,16 +70,29 @@ class SettingsModel {
       'next_employee_number': nextEmployeeNumber,
       'vehicle_designations': jsonEncode(vehicleDesignations),
       'vendors': jsonEncode(vendors),
+      'company_hourly_rate': companyHourlyRate,
+      'time_rounding_interval': timeRoundingInterval,
+      'auto_backup_reminder_frequency': autoBackupReminderFrequency,
+      'app_runs_since_backup': appRunsSinceBackup,
+      'measurement_system': measurementSystem,
+      'default_report_months': defaultReportMonths,
     };
   }
   // end method: toMap
 
+  // start method: copyWith
   SettingsModel copyWith({
     int? id,
     String? employeeNumberPrefix,
     int? nextEmployeeNumber,
     List<String>? vehicleDesignations,
     List<String>? vendors,
+    double? companyHourlyRate,
+    int? timeRoundingInterval,
+    int? autoBackupReminderFrequency,
+    int? appRunsSinceBackup,
+    String? measurementSystem,
+    int? defaultReportMonths,
   }) {
     return SettingsModel(
       id: id ?? this.id,
@@ -67,6 +100,13 @@ class SettingsModel {
       nextEmployeeNumber: nextEmployeeNumber ?? this.nextEmployeeNumber,
       vehicleDesignations: vehicleDesignations ?? this.vehicleDesignations,
       vendors: vendors ?? this.vendors,
+      companyHourlyRate: companyHourlyRate ?? this.companyHourlyRate,
+      timeRoundingInterval: timeRoundingInterval ?? this.timeRoundingInterval,
+      autoBackupReminderFrequency: autoBackupReminderFrequency ?? this.autoBackupReminderFrequency,
+      appRunsSinceBackup: appRunsSinceBackup ?? this.appRunsSinceBackup,
+      measurementSystem: measurementSystem ?? this.measurementSystem,
+      defaultReportMonths: defaultReportMonths ?? this.defaultReportMonths,
     );
   }
+// end method: copyWith
 }

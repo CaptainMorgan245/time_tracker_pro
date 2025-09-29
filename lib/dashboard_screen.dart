@@ -14,16 +14,89 @@ import 'package:intl/intl.dart';
 import 'package:time_tracker_pro/expenses_list_screen.dart';
 import 'package:time_tracker_pro/models.dart' as app_models;
 import 'package:time_tracker_pro/analytics_screen.dart';
+import 'package:time_tracker_pro/cost_entry_screen.dart';
+import 'package:time_tracker_pro/app_bottom_nav_bar.dart';
+
+
+// START REUSABLE DRAWER WIDGET (Secondary Navigation)
+class AppDrawer extends StatelessWidget {
+  const AppDrawer({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Drawer(
+      child: ListView(
+        padding: EdgeInsets.zero,
+        children: <Widget>[
+          DrawerHeader(
+            decoration: BoxDecoration(
+              color: Theme.of(context).primaryColor,
+            ),
+            child: const Text(
+              'Menu',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 24,
+              ),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.settings),
+            title: const Text('Settings'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.person_pin_circle),
+            title: const Text('Clients/Projects'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const ClientAndProjectScreen()),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.access_time),
+            title: const Text('Time Entry Form'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const TimeTrackerPage()),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.receipt_long),
+            title: const Text('View Expense Records'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const ExpensesListScreen()),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+// END REUSABLE DRAWER WIDGET
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  final int initialIndex;
+  const DashboardScreen({super.key, this.initialIndex = 0});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  int _selectedIndex = 0;
+  late int _selectedIndex;
 
   final ProjectRepository _projectRepo = ProjectRepository();
   final EmployeeRepository _employeeRepo = EmployeeRepository();
@@ -40,25 +113,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final Map<int, Timer> _activeTimers = {};
   final Map<int, Duration> _currentDurations = {};
 
+  @override
+  void initState() {
+    super.initState();
+    _selectedIndex = widget.initialIndex; // Use initial index passed from outside
+    _loadData();
+    _loadActiveTimers();
+  }
+
+  // start method: _onItemTapped
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
   }
-
-  late final List<Widget> _widgetOptions;
-
-  @override
-  void initState() {
-    super.initState();
-    _widgetOptions = [
-      _buildDashboardContent(),
-      const ExpensesListScreen(),
-      const AnalyticsScreen(),
-    ];
-    _loadData();
-    _loadActiveTimers();
-  }
+  // end method: _onItemTapped
 
   @override
   void dispose() {
@@ -66,7 +135,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
-  // start method: _loadData
+  // start method: _loadData (No change)
   Future<void> _loadData() async {
     try {
       final projects = await _projectRepo.getProjects();
@@ -79,7 +148,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               (p) => p.id == entry.projectId,
           orElse: () => app_models.Project(projectName: 'Unknown', clientId: 0, isCompleted: true),
         );
-        // FIX: Only include entries that have an endTime (i.e., are completed)
+        // Only include entries that have an endTime (i.e., are completed)
         return !entry.isDeleted && !project.isCompleted && entry.endTime != null;
       }).toList();
 
@@ -104,7 +173,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
   // end method: _loadData
 
-  // start method: _loadActiveTimers
+  // start method: _loadActiveTimers (No change)
   Future<void> _loadActiveTimers() async {
     try {
       final activeEntries = await _timeEntryRepo.getActiveTimeEntries();
@@ -128,7 +197,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (!_activeTimers.containsKey(entry.id)) {
           final now = DateTime.now();
           final elapsed = now.difference(entry.startTime!);
-          final initialDuration = elapsed - Duration(seconds: entry.pausedDuration?.toInt() ?? 0);
+          // FIX: pausedDuration is double, convert to int for Duration
+          final initialDuration = elapsed - Duration(seconds: entry.pausedDuration.toInt());
           _currentDurations[entry.id!] = initialDuration;
           _startTimerUpdate(entry);
         }
@@ -151,6 +221,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
   // end method: _loadActiveTimers
 
+  // START MISSING METHODS RE-INSERTED
   Future<void> _startTimer({
     app_models.Project? project,
     app_models.Employee? employee,
@@ -235,13 +306,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _timerFormKey.currentState?.resetForm();
     }
   }
+  // END MISSING METHODS RE-INSERTED
 
   void _startTimerUpdate(app_models.TimeEntry entry) {
     _activeTimers[entry.id!] = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!entry.isPaused) {
         final elapsed = DateTime.now().difference(entry.startTime!);
         setState(() {
-          _currentDurations[entry.id!] = elapsed - Duration(seconds: entry.pausedDuration?.toInt() ?? 0);
+          // FIX: pausedDuration is double, convert to int for Duration
+          _currentDurations[entry.id!] = elapsed - Duration(seconds: entry.pausedDuration.toInt());
         });
       }
     });
@@ -250,7 +323,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _stopTimer(int entryId) async {
     try {
       final entry = _activeEntries.firstWhere((e) => e.id == entryId);
-      final duration = DateTime.now().difference(entry.startTime!) - Duration(seconds: entry.pausedDuration?.toInt() ?? 0);
+      // FIX: pausedDuration is double, convert to int for Duration
+      final duration = DateTime.now().difference(entry.startTime!) - Duration(seconds: entry.pausedDuration.toInt());
 
       final stoppedEntry = entry.copyWith(
         endTime: DateTime.now(),
@@ -309,7 +383,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       final resumedEntry = entry.copyWith(
         isPaused: false,
-        pausedDuration: (entry.pausedDuration ?? 0) + pauseDuration,
+        pausedDuration: entry.pausedDuration + pauseDuration,
         pauseStartTime: null,
       );
 
@@ -521,94 +595,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // FIX: The _widgetOptions must reflect the three items in AppBottomNavBar:
+    // 0: Dashboard, 1: CostEntryScreen, 2: AnalyticsScreen
     final List<Widget> widgetOptions = [
       _buildDashboardContent(),
-      const ExpensesListScreen(),
-      const AnalyticsScreen(),
+      const CostEntryScreen(), // Index 1: The Cost Entry Screen
+      const AnalyticsScreen(), // Index 2: The Analytics Screen
     ];
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Time Tracker Pro'),
       ),
-      drawer: Drawer(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: <Widget>[
-            DrawerHeader(
-              decoration: BoxDecoration(
-                color: Theme.of(context).primaryColor,
-              ),
-              child: const Text(
-                'Menu',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 24,
-                ),
-              ),
-            ),
-            ListTile(
-              leading: const Icon(Icons.settings),
-              title: const Text('Settings'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (context) => const SettingsScreen()),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.person_pin_circle),
-              title: const Text('Clients'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (context) => const ClientAndProjectScreen()),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.construction),
-              title: const Text('Projects'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (context) => const ClientAndProjectScreen()),
-                );
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.access_time),
-              title: const Text('Time Tracker'),
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.of(context).push(
-                  MaterialPageRoute(builder: (context) => const TimeTrackerPage()),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
+      drawer: const AppDrawer(), // Use reusable AppDrawer
       body: IndexedStack(
         index: _selectedIndex,
         children: widgetOptions,
       ),
-      bottomNavigationBar: BottomNavigationBar(
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
-            label: 'Dashboard',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.receipt_long),
-            label: 'Expenses',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.analytics),
-            label: 'Analytics',
-          ),
-        ],
+      // Use the reusable modular bottom navigation bar
+      bottomNavigationBar: AppBottomNavBar(
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
       ),

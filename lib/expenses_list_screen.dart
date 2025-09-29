@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:time_tracker_pro/models.dart' as app_models;
-import 'package:time_tracker_pro/expense_add_form.dart';
+import 'package:time_tracker_pro/cost_add_form.dart';
 import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/settings_service.dart';
 import 'package:time_tracker_pro/project_repository.dart';

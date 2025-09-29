@@ -128,14 +128,20 @@ class DatabaseHelper {
       )
     ''');
 
-    // Rebuilt Settings table with hard-coded columns
+    // Settings table with all fields including new ones
     await db.execute('''
       CREATE TABLE settings (
         id INTEGER PRIMARY KEY,
         employee_number_prefix TEXT,
         next_employee_number INTEGER,
         vehicle_designations TEXT,
-        vendors TEXT
+        vendors TEXT,
+        company_hourly_rate REAL,
+        time_rounding_interval INTEGER DEFAULT 15,
+        auto_backup_reminder_frequency INTEGER DEFAULT 10,
+        app_runs_since_backup INTEGER DEFAULT 0,
+        measurement_system TEXT DEFAULT 'metric',
+        default_report_months INTEGER DEFAULT 3
       )
     ''');
   }
