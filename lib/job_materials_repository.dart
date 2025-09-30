@@ -71,7 +71,7 @@ class JobMaterialsRepository {
       _tableName,
       orderBy: 'id DESC',
     );
-
+    print('DATABASE DEBUG: Fetched ${maps.length} records from the database.');
     return List.generate(maps.length, (i) {
       return JobMaterials.fromMap(maps[i]);
     });

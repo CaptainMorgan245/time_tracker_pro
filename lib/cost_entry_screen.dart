@@ -8,7 +8,6 @@ import 'package:time_tracker_pro/expense_category_repository.dart';
 import 'package:time_tracker_pro/job_materials_repository.dart';
 import 'package:time_tracker_pro/settings_service.dart';
 import 'package:time_tracker_pro/models.dart';
-import 'package:intl/intl.dart';
 import 'package:time_tracker_pro/app_bottom_nav_bar.dart';
 
 // start class: CostEntryScreen
@@ -24,6 +23,7 @@ class CostEntryScreen extends StatefulWidget {
 class _CostEntryScreenState extends State<CostEntryScreen> {
   // GlobalKey used to access and validate the form data
   final _formKey = GlobalKey<CostRecordFormState>();
+  final _scrollController = ScrollController();
 
   // Repositories and Services
   final _projectRepo = ProjectRepository();
@@ -31,8 +31,9 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   final _jobMaterialsRepo = JobMaterialsRepository();
   final _settingsService = SettingsService.instance;
 
-  // New State Variable for tracking editing mode
+  // State Variables
   bool _isEditing = false;
+  bool _isLoading = true;
 
   // Data Lists
   List<Project> _allProjects = [];
@@ -44,8 +45,6 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   List<String> _vendors = [];
   List<String> _vehicleDesignations = [];
 
-  bool _isLoading = true;
-
   // Default Internal Project
   final Project _internalProject = Project(
     id: 0,
@@ -54,18 +53,39 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     isInternal: true,
   );
 
+  // *********************************************************
+  // FINAL FIX: Using WidgetsBinding.instance.addPostFrameCallback
+  // This is the guaranteed way to force a state reload after navigation.
+  // *********************************************************
   @override
   void initState() {
     super.initState();
-    _loadDependencies();
+    // Use addPostFrameCallback to ensure the form is rebuilt with the latest data
+    // right after the initial render cycle (or navigation return).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadDependencies();
+    });
+  }
+
+  // NOTE: didChangeDependencies() and the Observer pattern are removed.
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
   }
 
   // start method: _loadDependencies
   Future<void> _loadDependencies() async {
-    setState(() => _isLoading = true);
+    // Only show loading indicator if this is the very first load
+    if (_allProjects.isEmpty) {
+      setState(() => _isLoading = true);
+    }
+
     try {
       final categories = await _categoryRepo.getExpenseCategories();
       final allProjects = await _projectRepo.getProjects();
+
       final recentExpenses = await _jobMaterialsRepo.getAllJobMaterials();
       final settings = await _settingsService.loadSettings();
 
@@ -73,6 +93,8 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
       if (!allProjects.any((p) => p.id == _internalProject.id)) {
         allProjects.insert(0, _internalProject);
       }
+
+      if (!mounted) return;
 
       setState(() {
         _allProjects = allProjects;
@@ -126,8 +148,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
       }
 
       if (mounted) {
-        _formKey.currentState?.resetForm();
-        _loadDependencies();
+        _handleCancelEdit();
       }
     } catch (e) {
       if (mounted) {
@@ -139,17 +160,25 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   }
   // end method: _handleCostSubmission
 
+  // Handles cancelling edit mode and resetting form/data
+  void _handleCancelEdit() {
+    _formKey.currentState?.resetForm();
+    setState(() => _isEditing = false);
+    _loadDependencies(); // Reloads the list to show the new entry
+    _scrollController.animateTo(0.0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+  }
+
   // start method: _populateFormFromExpense
   void _populateFormFromExpense(JobMaterials expense) {
     _formKey.currentState?.populateForm(expense);
     setState(() {
       _isEditing = true;
     });
-    // Scroll to the top of the form after repopulating
-    Scrollable.ensureVisible(
-      _formKey.currentContext ?? context,
+    // Scroll to the top of the CustomScrollView after repopulating
+    _scrollController.animateTo(
+      0.0,
       duration: const Duration(milliseconds: 300),
-      alignment: 0.0,
+      curve: Curves.easeOut,
     );
   }
   // end method: _populateFormFromExpense
@@ -183,129 +212,197 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
 
   // start method: _handleBottomNavTap
   void _handleBottomNavTap(int index) {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (context) => DashboardScreen(initialIndex: index)),
-          (Route<dynamic> route) => false,
-    );
+    // Only navigate if the index is NOT for the current screen (0 for CostEntryScreen)
+    if (index != 0) {
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => DashboardScreen(initialIndex: index)),
+            (Route<dynamic> route) => false,
+      );
+    }
   }
   // end method: _handleBottomNavTap
 
   @override
   Widget build(BuildContext context) {
-    // FIX: Using LayoutBuilder to determine available screen height
     return Scaffold(
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SafeArea(
-        top: false,
+        top: true,
         bottom: false,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            // The height of the form and header elements (estimated or measured)
-            // Assuming the form is roughly 500 pixels high, plus margins/text
-            // This is the tricky part that often needs calibration.
-            const double formHeightEstimate = 550.0;
-            const double listHeaderHeight = 50.0;
-            const double totalFixedContentHeight = formHeightEstimate + listHeaderHeight;
+        child: CustomScrollView(
+          controller: _scrollController,
+          slivers: [
+            // 1. COLLAPSIBLE/PINNED FORM HEADER
+            SliverPersistentHeader(
+              delegate: _CostEntryFormSliverDelegate(
+                minHeight: 130.0,
+                maxHeight: 450.0,
+                formWidget: CostRecordForm(
+                  key: _formKey,
+                  availableProjects: _filteredProjects,
+                  expenseCategories: _expenseCategories,
+                  vendors: _vendors,
+                  vehicleDesignations: _vehicleDesignations,
+                  onAddExpense: _handleCostSubmission,
+                  onProjectFilterToggle: _applyProjectFilter,
+                  isEditing: _isEditing,
+                ),
+                isEditing: _isEditing,
+                onCancelEdit: _handleCancelEdit,
+              ),
+              pinned: true,
+            ),
 
-            // Calculate the remaining height for the scrollable list
-            final double remainingHeight = constraints.maxHeight - totalFixedContentHeight;
+            // 2. RECENT RECORDS LIST
+            _recentExpenses.isEmpty
+                ? const SliverToBoxAdapter(
+              child: Padding(
+                padding: EdgeInsets.only(top: 8.0),
+                child: Center(child: Text("No recent expenses found.")),
+              ),
+            )
+                : SliverList(
+              delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                  final expense = _recentExpenses[index];
+                  final projectName = _getProjectName(expense.projectId);
 
-            // The scrollable list needs a minimum height if there is no data
-            final double listHeight = remainingHeight > 0 ? remainingHeight : 0;
+                  // FIX: Display empty string for null/empty item names instead of "N/A"
+                  final itemNameDisplay = expense.itemName != null && expense.itemName!.isNotEmpty
+                      ? expense.itemName!
+                      : '';
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 1. STICKY FORM (Always visible, wrapped in a SingleChildScrollView for internal form scrolling if needed)
-                SingleChildScrollView(
-                  // Restrict the height of the form area
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(left: 16.0, right: 16.0, top: 8.0, bottom: 32.0),
-                        child: Card(
-                          margin: EdgeInsets.zero,
-                          child: Padding(
-                            padding: const EdgeInsets.all(16.0),
-                            child: CostRecordForm(
-                              key: _formKey,
-                              availableProjects: _filteredProjects,
-                              expenseCategories: _expenseCategories,
-                              vendors: _vendors,
-                              vehicleDesignations: _vehicleDesignations,
-                              onAddExpense: _handleCostSubmission,
-                              onProjectFilterToggle: _applyProjectFilter,
-                              isEditing: _isEditing,
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                    child: Card(
+                      margin: EdgeInsets.zero,
+                      child: ListTile(
+                        title: Text(
+                          '$itemNameDisplay (\$${expense.cost.toStringAsFixed(2)})',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        subtitle: Text(
+                          'Project: $projectName | Category: ${expense.expenseCategory ?? 'N/A'}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit, color: Colors.blueGrey),
+                              onPressed: () => _populateFormFromExpense(expense),
                             ),
-                          ),
+                            IconButton(
+                              icon: const Icon(Icons.delete_forever, color: Colors.red),
+                              onPressed: () => _deleteExpense(expense.id!),
+                            ),
+                          ],
                         ),
                       ),
-                      // ADD A BUTTON TO CLEAR EDITING STATE
-                      if (_isEditing)
-                        Center(
-                          child: TextButton(
-                            onPressed: () {
-                              _formKey.currentState?.resetForm();
-                              setState(() => _isEditing = false);
-                            },
-                            child: const Text('Cancel Edit / Reset Form', style: TextStyle(color: Colors.blueGrey)),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-
-                // 3. INDEPENDENTLY SCROLLABLE RECORDS LIST (Constrained by height)
-                Expanded(
-                  child: _recentExpenses.isEmpty
-                      ? const Center(child: Text("No recent expenses found."))
-                      : ListView.builder(
-                    // List itself handles its own scrolling
-                    itemCount: _recentExpenses.length,
-                    itemBuilder: (context, index) {
-                      final expense = _recentExpenses[index];
-                      final projectName = _getProjectName(expense.projectId);
-
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
-                        child: Card(
-                          margin: EdgeInsets.zero,
-                          child: ListTile(
-                            title: Text(
-                              '${expense.itemName} (\$${expense.cost.toStringAsFixed(2)})',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            subtitle: Text(
-                              'Project: $projectName | Category: ${expense.expenseCategory ?? 'N/A'}',
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.edit, color: Colors.blueGrey),
-                                  onPressed: () => _populateFormFromExpense(expense),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_forever, color: Colors.red),
-                                  onPressed: () => _deleteExpense(expense.id!),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            );
-          },
+                    ),
+                  );
+                },
+                childCount: _recentExpenses.length,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 // end class: _CostEntryScreenState
+
+
+// start class: _CostEntryFormSliverDelegate
+class _CostEntryFormSliverDelegate extends SliverPersistentHeaderDelegate {
+  final double minHeight;
+  final double maxHeight;
+  final Widget formWidget;
+  final bool isEditing;
+  final VoidCallback onCancelEdit;
+
+  _CostEntryFormSliverDelegate({
+    required this.minHeight,
+    required this.maxHeight,
+    required this.formWidget,
+    required this.isEditing,
+    required this.onCancelEdit,
+  });
+
+  @override
+  double get minExtent => minHeight;
+
+  @override
+  double get maxExtent => maxHeight;
+
+  @override
+  Widget build(
+      BuildContext context, double shrinkOffset, bool overlapsContent) {
+
+    // Calculates the fraction of the header that is currently covered by the scroll
+    final double scrollProgress =
+    (shrinkOffset / (maxHeight - minHeight)).clamp(0.0, 1.0);
+
+    // Determines the opacity of the Cancel Edit button
+    final double buttonOpacity = 1.0 - scrollProgress;
+
+    // Use a Stack and Positioned to correctly clip the content.
+    return Container(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: Stack(
+        children: [
+          // Positioned widget handles the vertical translation (the collapsing effect).
+          Positioned(
+            top: -shrinkOffset,
+            left: 0,
+            right: 0,
+            height: maxHeight,
+            child: SingleChildScrollView(
+              physics: const NeverScrollableScrollPhysics(),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Card(
+                  margin: EdgeInsets.zero,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 4.0),
+                        child: formWidget,
+                      ),
+                      // 2. The Cancel Edit/Clear Form Button
+                      if (isEditing)
+                        Opacity(
+                          opacity: buttonOpacity.clamp(0.0, 1.0),
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 8.0, top: 4.0),
+                            child: TextButton(
+                              onPressed: onCancelEdit,
+                              child: const Text('Cancel Edit / Clear Form',
+                                  style: TextStyle(color: Colors.blueGrey)),
+                            ),
+                          ),
+                        ),
+                      // Add minimal spacing to ensure the list doesn't hug the form too tightly
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(_CostEntryFormSliverDelegate oldDelegate) {
+    return maxHeight != oldDelegate.maxHeight ||
+        minHeight != oldDelegate.minHeight ||
+        isEditing != oldDelegate.isEditing;
+  }
+}
+// end class: _CostEntryFormSliverDelegate
