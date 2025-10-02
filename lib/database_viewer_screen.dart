@@ -1,177 +1,122 @@
 // lib/database_viewer_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:sqflite/sqflite.dart';
-import 'package:time_tracker_pro/models.dart' as app_models;
-import 'package:time_tracker_pro/cost_add_form.dart';
 import 'package:time_tracker_pro/database_helper.dart';
-import 'package:time_tracker_pro/settings_service.dart';
-import 'package:time_tracker_pro/project_repository.dart';
-import 'package:time_tracker_pro/expense_category_repository.dart';
-import 'package:intl/intl.dart'; // Needed for date formatting
-
-// Ensure JobMaterialsRepository is correctly defined here or imported elsewhere
-class JobMaterialsRepository {
-  final DatabaseHelper _databaseHelper = DatabaseHelper.instance;
-  final String _tableName = 'materials';
-
-  Future<int> insertJobMaterial(app_models.JobMaterials jobMaterial) async {
-    final db = await _databaseHelper.database;
-    return await db.insert(_tableName, jobMaterial.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-  }
-
-  // FIX: Renamed getJobMaterials to getAllJobMaterials for clarity in this viewer
-  Future<List<app_models.JobMaterials>> getAllJobMaterials() async {
-    final db = await _databaseHelper.database;
-    final List<Map<String, dynamic>> maps = await db.query(_tableName, orderBy: 'id DESC');
-    return List.generate(maps.length, (i) {
-      return app_models.JobMaterials.fromMap(maps[i]);
-    });
-  }
-}
+import 'package:time_tracker_pro/models.dart';
+import 'package:intl/intl.dart';
 
 class DatabaseViewerScreen extends StatefulWidget {
   const DatabaseViewerScreen({super.key});
 
   @override
-  // FIX: Corrected createState to use the full return block structure.
-  State<DatabaseViewerScreen> createState() {
-    return _DatabaseViewerScreenState();
-  }
+  State<DatabaseViewerScreen> createState() => _DatabaseViewerScreenState();
 }
 
-// FIX: Renamed the State class header to the correct private name.
 class _DatabaseViewerScreenState extends State<DatabaseViewerScreen> {
-  // Renamed MaterialRepository to JobMaterialsRepository
-  final JobMaterialsRepository _repo = JobMaterialsRepository();
-  final ProjectRepository _projectRepo = ProjectRepository();
-  final ExpenseCategoryRepository _categoryRepo = ExpenseCategoryRepository();
-  final SettingsService _settingsService = SettingsService.instance;
-
-  // Updated the list to use JobMaterials
-  List<app_models.JobMaterials> _expenses = [];
-  List<app_models.Project> _projects = [];
-  List<String> _expenseCategories = [];
-  List<String> _vehicleDesignations = [];
-  List<String> _vendors = [];
-
-  bool _isLoading = true;
+  // A "Future" holds the result of our database call.
+  late Future<List<AllRecordViewModel>> _recordsFuture;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    // Start loading the records as soon as the screen is created.
+    _loadRecords();
   }
 
-  Future<void> _loadData() async {
+  void _loadRecords() {
     setState(() {
-      _isLoading = true;
+      // Call the function from our database helper.
+      _recordsFuture = DatabaseHelper.instance.getAllRecords();
     });
-
-    try {
-      // FIX: Call the new getAllJobMaterials method
-      final expenses = await _repo.getAllJobMaterials();
-      final projects = await _projectRepo.getProjects();
-      final categories = await _categoryRepo.getExpenseCategories();
-      final settings = await _settingsService.loadSettings();
-
-      setState(() {
-        _expenses = expenses;
-        _projects = projects;
-        _expenseCategories = categories.map((e) => e.name).toList();
-        _vehicleDesignations = List<String>.from(settings?.vehicleDesignations ?? []);
-        _vendors = List<String>.from(settings?.vendors ?? []);
-      });
-    } catch (e) {
-      debugPrint('Error loading expenses data: $e');
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  // Helper to resolve Project Name for display
-  String _getProjectName(int projectId) {
-    try {
-      return _projects.firstWhere((p) => p.id == projectId).projectName;
-    } catch (e) {
-      return 'ID: $projectId (Missing)';
-    }
-  }
-
-  // NOTE: This method is a remnant of the old Add Expense functionality, kept for compilation.
-  Future<void> _addExpense(app_models.JobMaterials newExpense) async {
-    await _repo.insertJobMaterial(newExpense);
-    await _loadData();
-  }
-
-  // NOTE: This method is a remnant of the old Add Expense FAB functionality, kept for compilation.
-  void _showAddExpenseForm() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: ExpenseAddForm(
-            projects: _projects,
-            expenseCategories: _expenseCategories,
-            vehicleDesignations: _vehicleDesignations,
-            vendors: _vendors,
-            onSubmit: (newExpense) {
-              _addExpense(newExpense);
-              Navigator.pop(context);
-            },
-          ),
-        );
-      },
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Database Viewer'),
+        title: const Text('Database Viewer (Test)'),
+        actions: [
+          // A refresh button to try again without restarting the app.
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadRecords,
+            tooltip: 'Refresh Data',
+          ),
+        ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _expenses.isEmpty
-          ? const Center(child: Text('No expense records found in the database.'))
-      // FIX: Updated ListView to display all verification fields
-          : ListView.builder(
-        itemCount: _expenses.length,
-        itemBuilder: (context, index) {
-          final expense = _expenses[index];
-          final projectName = _getProjectName(expense.projectId!);
-
-          return Card(
-            margin: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-            child: ListTile(
-              // Display Category and Item Name
-              title: Text('${expense.expenseCategory ?? 'N/A'}: ${expense.itemName}',
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-
-              // Display verification fields in the subtitle
-              subtitle: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Project: $projectName | Vendor: ${expense.vendorOrSubtrade ?? 'None'}'),
-                  Text('Date: ${DateFormat('MMM d, yyyy').format(expense.purchaseDate)} | Company: ${expense.isCompanyExpense ? 'Yes' : 'No'}'),
-                  if (expense.description != null && expense.description!.isNotEmpty)
-                    Text('Notes: ${expense.description}', style: const TextStyle(fontStyle: FontStyle.italic, fontSize: 12)),
-                ],
+      body: FutureBuilder<List<AllRecordViewModel>>(
+        future: _recordsFuture,
+        builder: (context, snapshot) {
+          // Case 1: Still waiting for data
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          // Case 2: An error occurred
+          else if (snapshot.hasError) {
+            return Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  'AN ERROR OCCURRED:\n\n${snapshot.error}',
+                  style: const TextStyle(color: Colors.red, fontSize: 16),
+                  textAlign: TextAlign.center,
+                ),
               ),
-
-              // Display Cost
-              trailing: Text('\$${expense.cost.toStringAsFixed(2)}',
-                  style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).primaryColor)),
-            ),
-          );
+            );
+          }
+          // Case 3: Data loaded, but it's empty
+          else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return const Center(child: Text('No records found in the database.'));
+          }
+          // Case 4: Success! We have data.
+          else {
+            final records = snapshot.data!;
+            return ListView.builder(
+              itemCount: records.length,
+              itemBuilder: (context, index) {
+                final record = records[index];
+                // Use a simple, clear card to display the data for our test.
+                return _buildRecordCard(record);
+              },
+            );
+          }
         },
+      ),
+    );
+  }
+
+  // Helper widget to build a card for each record.
+  Widget _buildRecordCard(AllRecordViewModel record) {
+    final isTimeEntry = record.type == RecordType.time;
+    final icon = isTimeEntry ? Icons.timer_outlined : Icons.shopping_cart_outlined;
+    final color = isTimeEntry ? Colors.blue.shade300 : Colors.green.shade300;
+    final formattedDate = DateFormat.yMMMd().format(record.date);
+
+    final formattedValue = isTimeEntry
+        ? '${record.value.toStringAsFixed(2)} hours'
+        : NumberFormat.simpleCurrency().format(record.value);
+
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: ListTile(
+        leading: Icon(icon, color: color, size: 36),
+        title: Text(
+          record.description,
+          style: const TextStyle(fontWeight: FontWeight.bold),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          'Date: $formattedDate\nCategory/Project: ${record.categoryOrProject}',
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: Text(
+          formattedValue,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        isThreeLine: true,
       ),
     );
   }

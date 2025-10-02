@@ -1,8 +1,5 @@
 // lib/models.dart
 
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
-
 // start class: Client
 class Client {
   final int? id;
@@ -19,7 +16,6 @@ class Client {
     this.phoneNumber,
   });
 
-  // start method: toMap
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -29,9 +25,7 @@ class Client {
       'phone_number': phoneNumber,
     };
   }
-  // end method: toMap
 
-  // start method: fromMap
   factory Client.fromMap(Map<String, dynamic> map) {
     return Client(
       id: map['id'],
@@ -41,9 +35,7 @@ class Client {
       phoneNumber: map['phone_number'],
     );
   }
-// end method: fromMap
 
-  // start method: copyWith
   Client copyWith({
     int? id,
     String? name,
@@ -59,7 +51,6 @@ class Client {
       phoneNumber: phoneNumber ?? this.phoneNumber,
     );
   }
-// end method: copyWith
 }
 // end class: Client
 
@@ -69,7 +60,7 @@ class Project {
   final String projectName;
   final int clientId;
   final String? location;
-  final String pricingModel;
+  final String? pricingModel;
   final bool isCompleted;
   final DateTime? completionDate;
   final bool isInternal;
@@ -80,14 +71,13 @@ class Project {
     required this.projectName,
     required this.clientId,
     this.location,
-    this.pricingModel = 'hourly',
+    this.pricingModel,
     this.isCompleted = false,
     this.completionDate,
     this.isInternal = false,
     this.billedHourlyRate,
   });
 
-  // start method: toMap
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -101,9 +91,7 @@ class Project {
       'billed_hourly_rate': billedHourlyRate,
     };
   }
-  // end method: toMap
 
-  // start method: fromMap
   factory Project.fromMap(Map<String, dynamic> map) {
     return Project(
       id: map['id'],
@@ -117,9 +105,7 @@ class Project {
       billedHourlyRate: map['billed_hourly_rate'],
     );
   }
-// end method: fromMap
 
-  // start method: copyWith
   Project copyWith({
     int? id,
     String? projectName,
@@ -143,7 +129,6 @@ class Project {
       billedHourlyRate: billedHourlyRate ?? this.billedHourlyRate,
     );
   }
-// end method: copyWith
 }
 // end class: Project
 
@@ -163,7 +148,6 @@ class Employee {
     this.isDeleted = false,
   });
 
-  // start method: toMap
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -173,9 +157,7 @@ class Employee {
       'is_deleted': isDeleted ? 1 : 0,
     };
   }
-  // end method: toMap
 
-  // start method: fromMap
   factory Employee.fromMap(Map<String, dynamic> map) {
     return Employee(
       id: map['id'],
@@ -185,8 +167,7 @@ class Employee {
       isDeleted: map['is_deleted'] == 1,
     );
   }
-// end method: fromMap
-  // start method: copyWith
+
   Employee copyWith({
     int? id,
     String? employeeNumber,
@@ -202,7 +183,6 @@ class Employee {
       isDeleted: isDeleted ?? this.isDeleted,
     );
   }
-// end method: copyWith
 }
 // end class: Employee
 
@@ -234,7 +214,6 @@ class TimeEntry {
     this.workDetails,
   });
 
-  // start method: toMap
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -250,9 +229,7 @@ class TimeEntry {
       'work_details': workDetails,
     };
   }
-  // end method: toMap
 
-  // start method: fromMap
   factory TimeEntry.fromMap(Map<String, dynamic> map) {
     return TimeEntry(
       id: map['id'],
@@ -268,8 +245,7 @@ class TimeEntry {
       workDetails: map['work_details'],
     );
   }
-// end method: fromMap
-  // start method: copyWith
+
   TimeEntry copyWith({
     int? id,
     int? projectId,
@@ -297,7 +273,6 @@ class TimeEntry {
       workDetails: workDetails ?? this.workDetails,
     );
   }
-// end method: copyWith
 }
 // end class: TimeEntry
 
@@ -337,7 +312,6 @@ class JobMaterials {
     this.vendorOrSubtrade,
   });
 
-  // start method: toMap
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -357,9 +331,7 @@ class JobMaterials {
       'vendor_or_subtrade': vendorOrSubtrade,
     };
   }
-  // end method: toMap
 
-  // start method: fromMap
   factory JobMaterials.fromMap(Map<String, dynamic> map) {
     return JobMaterials(
       id: map['id'],
@@ -379,9 +351,7 @@ class JobMaterials {
       vendorOrSubtrade: map['vendor_or_subtrade'],
     );
   }
-// end method: fromMap
 
-  // start method: copyWith
   JobMaterials copyWith({
     int? id,
     int? projectId,
@@ -417,37 +387,22 @@ class JobMaterials {
       vendorOrSubtrade: vendorOrSubtrade ?? this.vendorOrSubtrade,
     );
   }
-// end method: copyWith
 }
 // end class: JobMaterials
 
 // start class: AppSettings
 class AppSettings {
-  final String key;
-  final String? value;
+  final Map<String, dynamic> settings;
 
-  AppSettings({
-    required this.key,
-    this.value,
-  });
+  AppSettings({required this.settings});
 
-  // start method: toMap
-  Map<String, dynamic> toMap() {
-    return {
-      'key': key,
-      'value': value,
-    };
-  }
-  // end method: toMap
-
-  // start method: fromMap
   factory AppSettings.fromMap(Map<String, dynamic> map) {
-    return AppSettings(
-      key: map['key'],
-      value: map['value'],
-    );
+    return AppSettings(settings: map);
   }
-// end method: fromMap
+
+  Map<String, dynamic> toMap() {
+    return settings;
+  }
 }
 // end class: AppSettings
 
@@ -463,7 +418,6 @@ class Role {
     this.standardRate = 0.0,
   });
 
-  // start method: toMap
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -471,9 +425,7 @@ class Role {
       'standard_rate': standardRate,
     };
   }
-  // end method: toMap
 
-  // start method: fromMap
   factory Role.fromMap(Map<String, dynamic> map) {
     return Role(
       id: map['id'],
@@ -481,9 +433,7 @@ class Role {
       standardRate: map['standard_rate'],
     );
   }
-// end method: fromMap
 
-  // start method: copyWith
   Role copyWith({
     int? id,
     String? name,
@@ -495,7 +445,6 @@ class Role {
       standardRate: standardRate ?? this.standardRate,
     );
   }
-// end method: copyWith
 }
 // end class: Role
 
@@ -509,24 +458,20 @@ class ExpenseCategory {
     required this.name,
   });
 
-  // start method: toMap
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'name': name,
     };
   }
-  // end method: toMap
 
-  // start method: fromMap
   factory ExpenseCategory.fromMap(Map<String, dynamic> map) {
     return ExpenseCategory(
       id: map['id'],
       name: map['name'],
     );
   }
-// end method: fromMap
-  // start method: copyWith
+
   ExpenseCategory copyWith({
     int? id,
     String? name,
@@ -536,7 +481,6 @@ class ExpenseCategory {
       name: name ?? this.name,
     );
   }
-// end method: copyWith
 }
 // end class: ExpenseCategory
 
@@ -552,7 +496,6 @@ class CostSummary {
     required this.recordCount,
   });
 }
-
 // end method: cost summary
 
 // start class: User
@@ -571,7 +514,6 @@ class User {
     this.isAdmin = false,
   });
 
-  // start method: toMap
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -581,9 +523,7 @@ class User {
       'is_admin': isAdmin ? 1 : 0,
     };
   }
-  // end method: toMap
 
-  // start method: fromMap
   factory User.fromMap(Map<String, dynamic> map) {
     return User(
       id: map['id'],
@@ -593,6 +533,33 @@ class User {
       isAdmin: map['is_admin'] == 1,
     );
   }
-// end method: fromMap
 }
 // end class: User
+
+
+// =========================================================================
+// == ADDED FOR DATABASE VIEWER TEST ==
+// =========================================================================
+
+enum RecordType {
+  time,
+  expense,
+}
+
+class AllRecordViewModel {
+  final int id;
+  final RecordType type;
+  final DateTime date;
+  final String description;
+  final double value; // Can be hours for time, or cost for expense
+  final String categoryOrProject;
+
+  AllRecordViewModel({
+    required this.id,
+    required this.type,
+    required this.date,
+    required this.description,
+    required this.value,
+    required this.categoryOrProject,
+  });
+}
