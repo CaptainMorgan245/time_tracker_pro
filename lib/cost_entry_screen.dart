@@ -2,12 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/database_helper.dart'; // Using V2!
-import 'package:time_tracker_pro/dashboard_screen.dart';
+//import 'package:time_tracker_pro/dashboard_screen.dart';
 import 'package:time_tracker_pro/cost_record_form.dart';
 import 'package:time_tracker_pro/project_repository.dart';
-// V2 CHANGE: Old category repo is no longer needed for reactive updates
-// import 'package:time_tracker_pro/expense_category_repository.dart';
-import 'package:time_tracker_pro/job_materials_repository.dart';
 import 'package:time_tracker_pro/settings_service.dart';
 import 'package:time_tracker_pro/models.dart';
 
@@ -22,25 +19,23 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   final _formKey = GlobalKey<CostRecordFormState>();
   final _scrollController = ScrollController();
 
-  // Keep old repos for things we haven't made reactive yet
-  final _jobMaterialsRepo = JobMaterialsRepository();
+  // Repositories for data that is not yet reactive
   final _projectRepo = ProjectRepository();
-  // final _categoryRepo = ExpenseCategoryRepository(); // V2 CHANGE: Removed
   final _settingsService = SettingsService.instance;
 
-  // V2 CHANGE: We need access to the notifier
+  // V2: We need access to the notifier for reactive updates
   final dbNotifier = DatabaseHelperV2.instance.databaseNotifier;
 
   bool _isEditing = false;
   bool _isLoading = true;
 
-  // State for dropdowns and lists
+  // State for dropdowns
   List<Project> _allProjects = [];
   List<Project> _filteredProjects = [];
-  List<String> _expenseCategories = []; // This will now be updated reactively
-  List<JobMaterials> _recentExpenses = [];
+  List<String> _expenseCategories = [];
   List<String> _vendors = [];
   List<String> _vehicleDesignations = [];
+  // NOTE: _recentExpenses is now fully managed by a ValueListenableBuilder
 
   final Project _internalProject =
   Project(id: 0, projectName: 'Internal Company Project', clientId: 0, isInternal: true);
@@ -48,46 +43,46 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   @override
   void initState() {
     super.initState();
-    _loadInitialData(); // Load everything once at the start
-    // V2 CHANGE: Listen for database changes to reload dropdowns
+    // Load data that doesn't need to be reactive
+    _loadNonReactiveData();
+    // Listen for database changes to reload dropdowns
     dbNotifier.addListener(_reloadDropdownData);
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
-    // V2 CHANGE: Always remove the listener
+    // Always remove the listener
     dbNotifier.removeListener(_reloadDropdownData);
     super.dispose();
   }
 
-  /// V2 CHANGE: This method is called reactively when the database changes.
+  /// This method is called reactively when the database changes.
   /// It specifically re-fetches data for dropdown menus.
   Future<void> _reloadDropdownData() async {
     debugPrint("[CostEntryScreen] Notified of DB change. Reloading dropdown data...");
     // Fetch the latest categories using the V2 helper
     final cats = await DatabaseHelperV2.instance.getExpenseCategoriesV2();
-
-    // We can add vendors and vehicles here later if they become reactive
+    // We could add vendors/vehicles here in the future
 
     if (!mounted) return;
 
+    // Call setState to trigger a UI rebuild for the dropdowns.
     setState(() {
       _expenseCategories = cats.map((c) => c.name).toList();
     });
   }
 
-  /// Loads all data when the screen is first created.
-  Future<void> _loadInitialData() async {
+  /// Loads data that does not change often ONCE on startup.
+  Future<void> _loadNonReactiveData() async {
     setState(() => _isLoading = true);
 
     try {
       // Use V2 for categories from the start
       final categories = await DatabaseHelperV2.instance.getExpenseCategoriesV2();
-      // Other dependencies are loaded the old way for now
+      // Load other non-reactive data
       final allProjects = await _projectRepo.getProjects();
       final settings = await _settingsService.loadSettings();
-      final recentExpenses = await _jobMaterialsRepo.getAllJobMaterials();
 
       if (!allProjects.any((p) => p.id == _internalProject.id)) {
         allProjects.insert(0, _internalProject);
@@ -98,9 +93,9 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
       setState(() {
         _allProjects = allProjects;
         _expenseCategories = categories.map((c) => c.name).toList();
-        _vendors = List<String>.from(settings?.vendors ?? []);
-        _vehicleDesignations = List<String>.from(settings?.vehicleDesignations ?? []);
-        _recentExpenses = recentExpenses;
+        // FIX #1: Removed unnecessary null-aware operators `?.`
+        _vendors = List<String>.from(settings.vendors);
+        _vehicleDesignations = List<String>.from(settings.vehicleDesignations);
 
         _applyProjectFilter(false);
         _isLoading = false;
@@ -114,11 +109,6 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     }
   }
 
-  // Reloads both recent expenses and dropdowns (legacy behavior for now)
-  Future<void> _reloadData() async {
-    await _loadInitialData();
-  }
-
   void _applyProjectFilter(bool showCompleted) {
     _filteredProjects = showCompleted
         ? _allProjects
@@ -127,29 +117,45 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     _formKey.currentState?.forceRebuild();
   }
 
-  // This uses the OLD repository. We fixed this once, but reverted.
-  // We can re-fix this in the next step if we want.
+  /// V2: Handles submission by calling the V2 helper. The UI updates automatically.
   Future<void> _handleCostSubmission(JobMaterials expense, bool isEditing) async {
     try {
       if (isEditing) {
-        await _jobMaterialsRepo.updateJobMaterial(expense);
+        await DatabaseHelperV2.instance.updateMaterialV2(expense);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Expense updated successfully!')));
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('Expense updated successfully!')));
         }
       } else {
-        await _jobMaterialsRepo.insertJobMaterial(expense);
+        await DatabaseHelperV2.instance.addMaterialV2(expense);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Expense recorded successfully!')));
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('Expense recorded successfully!')));
         }
       }
-      _reloadData(); // Manual refresh of recent expenses list
-      _handleCancelEdit();
+      if (mounted) _handleCancelEdit();
+      // NO manual refresh needed. The ValueListenableBuilder handles it.
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text('Failed to save expense: $e')));
+      }
+    }
+  }
+
+  /// V2: Deletes an expense by calling the V2 helper.
+  Future<void> _deleteExpense(int id) async {
+    try {
+      await DatabaseHelperV2.instance.deleteRecordV2(id: id, fromTable: 'materials');
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Expense deleted.')));
+      }
+      // NO manual refresh needed.
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed to delete expense: $e')));
       }
     }
   }
@@ -168,22 +174,6 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
         duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
   }
 
-  Future<void> _deleteExpense(int id) async {
-    try {
-      await _jobMaterialsRepo.deleteJobMaterial(id);
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Expense deleted.')));
-      }
-      _reloadData();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Failed to delete expense: $e')));
-      }
-    }
-  }
-
   String _getProjectName(int projectId) {
     try {
       return _allProjects.firstWhere((p) => p.id == projectId).projectName;
@@ -192,24 +182,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     }
   }
 
-  void _handleBottomNavTap(int index) {
-    // This is the original navigation logic from before
-    final route = ModalRoute.of(context);
-    if (route is PageRoute && route.isFirst) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (context) => DashboardScreen(initialIndex: index),
-        ),
-      );
-    } else {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(
-          builder: (context) => DashboardScreen(initialIndex: index),
-        ),
-            (Route<dynamic> route) => false,
-      );
-    }
-  }
+  // FIX #2: The unused _handleBottomNavTap method has been completely removed.
 
   @override
   Widget build(BuildContext context) {
@@ -229,7 +202,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                 formWidget: CostRecordForm(
                   key: _formKey,
                   availableProjects: _filteredProjects,
-                  expenseCategories: _expenseCategories, // This list is now reactive
+                  expenseCategories: _expenseCategories, // This list is reactive
                   vendors: _vendors,
                   vehicleDesignations: _vehicleDesignations,
                   onAddExpense: _handleCostSubmission,
@@ -241,66 +214,78 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
               ),
               pinned: true,
             ),
-            _recentExpenses.isEmpty
-                ? const SliverToBoxAdapter(
-              child: Padding(
-                padding: EdgeInsets.only(top: 8.0),
-                child: Center(
-                    child: Text("No recent expenses found.")),
-              ),
-            )
-                : SliverList(
-              delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                  final expense = _recentExpenses[index];
-                  final projectName =
-                  _getProjectName(expense.projectId);
-                  final itemNameDisplay =
-                  expense.itemName != null &&
-                      expense.itemName!.isNotEmpty
-                      ? expense.itemName!
-                      : '';
+            // THIS IS THE FULLY REACTIVE LIST OF RECENT EXPENSES
+            ValueListenableBuilder<int>(
+              valueListenable: dbNotifier,
+              builder: (context, dbVersion, child) {
+                debugPrint("[CostEntryScreen] Rebuilding recent expenses list due to DB version $dbVersion");
+                return FutureBuilder<List<JobMaterials>>(
+                  future: DatabaseHelperV2.instance.getRecentMaterialsV2(),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const SliverToBoxAdapter(
+                          child: Center(child: Padding(padding: EdgeInsets.all(20.0), child: CircularProgressIndicator())));
+                    }
+                    if (snapshot.hasError) {
+                      return SliverToBoxAdapter(
+                          child: Center(child: Text('Error loading expenses: ${snapshot.error}')));
+                    }
+                    final recentExpenses = snapshot.data ?? [];
+                    if (recentExpenses.isEmpty) {
+                      return const SliverToBoxAdapter(
+                        child: Padding(
+                            padding: EdgeInsets.only(top: 8.0),
+                            child: Center(child: Text("No recent expenses found."))),
+                      );
+                    }
+                    // If we have data, we build the SliverList.
+                    return SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                            (context, index) {
+                          final expense = recentExpenses[index];
+                          final projectName =
+                          _getProjectName(expense.projectId);
 
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16.0, vertical: 4.0),
-                    child: Card(
-                      margin: EdgeInsets.zero,
-                      child: ListTile(
-                        title: Text(
-                          '$itemNameDisplay (\$${expense.cost.toStringAsFixed(2)})',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Text(
-                          'Project: $projectName | Category: ${expense.expenseCategory ?? 'N/A'}',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.edit,
-                                  color: Colors.blueGrey),
-                              onPressed: () =>
-                                  _populateFormFromExpense(
-                                      expense),
+                          // FIX #3: Simplified the logic since expense.itemName cannot be null.
+                          final itemNameDisplay = expense.itemName.isNotEmpty
+                              ? expense.itemName
+                              : '';
+
+                          return Padding(
+                            padding:
+                            const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                            child: Card(
+                              margin: EdgeInsets.zero,
+                              child: ListTile(
+                                title: Text(
+                                    '$itemNameDisplay (\$${expense.cost.toStringAsFixed(2)})',
+                                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                                subtitle: Text(
+                                    'Project: $projectName | Category: ${expense.expenseCategory ?? 'N/A'}',
+                                    style: const TextStyle(fontSize: 12)),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                        icon: const Icon(Icons.edit, color: Colors.blueGrey),
+                                        onPressed: () => _populateFormFromExpense(expense)),
+                                    IconButton(
+                                        icon: const Icon(
+                                            Icons.delete_forever,
+                                            color: Colors.red),
+                                        onPressed: () => _deleteExpense(expense.id!)),
+                                  ],
+                                ),
+                              ),
                             ),
-                            IconButton(
-                              icon: const Icon(
-                                  Icons.delete_forever,
-                                  color: Colors.red),
-                              onPressed: () =>
-                                  _deleteExpense(expense.id!),
-                            ),
-                          ],
-                        ),
+                          );
+                        },
+                        childCount: recentExpenses.length,
                       ),
-                    ),
-                  );
-                },
-                childCount: _recentExpenses.length,
-              ),
+                    );
+                  },
+                );
+              },
             ),
           ],
         ),

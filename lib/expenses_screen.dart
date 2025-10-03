@@ -1,14 +1,11 @@
 // lib/expenses_screen.dart
 
 import 'package:flutter/material.dart';
-// V2 CHANGE: Import the new helper
 import 'package:time_tracker_pro/database_helper.dart';
-// V2 CHANGE: Old repository is no longer needed for categories
-// import 'package:time_tracker_pro/expense_category_repository.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/settings_service.dart';
 import 'package:time_tracker_pro/input_formatters.dart';
-import 'package:time_tracker_pro/settings_model.dart';
+//import 'package:time_tracker_pro/settings_model.dart';
 import 'package:time_tracker_pro/widgets/app_setting_list_card.dart';
 
 class ExpensesScreen extends StatefulWidget {
@@ -19,8 +16,6 @@ class ExpensesScreen extends StatefulWidget {
 }
 
 class _ExpensesScreenState extends State<ExpensesScreen> {
-  // V2 CHANGE: The old repo is gone
-  // final ExpenseCategoryRepository _repo = ExpenseCategoryRepository();
   final SettingsService _settingsService = SettingsService.instance;
 
   final TextEditingController _categoryController = TextEditingController();
@@ -31,7 +26,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   List<String> _vehicles = [];
   List<String> _vendors = [];
 
-  // V2 CHANGE: We will listen to the database notifier to refresh this screen's own list
   final dbNotifier = DatabaseHelperV2.instance.databaseNotifier;
 
 
@@ -39,7 +33,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   void initState() {
     super.initState();
     _loadData();
-    // V2 CHANGE: Add a listener to refresh this screen if data changes elsewhere
     dbNotifier.addListener(_loadData);
   }
 
@@ -48,20 +41,18 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     _categoryController.dispose();
     _vehicleController.dispose();
     _vendorController.dispose();
-    // V2 CHANGE: Remove the listener when the screen is disposed
     dbNotifier.removeListener(_loadData);
     super.dispose();
   }
 
-  // V2 CHANGE: This now uses the V2 helper to get categories.
-  Future<void> _loadData() async {
-    // The settings logic for vehicles/vendors is unchanged
-    final rawSettings = await _settingsService.loadSettings();
-    final settings = (rawSettings is Map<String, dynamic>)
-        ? SettingsModel.fromMap(rawSettings as Map<String, dynamic>)
-        : (rawSettings is SettingsModel ? rawSettings : SettingsModel());
 
-    // Use the V2 helper to get categories
+  // REVISED FIX: Trusting the analyzer that rawSettings is not null.
+  Future<void> _loadData() async {
+    final rawSettings = await _settingsService.loadSettings();
+
+    // THIS IS THE REVISED FIX
+    final settings = rawSettings;
+
     final cats = await DatabaseHelperV2.instance.getExpenseCategoriesV2();
 
     if (!mounted) return;
@@ -73,33 +64,23 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     });
   }
 
-  // V2 CHANGE: This now calls the V2 method. No need for manual _loadData().
   Future<void> _addCategory() async {
     FocusScope.of(context).unfocus();
     final name = _categoryController.text.trim();
     if (name.isEmpty) return;
 
-    // This now calls the V2 method which will notify all listeners
     await DatabaseHelperV2.instance.addExpenseCategoryV2(ExpenseCategory(name: name));
     _categoryController.clear();
-    // No need to call _loadData(), the listener will handle it automatically.
   }
 
-  // V2 CHANGE: This now calls the V2 method. No need for manual _loadData().
   Future<void> _deleteCategory(int id) async {
-    // This now calls the V2 method which will notify all listeners
     await DatabaseHelperV2.instance.deleteRecordV2(id: id, fromTable: 'expense_categories');
-    // No need to call _loadData()
   }
 
-  // V2 CHANGE: This now calls the V2 method. No need for manual _loadData().
   Future<void> _updateCategory(ExpenseCategory category) async {
-    // This now calls the V2 method which will notify all listeners
     await DatabaseHelperV2.instance.updateExpenseCategoryV2(category);
-    // No need to call _loadData()
   }
 
-  // The logic for Vehicles and Vendors (which use SettingsService) is unchanged for now
   Future<void> _addOption(TextEditingController controller, List<String> list) async {
     FocusScope.of(context).unfocus();
     final name = controller.text.trim();
@@ -124,11 +105,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     _loadData();
   }
 
+  // REVISED FIX: Trusting the analyzer that rawSettings is not null.
   Future<void> _saveSettings() async {
     final rawSettings = await _settingsService.loadSettings();
-    final currentSettings = (rawSettings is Map<String, dynamic>)
-        ? SettingsModel.fromMap(rawSettings as Map<String, dynamic>)
-        : (rawSettings is SettingsModel ? rawSettings : SettingsModel());
+
+    // THIS IS THE REVISED FIX
+    final currentSettings = rawSettings;
 
     final updatedSettings = currentSettings.copyWith(
       vehicleDesignations: _vehicles,
@@ -137,7 +119,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     await _settingsService.saveSettings(updatedSettings);
   }
 
-  // Unchanged
+  // Unchanged UI methods below...
   Widget _buildForm(String label, TextEditingController controller, VoidCallback onAdd) {
     final bool applyCapitalization = label != 'Vehicle Designation';
     return Expanded(
@@ -163,7 +145,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     );
   }
 
-  // Unchanged
   void _showEditDialog(
       BuildContext context,
       String title,
@@ -208,7 +189,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     );
   }
 
-  // Unchanged
   @override
   Widget build(BuildContext context) {
     void openEditDialog(String title, String currentValue, Function(String) onSave, VoidCallback onDelete) {
@@ -317,4 +297,3 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     );
   }
 }
-
