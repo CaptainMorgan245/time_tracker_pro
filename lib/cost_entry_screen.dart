@@ -1,95 +1,94 @@
 // lib/cost_entry_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:time_tracker_pro/database_helper.dart'; // Using V2!
 import 'package:time_tracker_pro/dashboard_screen.dart';
 import 'package:time_tracker_pro/cost_record_form.dart';
 import 'package:time_tracker_pro/project_repository.dart';
-import 'package:time_tracker_pro/expense_category_repository.dart';
+// V2 CHANGE: Old category repo is no longer needed for reactive updates
+// import 'package:time_tracker_pro/expense_category_repository.dart';
 import 'package:time_tracker_pro/job_materials_repository.dart';
 import 'package:time_tracker_pro/settings_service.dart';
 import 'package:time_tracker_pro/models.dart';
-import 'package:time_tracker_pro/app_bottom_nav_bar.dart';
 
-// start class: CostEntryScreen
 class CostEntryScreen extends StatefulWidget {
   const CostEntryScreen({super.key});
 
   @override
   State<CostEntryScreen> createState() => _CostEntryScreenState();
 }
-// end class: CostEntryScreen
 
-// start class: _CostEntryScreenState
 class _CostEntryScreenState extends State<CostEntryScreen> {
-  // GlobalKey used to access and validate the form data
   final _formKey = GlobalKey<CostRecordFormState>();
   final _scrollController = ScrollController();
 
-  // Repositories and Services
-  final _projectRepo = ProjectRepository();
-  final _categoryRepo = ExpenseCategoryRepository();
+  // Keep old repos for things we haven't made reactive yet
   final _jobMaterialsRepo = JobMaterialsRepository();
+  final _projectRepo = ProjectRepository();
+  // final _categoryRepo = ExpenseCategoryRepository(); // V2 CHANGE: Removed
   final _settingsService = SettingsService.instance;
 
-  // State Variables
+  // V2 CHANGE: We need access to the notifier
+  final dbNotifier = DatabaseHelperV2.instance.databaseNotifier;
+
   bool _isEditing = false;
   bool _isLoading = true;
 
-  // Data Lists
+  // State for dropdowns and lists
   List<Project> _allProjects = [];
   List<Project> _filteredProjects = [];
-  List<String> _expenseCategories = [];
+  List<String> _expenseCategories = []; // This will now be updated reactively
   List<JobMaterials> _recentExpenses = [];
-
-  // Dynamic Lookup Data from Settings
   List<String> _vendors = [];
   List<String> _vehicleDesignations = [];
 
-  // Default Internal Project
-  final Project _internalProject = Project(
-    id: 0,
-    projectName: 'Internal Company Project',
-    clientId: 0,
-    isInternal: true,
-  );
+  final Project _internalProject =
+  Project(id: 0, projectName: 'Internal Company Project', clientId: 0, isInternal: true);
 
-  // *********************************************************
-  // FINAL FIX: Using WidgetsBinding.instance.addPostFrameCallback
-  // This is the guaranteed way to force a state reload after navigation.
-  // *********************************************************
   @override
   void initState() {
     super.initState();
-    // Use addPostFrameCallback to ensure the form is rebuilt with the latest data
-    // right after the initial render cycle (or navigation return).
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadDependencies();
-    });
+    _loadInitialData(); // Load everything once at the start
+    // V2 CHANGE: Listen for database changes to reload dropdowns
+    dbNotifier.addListener(_reloadDropdownData);
   }
-
-  // NOTE: didChangeDependencies() and the Observer pattern are removed.
 
   @override
   void dispose() {
     _scrollController.dispose();
+    // V2 CHANGE: Always remove the listener
+    dbNotifier.removeListener(_reloadDropdownData);
     super.dispose();
   }
 
-  // start method: _loadDependencies
-  Future<void> _loadDependencies() async {
-    // Only show loading indicator if this is the very first load
-    if (_allProjects.isEmpty) {
-      setState(() => _isLoading = true);
-    }
+  /// V2 CHANGE: This method is called reactively when the database changes.
+  /// It specifically re-fetches data for dropdown menus.
+  Future<void> _reloadDropdownData() async {
+    debugPrint("[CostEntryScreen] Notified of DB change. Reloading dropdown data...");
+    // Fetch the latest categories using the V2 helper
+    final cats = await DatabaseHelperV2.instance.getExpenseCategoriesV2();
+
+    // We can add vendors and vehicles here later if they become reactive
+
+    if (!mounted) return;
+
+    setState(() {
+      _expenseCategories = cats.map((c) => c.name).toList();
+    });
+  }
+
+  /// Loads all data when the screen is first created.
+  Future<void> _loadInitialData() async {
+    setState(() => _isLoading = true);
 
     try {
-      final categories = await _categoryRepo.getExpenseCategories();
+      // Use V2 for categories from the start
+      final categories = await DatabaseHelperV2.instance.getExpenseCategoriesV2();
+      // Other dependencies are loaded the old way for now
       final allProjects = await _projectRepo.getProjects();
-
-      final recentExpenses = await _jobMaterialsRepo.getAllJobMaterials();
       final settings = await _settingsService.loadSettings();
+      final recentExpenses = await _jobMaterialsRepo.getAllJobMaterials();
 
-      // Add the default internal project to the list of all projects
       if (!allProjects.any((p) => p.id == _internalProject.id)) {
         allProjects.insert(0, _internalProject);
       }
@@ -99,128 +98,118 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
       setState(() {
         _allProjects = allProjects;
         _expenseCategories = categories.map((c) => c.name).toList();
-        _recentExpenses = recentExpenses;
-
-        // Load dynamic data from settings
         _vendors = List<String>.from(settings?.vendors ?? []);
         _vehicleDesignations = List<String>.from(settings?.vehicleDesignations ?? []);
+        _recentExpenses = recentExpenses;
 
         _applyProjectFilter(false);
         _isLoading = false;
-        _isEditing = false;
       });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load dependency data: $e')),
-        );
+            SnackBar(content: Text('Failed to load initial dependency data: $e')));
         setState(() => _isLoading = false);
       }
     }
   }
-  // end method: _loadDependencies
 
-  // start method: _applyProjectFilter
+  // Reloads both recent expenses and dropdowns (legacy behavior for now)
+  Future<void> _reloadData() async {
+    await _loadInitialData();
+  }
+
   void _applyProjectFilter(bool showCompleted) {
-    if (showCompleted) {
-      _filteredProjects = _allProjects;
-    } else {
-      _filteredProjects = _allProjects.where((p) => !p.isCompleted || p.id == _internalProject.id).toList();
-    }
+    _filteredProjects = showCompleted
+        ? _allProjects
+        : _allProjects.where((p) => !p.isCompleted || p.id == _internalProject.id).toList();
     setState(() {});
     _formKey.currentState?.forceRebuild();
   }
-  // end method: _applyProjectFilter
 
-  // start method: _handleCostSubmission
+  // This uses the OLD repository. We fixed this once, but reverted.
+  // We can re-fix this in the next step if we want.
   Future<void> _handleCostSubmission(JobMaterials expense, bool isEditing) async {
     try {
       if (isEditing) {
         await _jobMaterialsRepo.updateJobMaterial(expense);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Expense updated successfully!')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Expense updated successfully!')));
+        }
       } else {
         await _jobMaterialsRepo.insertJobMaterial(expense);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Expense recorded successfully!')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Expense recorded successfully!')));
+        }
       }
-
-      if (mounted) {
-        _handleCancelEdit();
-      }
+      _reloadData(); // Manual refresh of recent expenses list
+      _handleCancelEdit();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save expense: $e')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed to save expense: $e')));
       }
     }
   }
-  // end method: _handleCostSubmission
 
-  // Handles cancelling edit mode and resetting form/data
   void _handleCancelEdit() {
     _formKey.currentState?.resetForm();
     setState(() => _isEditing = false);
-    _loadDependencies(); // Reloads the list to show the new entry
-    _scrollController.animateTo(0.0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+    _scrollController.animateTo(0.0,
+        duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
   }
 
-  // start method: _populateFormFromExpense
   void _populateFormFromExpense(JobMaterials expense) {
     _formKey.currentState?.populateForm(expense);
-    setState(() {
-      _isEditing = true;
-    });
-    // Scroll to the top of the CustomScrollView after repopulating
-    _scrollController.animateTo(
-      0.0,
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOut,
-    );
+    setState(() => _isEditing = true);
+    _scrollController.animateTo(0.0,
+        duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
   }
-  // end method: _populateFormFromExpense
 
-  // start method: _deleteExpense
   Future<void> _deleteExpense(int id) async {
     try {
       await _jobMaterialsRepo.deleteJobMaterial(id);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Expense deleted.')),
-      );
-      _loadDependencies();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Expense deleted.')));
+      }
+      _reloadData();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete expense: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed to delete expense: $e')));
+      }
     }
   }
-  // end method: _deleteExpense
 
-  // start method: _getProjectName
   String _getProjectName(int projectId) {
     try {
-      final project = _allProjects.firstWhere((p) => p.id == projectId);
-      return project.projectName;
+      return _allProjects.firstWhere((p) => p.id == projectId).projectName;
     } catch (e) {
       return 'Unknown Project';
     }
   }
-  // end method: _getProjectName
 
-  // start method: _handleBottomNavTap
   void _handleBottomNavTap(int index) {
-    // Only navigate if the index is NOT for the current screen (0 for CostEntryScreen)
-    if (index != 0) {
+    // This is the original navigation logic from before
+    final route = ModalRoute.of(context);
+    if (route is PageRoute && route.isFirst) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => DashboardScreen(initialIndex: index),
+        ),
+      );
+    } else {
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (context) => DashboardScreen(initialIndex: index)),
+        MaterialPageRoute(
+          builder: (context) => DashboardScreen(initialIndex: index),
+        ),
             (Route<dynamic> route) => false,
       );
     }
   }
-  // end method: _handleBottomNavTap
 
   @override
   Widget build(BuildContext context) {
@@ -233,7 +222,6 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
         child: CustomScrollView(
           controller: _scrollController,
           slivers: [
-            // 1. COLLAPSIBLE/PINNED FORM HEADER
             SliverPersistentHeader(
               delegate: _CostEntryFormSliverDelegate(
                 minHeight: 130.0,
@@ -241,7 +229,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                 formWidget: CostRecordForm(
                   key: _formKey,
                   availableProjects: _filteredProjects,
-                  expenseCategories: _expenseCategories,
+                  expenseCategories: _expenseCategories, // This list is now reactive
                   vendors: _vendors,
                   vehicleDesignations: _vehicleDesignations,
                   onAddExpense: _handleCostSubmission,
@@ -253,34 +241,36 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
               ),
               pinned: true,
             ),
-
-            // 2. RECENT RECORDS LIST
             _recentExpenses.isEmpty
                 ? const SliverToBoxAdapter(
               child: Padding(
                 padding: EdgeInsets.only(top: 8.0),
-                child: Center(child: Text("No recent expenses found.")),
+                child: Center(
+                    child: Text("No recent expenses found.")),
               ),
             )
                 : SliverList(
               delegate: SliverChildBuilderDelegate(
                     (context, index) {
                   final expense = _recentExpenses[index];
-                  final projectName = _getProjectName(expense.projectId);
-
-                  // FIX: Display empty string for null/empty item names instead of "N/A"
-                  final itemNameDisplay = expense.itemName != null && expense.itemName!.isNotEmpty
+                  final projectName =
+                  _getProjectName(expense.projectId);
+                  final itemNameDisplay =
+                  expense.itemName != null &&
+                      expense.itemName!.isNotEmpty
                       ? expense.itemName!
                       : '';
 
                   return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0, vertical: 4.0),
                     child: Card(
                       margin: EdgeInsets.zero,
                       child: ListTile(
                         title: Text(
                           '$itemNameDisplay (\$${expense.cost.toStringAsFixed(2)})',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                              fontWeight: FontWeight.bold),
                         ),
                         subtitle: Text(
                           'Project: $projectName | Category: ${expense.expenseCategory ?? 'N/A'}',
@@ -290,12 +280,18 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             IconButton(
-                              icon: const Icon(Icons.edit, color: Colors.blueGrey),
-                              onPressed: () => _populateFormFromExpense(expense),
+                              icon: const Icon(Icons.edit,
+                                  color: Colors.blueGrey),
+                              onPressed: () =>
+                                  _populateFormFromExpense(
+                                      expense),
                             ),
                             IconButton(
-                              icon: const Icon(Icons.delete_forever, color: Colors.red),
-                              onPressed: () => _deleteExpense(expense.id!),
+                              icon: const Icon(
+                                  Icons.delete_forever,
+                                  color: Colors.red),
+                              onPressed: () =>
+                                  _deleteExpense(expense.id!),
                             ),
                           ],
                         ),
@@ -312,13 +308,10 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     );
   }
 }
-// end class: _CostEntryScreenState
 
-
-// start class: _CostEntryFormSliverDelegate
+// Unchanged Sliver Header Delegate
 class _CostEntryFormSliverDelegate extends SliverPersistentHeaderDelegate {
-  final double minHeight;
-  final double maxHeight;
+  final double minHeight, maxHeight;
   final Widget formWidget;
   final bool isEditing;
   final VoidCallback onCancelEdit;
@@ -340,20 +333,14 @@ class _CostEntryFormSliverDelegate extends SliverPersistentHeaderDelegate {
   @override
   Widget build(
       BuildContext context, double shrinkOffset, bool overlapsContent) {
-
-    // Calculates the fraction of the header that is currently covered by the scroll
     final double scrollProgress =
     (shrinkOffset / (maxHeight - minHeight)).clamp(0.0, 1.0);
-
-    // Determines the opacity of the Cancel Edit button
     final double buttonOpacity = 1.0 - scrollProgress;
 
-    // Use a Stack and Positioned to correctly clip the content.
     return Container(
       color: Theme.of(context).scaffoldBackgroundColor,
       child: Stack(
         children: [
-          // Positioned widget handles the vertical translation (the collapsing effect).
           Positioned(
             top: -shrinkOffset,
             left: 0,
@@ -369,15 +356,16 @@ class _CostEntryFormSliverDelegate extends SliverPersistentHeaderDelegate {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 4.0),
+                        padding:
+                        const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 4.0),
                         child: formWidget,
                       ),
-                      // 2. The Cancel Edit/Clear Form Button
                       if (isEditing)
                         Opacity(
                           opacity: buttonOpacity.clamp(0.0, 1.0),
                           child: Padding(
-                            padding: const EdgeInsets.only(bottom: 8.0, top: 4.0),
+                            padding:
+                            const EdgeInsets.only(bottom: 8.0, top: 4.0),
                             child: TextButton(
                               onPressed: onCancelEdit,
                               child: const Text('Cancel Edit / Clear Form',
@@ -385,7 +373,6 @@ class _CostEntryFormSliverDelegate extends SliverPersistentHeaderDelegate {
                             ),
                           ),
                         ),
-                      // Add minimal spacing to ensure the list doesn't hug the form too tightly
                       const SizedBox(height: 8),
                     ],
                   ),
@@ -405,4 +392,3 @@ class _CostEntryFormSliverDelegate extends SliverPersistentHeaderDelegate {
         isEditing != oldDelegate.isEditing;
   }
 }
-// end class: _CostEntryFormSliverDelegate

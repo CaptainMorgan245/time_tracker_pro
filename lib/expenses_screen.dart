@@ -1,27 +1,26 @@
 // lib/expenses_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:time_tracker_pro/expense_category_repository.dart';
+// V2 CHANGE: Import the new helper
+import 'package:time_tracker_pro/database_helper.dart';
+// V2 CHANGE: Old repository is no longer needed for categories
+// import 'package:time_tracker_pro/expense_category_repository.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/settings_service.dart';
 import 'package:time_tracker_pro/input_formatters.dart';
 import 'package:time_tracker_pro/settings_model.dart';
 import 'package:time_tracker_pro/widgets/app_setting_list_card.dart';
 
-// start class: ExpensesScreen
 class ExpensesScreen extends StatefulWidget {
-  // start method: constructor
   const ExpensesScreen({super.key});
-  // end method: constructor
 
   @override
   State<ExpensesScreen> createState() => _ExpensesScreenState();
 }
-// end class: ExpensesScreen
 
-// start class: _ExpensesScreenState
 class _ExpensesScreenState extends State<ExpensesScreen> {
-  final ExpenseCategoryRepository _repo = ExpenseCategoryRepository();
+  // V2 CHANGE: The old repo is gone
+  // final ExpenseCategoryRepository _repo = ExpenseCategoryRepository();
   final SettingsService _settingsService = SettingsService.instance;
 
   final TextEditingController _categoryController = TextEditingController();
@@ -32,33 +31,40 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   List<String> _vehicles = [];
   List<String> _vendors = [];
 
-  // start method: initState
+  // V2 CHANGE: We will listen to the database notifier to refresh this screen's own list
+  final dbNotifier = DatabaseHelperV2.instance.databaseNotifier;
+
+
   @override
   void initState() {
     super.initState();
     _loadData();
+    // V2 CHANGE: Add a listener to refresh this screen if data changes elsewhere
+    dbNotifier.addListener(_loadData);
   }
-  // end method: initState
 
-  // start method: dispose
   @override
   void dispose() {
     _categoryController.dispose();
     _vehicleController.dispose();
     _vendorController.dispose();
+    // V2 CHANGE: Remove the listener when the screen is disposed
+    dbNotifier.removeListener(_loadData);
     super.dispose();
   }
-  // end method: _dispose
 
-  // start method: _loadData
+  // V2 CHANGE: This now uses the V2 helper to get categories.
   Future<void> _loadData() async {
+    // The settings logic for vehicles/vendors is unchanged
     final rawSettings = await _settingsService.loadSettings();
-
     final settings = (rawSettings is Map<String, dynamic>)
         ? SettingsModel.fromMap(rawSettings as Map<String, dynamic>)
         : (rawSettings is SettingsModel ? rawSettings : SettingsModel());
 
-    final cats = await _repo.getExpenseCategories();
+    // Use the V2 helper to get categories
+    final cats = await DatabaseHelperV2.instance.getExpenseCategoriesV2();
+
+    if (!mounted) return;
 
     setState(() {
       _categories = cats;
@@ -66,34 +72,34 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       _vendors = List<String>.from(settings.vendors);
     });
   }
-  // end method: _loadData
 
-  // start method: _addCategory
+  // V2 CHANGE: This now calls the V2 method. No need for manual _loadData().
   Future<void> _addCategory() async {
     FocusScope.of(context).unfocus();
     final name = _categoryController.text.trim();
     if (name.isEmpty) return;
-    await _repo.insertExpenseCategory(ExpenseCategory(name: name));
+
+    // This now calls the V2 method which will notify all listeners
+    await DatabaseHelperV2.instance.addExpenseCategoryV2(ExpenseCategory(name: name));
     _categoryController.clear();
-    _loadData();
+    // No need to call _loadData(), the listener will handle it automatically.
   }
-  // end method: _addCategory
 
-  // start method: _deleteCategory
+  // V2 CHANGE: This now calls the V2 method. No need for manual _loadData().
   Future<void> _deleteCategory(int id) async {
-    await _repo.deleteExpenseCategory(id);
-    _loadData();
+    // This now calls the V2 method which will notify all listeners
+    await DatabaseHelperV2.instance.deleteRecordV2(id: id, fromTable: 'expense_categories');
+    // No need to call _loadData()
   }
-  // end method: _deleteCategory
 
-  // start method: _updateCategory
+  // V2 CHANGE: This now calls the V2 method. No need for manual _loadData().
   Future<void> _updateCategory(ExpenseCategory category) async {
-    await _repo.updateExpenseCategory(category);
-    _loadData();
+    // This now calls the V2 method which will notify all listeners
+    await DatabaseHelperV2.instance.updateExpenseCategoryV2(category);
+    // No need to call _loadData()
   }
-  // end method: _updateCategory
 
-  // start method: _addOption
+  // The logic for Vehicles and Vendors (which use SettingsService) is unchanged for now
   Future<void> _addOption(TextEditingController controller, List<String> list) async {
     FocusScope.of(context).unfocus();
     final name = controller.text.trim();
@@ -105,28 +111,21 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     await _saveSettings();
     _loadData();
   }
-  // end method: _addOption
 
-  // start method: _updateOption
   Future<void> _updateOption(List<String> list, int index, String newValue) async {
     list[index] = newValue;
     await _saveSettings();
     _loadData();
   }
-  // end method: _updateOption
 
-  // start method: _removeOption
   Future<void> _removeOption(List<String> list, int index) async {
     list.removeAt(index);
     await _saveSettings();
     _loadData();
   }
-  // end method: _removeOption
 
-  // start method: _saveSettings
   Future<void> _saveSettings() async {
     final rawSettings = await _settingsService.loadSettings();
-
     final currentSettings = (rawSettings is Map<String, dynamic>)
         ? SettingsModel.fromMap(rawSettings as Map<String, dynamic>)
         : (rawSettings is SettingsModel ? rawSettings : SettingsModel());
@@ -135,15 +134,12 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       vehicleDesignations: _vehicles,
       vendors: _vendors,
     );
-
     await _settingsService.saveSettings(updatedSettings);
   }
-  // end method: _saveSettings
 
-  // start method: _buildForm
+  // Unchanged
   Widget _buildForm(String label, TextEditingController controller, VoidCallback onAdd) {
     final bool applyCapitalization = label != 'Vehicle Designation';
-
     return Expanded(
       child: Card(
         child: Padding(
@@ -166,9 +162,8 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       ),
     );
   }
-  // end method: _buildForm
 
-  // start method: _showEditDialog
+  // Unchanged
   void _showEditDialog(
       BuildContext context,
       String title,
@@ -177,7 +172,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       VoidCallback onDelete,
       ) {
     final TextEditingController controller = TextEditingController(text: currentValue);
-
     showDialog(
       context: context,
       builder: (context) {
@@ -213,20 +207,17 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       },
     );
   }
-  // end method: _showEditDialog
 
-  // start method: build
+  // Unchanged
   @override
   Widget build(BuildContext context) {
     void openEditDialog(String title, String currentValue, Function(String) onSave, VoidCallback onDelete) {
       _showEditDialog(context, title, currentValue, onSave, onDelete);
     }
-
     return Scaffold(
       resizeToAvoidBottomInset: false,
       body: Column(
         children: [
-          // Top forms section - fixed height, scrollable horizontally if needed
           Padding(
             padding: const EdgeInsets.all(16.0),
             child: IntrinsicHeight(
@@ -243,8 +234,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             ),
           ),
           const Divider(height: 1),
-
-          // Bottom lists section - each scrolls independently
           Expanded(
             child: Padding(
               padding: const EdgeInsets.all(16.0),
@@ -327,6 +316,5 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       ),
     );
   }
-// end method: build
 }
-// end class: _ExpensesScreenState
+
