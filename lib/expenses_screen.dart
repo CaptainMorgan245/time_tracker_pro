@@ -5,7 +5,6 @@ import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/settings_service.dart';
 import 'package:time_tracker_pro/input_formatters.dart';
-//import 'package:time_tracker_pro/settings_model.dart';
 import 'package:time_tracker_pro/widgets/app_setting_list_card.dart';
 
 class ExpensesScreen extends StatefulWidget {
@@ -28,7 +27,6 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
 
   final dbNotifier = DatabaseHelperV2.instance.databaseNotifier;
 
-
   @override
   void initState() {
     super.initState();
@@ -45,14 +43,8 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     super.dispose();
   }
 
-
-  // REVISED FIX: Trusting the analyzer that rawSettings is not null.
   Future<void> _loadData() async {
-    final rawSettings = await _settingsService.loadSettings();
-
-    // THIS IS THE REVISED FIX
-    final settings = rawSettings;
-
+    final settings = await _settingsService.loadSettings();
     final cats = await DatabaseHelperV2.instance.getExpenseCategoriesV2();
 
     if (!mounted) return;
@@ -64,11 +56,11 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     });
   }
 
+  // This logic is correct: it interacts with the DB directly.
   Future<void> _addCategory() async {
     FocusScope.of(context).unfocus();
     final name = _categoryController.text.trim();
     if (name.isEmpty) return;
-
     await DatabaseHelperV2.instance.addExpenseCategoryV2(ExpenseCategory(name: name));
     _categoryController.clear();
   }
@@ -81,43 +73,41 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     await DatabaseHelperV2.instance.updateExpenseCategoryV2(category);
   }
 
-  Future<void> _addOption(TextEditingController controller, List<String> list) async {
+  // --- REVISED AND CORRECTED LOGIC FOR VENDORS/VEHICLES ---
+
+  Future<void> _addOption(TextEditingController controller, List<String> list, Function(List<String>) onSave) async {
     FocusScope.of(context).unfocus();
     final name = controller.text.trim();
     if (name.isEmpty) return;
 
-    list.add(name);
+    list.add(name); // Modify local list
     controller.clear();
-
-    await _saveSettings();
-    _loadData();
+    await onSave(list); // Pass the whole list to be saved
   }
 
-  Future<void> _updateOption(List<String> list, int index, String newValue) async {
-    list[index] = newValue;
-    await _saveSettings();
-    _loadData();
+  Future<void> _updateOption(List<String> list, int index, String newValue, Function(List<String>) onSave) async {
+    list[index] = newValue; // Modify local list
+    await onSave(list); // Pass the whole list to be saved
   }
 
-  Future<void> _removeOption(List<String> list, int index) async {
-    list.removeAt(index);
-    await _saveSettings();
-    _loadData();
+  Future<void> _removeOption(List<String> list, int index, Function(List<String>) onSave) async {
+    list.removeAt(index); // Modify local list
+    await onSave(list); // Pass the whole list to be saved
   }
 
-  // REVISED FIX: Trusting the analyzer that rawSettings is not null.
-  Future<void> _saveSettings() async {
-    final rawSettings = await _settingsService.loadSettings();
-
-    // THIS IS THE REVISED FIX
-    final currentSettings = rawSettings;
-
+  // IMPROVEMENT RESTORED & NOTIFIER ADDED
+  Future<void> _saveSettings({List<String>? vehicles, List<String>? vendors}) async {
+    final currentSettings = await _settingsService.loadSettings();
     final updatedSettings = currentSettings.copyWith(
-      vehicleDesignations: _vehicles,
-      vendors: _vendors,
+      // Use the provided lists, or fallback to the current state lists
+      vehicleDesignations: vehicles ?? _vehicles,
+      vendors: vendors ?? _vendors,
     );
     await _settingsService.saveSettings(updatedSettings);
+    // NOTIFY every other part of the app that settings have changed.
+    DatabaseHelperV2.instance.databaseNotifier.value++;
   }
+
 
   // Unchanged UI methods below...
   Widget _buildForm(String label, TextEditingController controller, VoidCallback onAdd) {
@@ -206,9 +196,9 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                 children: [
                   _buildForm('Expense Category', _categoryController, _addCategory),
                   const SizedBox(width: 16),
-                  _buildForm('Vehicle Designation', _vehicleController, () async => _addOption(_vehicleController, _vehicles)),
+                  _buildForm('Vehicle Designation', _vehicleController, () async => _addOption(_vehicleController, _vehicles, (updatedList) => _saveSettings(vehicles: updatedList))),
                   const SizedBox(width: 16),
-                  _buildForm('Vendor / Subtrade', _vendorController, () async => _addOption(_vendorController, _vendors)),
+                  _buildForm('Vendor / Subtrade', _vendorController, () async => _addOption(_vendorController, _vendors, (updatedList) => _saveSettings(vendors: updatedList))),
                 ],
               ),
             ),
@@ -257,8 +247,8 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                               openEditDialog(
                                 'Vehicle Designation',
                                 currentValue,
-                                    (newValue) => _updateOption(_vehicles, index, newValue),
-                                    () => _removeOption(_vehicles, index),
+                                    (newValue) => _updateOption(_vehicles, index, newValue, (updatedList) => _saveSettings(vehicles: updatedList)),
+                                    () => _removeOption(_vehicles, index, (updatedList) => _saveSettings(vehicles: updatedList)),
                               );
                             },
                           ),
@@ -279,8 +269,8 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
                               openEditDialog(
                                 'Vendor / Subtrade',
                                 currentValue,
-                                    (newValue) => _updateOption(_vendors, index, newValue),
-                                    () => _removeOption(_vendors, index),
+                                    (newValue) => _updateOption(_vendors, index, newValue, (updatedList) => _saveSettings(vendors: updatedList)),
+                                    () => _removeOption(_vendors, index, (updatedList) => _saveSettings(vendors: updatedList)),
                               );
                             },
                           ),

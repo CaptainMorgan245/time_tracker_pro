@@ -6,7 +6,32 @@ import 'package:intl/intl.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/input_formatters.dart';
 
-// Public state class is defined in the file scope
+class CostRecordForm extends StatefulWidget {
+  final ValueNotifier<List<Project>> availableProjectsNotifier;
+  final ValueNotifier<List<String>> expenseCategoriesNotifier;
+  final ValueNotifier<List<String>> vendorsNotifier;
+  final ValueNotifier<List<String>> vehicleDesignationsNotifier;
+  final Function(JobMaterials expense, bool isEditing) onAddExpense;
+  final Function(bool showCompleted) onProjectFilterToggle;
+  final VoidCallback onClearForm;
+  final bool isEditing;
+
+  const CostRecordForm({
+    super.key,
+    required this.availableProjectsNotifier,
+    required this.expenseCategoriesNotifier,
+    required this.vendorsNotifier,
+    required this.vehicleDesignationsNotifier,
+    required this.onAddExpense,
+    required this.onProjectFilterToggle,
+    required this.onClearForm,
+    required this.isEditing,
+  });
+
+  @override
+  State<CostRecordForm> createState() => CostRecordFormState();
+}
+
 class CostRecordFormState extends State<CostRecordForm> {
   final _formKey = GlobalKey<FormState>();
 
@@ -20,59 +45,14 @@ class CostRecordFormState extends State<CostRecordForm> {
   Project? _selectedProject;
   DateTime _selectedPurchaseDate = DateTime.now();
   String? _selectedExpenseCategory;
-  String? _selectedVendorOrSubtrade; // <--- CRITICAL FIX: ENSURING DECLARATION
+  String? _selectedVendorOrSubtrade;
   String? _selectedVehicleDesignation;
-  // String? _selectedUnit is removed as per earlier request
 
-  // IMPORTANT: Internal Company Project ID
   static const int _internalProjectId = 0;
-
   bool _isCompanyExpense = false;
   bool _isFuelCategory = false;
-
-  // State for the project filter toggle (NOW A CHECKBOX)
-  bool _showCompletedProjects = false;
-
-  // Track the ID of the expense being edited
+  bool showCompletedProjects = false;
   int? _editingExpenseId;
-
-  // Utility method to get the Internal Project object
-  Project? _getInternalProject() {
-    return widget.availableProjects.cast<Project?>().firstWhere(
-          (p) => p?.id == _internalProjectId,
-      orElse: () => null,
-    );
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    // Initialize _selectedVendorOrSubtrade to null, same as other selection fields.
-    // This is safe even if it was declared above.
-    _selectedVendorOrSubtrade = null;
-
-    if (widget.isEditing) {
-      _selectedProject = widget.availableProjects.cast<Project?>().firstWhere(
-            (p) => p?.projectName == 'Internal Company Project',
-        orElse: () => widget.availableProjects.isNotEmpty
-            ? widget.availableProjects.first
-            : null,
-      );
-    } else {
-      _selectedProject = null;
-    }
-  }
-
-  @override
-  void didUpdateWidget(covariant CostRecordForm oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.availableProjects.isNotEmpty && _selectedProject == null && !oldWidget.isEditing && widget.isEditing) {
-      _selectedProject = widget.availableProjects.firstWhere(
-            (p) => p.projectName == 'Internal Company Project',
-        orElse: () => widget.availableProjects.first,
-      );
-    }
-  }
 
   @override
   void dispose() {
@@ -85,11 +65,13 @@ class CostRecordFormState extends State<CostRecordForm> {
     super.dispose();
   }
 
-  void forceRebuild() {
-    setState(() {});
+  Project? _getInternalProject() {
+    return widget.availableProjectsNotifier.value.cast<Project?>().firstWhere(
+          (p) => p?.id == _internalProjectId,
+      orElse: () => null,
+    );
   }
 
-  // start method: populateForm
   void populateForm(JobMaterials expense) {
     setState(() {
       _editingExpenseId = expense.id;
@@ -102,22 +84,30 @@ class CostRecordFormState extends State<CostRecordForm> {
       _selectedPurchaseDate = expense.purchaseDate;
       _isCompanyExpense = expense.isCompanyExpense;
 
-      _selectedExpenseCategory = expense.expenseCategory;
+      if (widget.expenseCategoriesNotifier.value.contains(expense.expenseCategory)) {
+        _selectedExpenseCategory = expense.expenseCategory;
+      } else {
+        _selectedExpenseCategory = null;
+      }
+      if (widget.vehicleDesignationsNotifier.value.contains(expense.vehicleDesignation)) {
+        _selectedVehicleDesignation = expense.vehicleDesignation;
+      } else {
+        _selectedVehicleDesignation = null;
+      }
+      if (widget.vendorsNotifier.value.contains(expense.vendorOrSubtrade)) {
+        _selectedVendorOrSubtrade = expense.vendorOrSubtrade;
+      } else {
+        _selectedVendorOrSubtrade = null;
+      }
+
       _isFuelCategory = expense.expenseCategory == 'Fuel';
-
-      _selectedVehicleDesignation = expense.vehicleDesignation;
-      // FIX: Populate the dedicated Vendor field
-      _selectedVendorOrSubtrade = expense.vendorOrSubtrade;
-
-      _selectedProject = widget.availableProjects.cast<Project?>().firstWhere(
+      _selectedProject = widget.availableProjectsNotifier.value.cast<Project?>().firstWhere(
             (p) => p?.id == expense.projectId,
         orElse: () => null,
       );
     });
   }
-  // end method: populateForm
 
-  // start method: resetForm
   void resetForm() {
     _formKey.currentState?.reset();
     _itemNameController.clear();
@@ -126,7 +116,6 @@ class CostRecordFormState extends State<CostRecordForm> {
     _quantityController.clear();
     _odometerReadingController.clear();
     _baseQuantityController.clear();
-
     setState(() {
       _editingExpenseId = null;
       _selectedPurchaseDate = DateTime.now();
@@ -134,344 +123,251 @@ class CostRecordFormState extends State<CostRecordForm> {
       _isFuelCategory = false;
       _selectedExpenseCategory = null;
       _selectedVehicleDesignation = null;
-      // FIX: Reset the dedicated Vendor field
       _selectedVendorOrSubtrade = null;
       _selectedProject = null;
     });
   }
-  // end method: resetForm
 
-  // start method: _selectPurchaseDate
-  Future<void> _selectPurchaseDate(BuildContext context) async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedPurchaseDate,
-      firstDate: DateTime(2000),
-      lastDate: DateTime.now(),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.light().copyWith(
-            colorScheme: ColorScheme.light(
-              primary: Theme.of(context).primaryColor,
-            ),
-          ),
-          child: child!,
-        );
-      },
-    );
-    if (picked != null && picked != _selectedPurchaseDate) {
-      setState(() {
-        _selectedPurchaseDate = picked;
-      });
-    }
-  }
-  // end method: _selectPurchaseDate
-
-  // start method: _submitForm
   void _submitForm() {
     SystemChannels.textInput.invokeMethod('TextInput.hide');
-    if (_isCompanyExpense || _formKey.currentState!.validate()) {
-
-      final int submissionProjectId = _isCompanyExpense
-          ? _internalProjectId
-          : _selectedProject!.id!;
-
-      // Placeholder unit for submission, assumed to be set globally later.
-      const String assumedUnit = 'Liters';
-
+    if (_formKey.currentState!.validate()) {
+      final int submissionProjectId = _isCompanyExpense ? _internalProjectId : _selectedProject!.id!;
       final newExpense = JobMaterials(
-        id: _editingExpenseId,
-        projectId: submissionProjectId,
-        itemName: _itemNameController.text.isEmpty ? 'N/A' : _itemNameController.text,
-        cost: double.parse(_costController.text),
-        purchaseDate: _selectedPurchaseDate,
-        description: _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
-        expenseCategory: _selectedExpenseCategory,
-        unit: assumedUnit, // ASSUMED VALUE
-        quantity: _quantityController.text.isNotEmpty ? double.tryParse(_quantityController.text) : null,
-        baseQuantity: _baseQuantityController.text.isNotEmpty ? double.tryParse(_baseQuantityController.text) : null,
-        odometerReading: _odometerReadingController.text.isNotEmpty ? double.tryParse(_odometerReadingController.text) : null,
-        isCompanyExpense: _isCompanyExpense,
-        vehicleDesignation: _selectedVehicleDesignation,
-        // FIX: Use the directly selected vendor/subtrade (no more complex lookup needed!)
-        vendorOrSubtrade: _selectedVendorOrSubtrade,
+          id: _editingExpenseId,
+          projectId: submissionProjectId,
+          itemName: _itemNameController.text.isEmpty ? 'N/A' : _itemNameController.text,
+          cost: double.parse(_costController.text),
+          purchaseDate: _selectedPurchaseDate,
+          description: _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
+          expenseCategory: _selectedExpenseCategory,
+          isCompanyExpense: _isCompanyExpense,
+          vehicleDesignation: _isCompanyExpense ? _selectedVehicleDesignation : null,
+          vendorOrSubtrade: _selectedVendorOrSubtrade,
+          unit: 'Liters',
+          quantity: _isFuelCategory ? (_quantityController.text.isNotEmpty ? double.tryParse(_quantityController.text) : null) : null,
+          baseQuantity: _baseQuantityController.text.isNotEmpty ? double.tryParse(_baseQuantityController.text) : null,
+          odometerReading: _isCompanyExpense ? (_odometerReadingController.text.isNotEmpty ? double.tryParse(_odometerReadingController.text) : null) : null
       );
-
       widget.onAddExpense(newExpense, widget.isEditing);
-      resetForm();
     }
   }
-  // end method: _submitForm
+
+  Future<void> _selectPurchaseDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(context: context, initialDate: _selectedPurchaseDate, firstDate: DateTime(2000), lastDate: DateTime.now());
+    if (picked != null && picked != _selectedPurchaseDate) {
+      setState(() => _selectedPurchaseDate = picked);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final buttonText = widget.isEditing ? 'Update Expense' : 'Add Expense';
-
-    // Disable the Project dropdown if Company Expense is checked
     final bool isProjectDropdownEnabled = !_isCompanyExpense;
-
-    // Set Project Dropdown Hint/Value based on state
     Project? currentProjectSelection = _isCompanyExpense ? _getInternalProject() : _selectedProject;
 
     return Form(
       key: _formKey,
+      autovalidateMode: AutovalidateMode.disabled,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-
-          // Row 1: Project Dropdown, Expense Category, and Control Checkboxes
           Row(
-            crossAxisAlignment: CrossAxisAlignment.end, // Align widgets to the bottom
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // Project Dropdown (Narrowed)
               Flexible(
                 flex: 4,
-                child: DropdownButtonFormField<Project>(
-                  decoration: InputDecoration(
-                    labelText: 'Select Project',
-                    suffixIcon: isProjectDropdownEnabled ? const Text('*') : null,
-                  ),
-                  isDense: true,
-                  value: currentProjectSelection,
-                  onChanged: isProjectDropdownEnabled
-                      ? (Project? newValue) {
-                    setState(() {
-                      _selectedProject = newValue;
-                    });
-                  }
-                      : null,
-                  items: widget.availableProjects.map((project) {
-                    final isInternal = project.projectName == 'Internal Company Project';
-                    // Only display the name, without the internal ID
-                    final displayName = isInternal ? 'Internal Company Project' : project.projectName;
-                    return DropdownMenuItem<Project>(
-                      value: project,
-                      child: Text(displayName),
-                    );
-                  }).toList(),
-                  validator: (value) {
-                    if (isProjectDropdownEnabled && value == null) {
-                      return 'Project is required';
+                child: ValueListenableBuilder<List<Project>>(
+                    valueListenable: widget.availableProjectsNotifier,
+                    builder: (context, projects, _) {
+                      return DropdownButtonFormField<Project>(
+                        decoration: InputDecoration(labelText: 'Select Project', suffixIcon: isProjectDropdownEnabled ? const Text('*') : null,),
+                        isDense: true,
+                        value: currentProjectSelection,
+                        onChanged: isProjectDropdownEnabled ? (Project? newValue) => setState(() => _selectedProject = newValue) : null,
+                        items: projects.map((project) {
+                          final displayName = project.isInternal ? 'Internal Company Project' : project.projectName;
+                          return DropdownMenuItem<Project>(value: project, child: Text(displayName));
+                        }).toList(),
+                        validator: (value) => (isProjectDropdownEnabled && value == null) ? 'Project is required' : null,
+                      );
                     }
-                    return null;
-                  },
                 ),
               ),
               const SizedBox(width: 16),
-
-              // Expense Category Dropdown (Standard width)
               Flexible(
                 flex: 5,
-                child: DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(labelText: 'Expense Category *'),
-                  value: _selectedExpenseCategory,
-                  items: widget.expenseCategories.map((category) {
-                    return DropdownMenuItem<String>(
-                      value: category,
-                      child: Text(category),
-                    );
-                  }).toList(),
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      _selectedExpenseCategory = newValue;
-                      _isFuelCategory = newValue == 'Fuel';
-                      if (!_isFuelCategory) {
-                        _odometerReadingController.clear();
-                        _quantityController.clear();
-                      }
-                    });
-                  },
-                  validator: (value) => value == null ? 'Category is required' : null,
+                child: ValueListenableBuilder<List<String>>(
+                    valueListenable: widget.expenseCategoriesNotifier,
+                    builder: (context, categories, _) {
+                      return DropdownButtonFormField<String>(
+                        decoration: const InputDecoration(labelText: 'Expense Category *'),
+                        value: _selectedExpenseCategory,
+                        items: categories.map((c) => DropdownMenuItem<String>(value: c, child: Text(c))).toList(),
+                        onChanged: (String? newValue) {
+                          setState(() {
+                            _selectedExpenseCategory = newValue;
+                            _isFuelCategory = newValue == 'Fuel';
+                          });
+                        },
+                        validator: (v) => v == null ? 'Category is required' : null,
+                      );
+                    }
                 ),
               ),
               const SizedBox(width: 16),
-
-              // Control Checkboxes (Company Expense and Show Completed)
-              // Grouped horizontally for minimal vertical space
               Flexible(
                 flex: 4,
                 child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    // Company Expense Checkbox Group
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Checkbox(
-                            value: _isCompanyExpense,
-                            onChanged: (bool? newValue) {
-                              setState(() {
-                                _isCompanyExpense = newValue ?? false;
-                                if (newValue == true) {
-                                  _selectedProject = null;
-                                }
-                                if (newValue == false && _selectedProject == null) {
-                                  _selectedProject = _getInternalProject();
-                                }
-                              });
-                            },
-                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          const Text('Company Expense', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
-                        ],
-                      ),
-                    ),
+                    Expanded( child: Column( mainAxisSize: MainAxisSize.min, children: [
+                      Checkbox( value: _isCompanyExpense, onChanged: (bool? newValue) {
+                        setState(() {
+                          _isCompanyExpense = newValue ?? false;
+                          if (_isCompanyExpense) {
+                            _selectedProject = null;
+                          }
+                        });
+                      }, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, ),
+                      const Text('Company Expense', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
+                    ],),),
                     const SizedBox(width: 8),
-
-                    // Project Filter Checkbox Group
-                    Expanded(
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Checkbox(
-                            value: _showCompletedProjects,
-                            onChanged: (bool? newValue) {
-                              setState(() {
-                                _showCompletedProjects = newValue ?? false;
-                                widget.onProjectFilterToggle(_showCompletedProjects);
-                              });
-                            },
-                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          const Text('Show Completed', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
-                        ],
-                      ),
-                    ),
+                    Expanded(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Checkbox(value: showCompletedProjects, onChanged: (bool? newValue) { setState(() { showCompletedProjects = newValue ?? false; widget.onProjectFilterToggle(showCompletedProjects); }); }, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,),
+                      const Text('Show Completed', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
+                    ],),),
                   ],
                 ),
               ),
             ],
           ),
-
           const Divider(height: 24),
-
-          // Row 2: Vendor/Subtrade and Item Name
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(labelText: 'Vendor/Subtrade (Optional)'),
-                  // FIX: Use the new dedicated state variable
-                  value: _selectedVendorOrSubtrade,
-                  items: widget.vendors.map((vendor) {
-                    return DropdownMenuItem<String>(
-                      value: vendor,
-                      child: Text(vendor),
-                    );
-                  }).toList(),
-                  onChanged: (String? newValue) {
-                    setState(() {
-                      // FIX: Update the new dedicated state variable
-                      _selectedVendorOrSubtrade = newValue;
-                    });
-                  },
+                child: ValueListenableBuilder<List<String>>(
+                    valueListenable: widget.vendorsNotifier,
+                    builder: (context, vendors, _) {
+                      return DropdownButtonFormField<String>(
+                        decoration: const InputDecoration(labelText: 'Vendor/Subtrade (Optional)'),
+                        value: _selectedVendorOrSubtrade,
+                        items: vendors.map((v) => DropdownMenuItem<String>(value: v, child: Text(v))).toList(),
+                        onChanged: (String? newValue) => setState(() => _selectedVendorOrSubtrade = newValue),
+                      );
+                    }
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: TextFormField(
-                  controller: _itemNameController,
-                  inputFormatters: [CapitalizeEachWordInputFormatter()],
-                  decoration: const InputDecoration(labelText: 'Item Name (Optional)'),
-                ),
+                child: TextFormField(controller: _itemNameController, inputFormatters: [CapitalizeEachWordInputFormatter()], decoration: const InputDecoration(labelText: 'Item Name (Optional)')),
               ),
             ],
           ),
           const SizedBox(height: 16),
+          Row( crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: TextFormField(controller: _costController, decoration: const InputDecoration(labelText: 'Receipt Total *', prefixText: '\$'), keyboardType: const TextInputType.numberWithOptions(decimal: true), validator: (v) { if (v == null || v.isEmpty) return 'Cost is required'; if (double.tryParse(v) == null) return 'Invalid number'; return null; },),),
+            const SizedBox(width: 16),
+            Expanded(child: TextFormField(readOnly: true, controller: TextEditingController(text: DateFormat('MMM d, yyyy').format(_selectedPurchaseDate)), decoration: InputDecoration(labelText: 'Select Purchase Date', suffixIcon: const Icon(Icons.calendar_today)), onTap: () => _selectPurchaseDate(context),),),
+          ],),
+          const SizedBox(height: 16),
 
-          // Row 3: Receipt Total and Purchase Date
+          // --- LOGIC CHANGE IS HERE ---
+          // This section handles showing the conditional fields.
+          // The structure is now cleaner.
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: TextFormField(
-                  controller: _costController,
-                  decoration: const InputDecoration(
-                    labelText: 'Receipt Total *',
-                    prefixText: '\$',
-                  ),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  validator: (value) {
-                    if (value!.isEmpty) {
-                      return 'Please enter a total cost';
-                    }
-                    if (double.tryParse(value) == null) {
-                      return 'Invalid number';
-                    }
-                    return null;
-                  },
-                ),
-              ),
-              const SizedBox(width: 16),
-              // Date picker trigger field
-              Expanded(
-                child: TextFormField(
-                  // Use the date display text as the field value, but disable editing
-                  readOnly: true,
-                  controller: TextEditingController(
-                    text: DateFormat('MMM d, yyyy').format(_selectedPurchaseDate),
-                  ),
-                  decoration: InputDecoration(
-                    labelText: 'Select Purchase Date',
-                    suffixIcon: const Icon(Icons.calendar_today),
-                  ),
-                  onTap: () => _selectPurchaseDate(context),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-
-          // Conditional Fuel Fields (Quantity, Odometer)
-          if (_isFuelCategory) ...[
-            // Row 4a: Quantity and Odometer (Unit removed)
-            Row(
-              children: [
+              // This entire block only shows for Company Expense.
+              if (_isCompanyExpense)
                 Expanded(
-                  // Quantity field now takes half the row (it shared space with Odometer)
+                  // Use a Row to hold Vehicle, Odometer, and Liters
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Vehicle Dropdown
+                      Expanded(
+                        flex: 3,
+                        child: ValueListenableBuilder<List<String>>(
+                            valueListenable: widget.vehicleDesignationsNotifier,
+                            builder: (context, designations, _) {
+                              return DropdownButtonFormField<String>(
+                                isDense: true,
+                                decoration: const InputDecoration(labelText: 'Vehicle *'),
+                                value: _selectedVehicleDesignation,
+                                items: designations.map((v) => DropdownMenuItem<String>(value: v, child: Text(v))).toList(),
+                                onChanged: (String? newValue) => setState(() => _selectedVehicleDesignation = newValue),
+                                validator: (v) => _isCompanyExpense && v == null ? 'Vehicle is required' : null,
+                              );
+                            }),
+                      ),
+                      const SizedBox(width: 8),
+                      // Odometer Field
+                      Expanded(
+                        flex: 2,
+                        child: TextFormField(
+                          controller: _odometerReadingController,
+                          decoration: const InputDecoration(labelText: 'Odometer'),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                      // Liters field ONLY appears if it's also Fuel category
+                      if (_isFuelCategory) ...[
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 2,
+                          child: TextFormField(
+                            controller: _quantityController,
+                            decoration: const InputDecoration(labelText: 'Liters'),
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              // This handles the case where it's Fuel but NOT a Company Expense.
+              // For example, fuel for a personal vehicle on a specific job.
+              if (!_isCompanyExpense && _isFuelCategory)
+                Expanded(
                   child: TextFormField(
                     controller: _quantityController,
-                    decoration: const InputDecoration(
-                      // Label updated to reflect the unit setting (placeholder)
-                      labelText: 'Fuel Quantity (Liters)',
-                    ),
+                    decoration: const InputDecoration(labelText: 'Liters'),
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   ),
                 ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: TextFormField(
-                    controller: _odometerReadingController,
-                    // Label updated to reflect the unit setting (placeholder)
-                    decoration: const InputDecoration(labelText: 'Odometer Reading (km)'),
-                    keyboardType: TextInputType.number,
+            ],
+          ),
+          // Add spacing only if any of the above fields were visible.
+          if (_isCompanyExpense || _isFuelCategory) const SizedBox(height: 16),
+          // --- END OF LOGIC CHANGE ---
+
+          TextFormField(controller: _descriptionController, decoration: const InputDecoration(labelText: 'Description/Notes (Optional)'), maxLines: 1),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Flexible(
+                flex: 1,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: widget.onClearForm,
+                    child: Text(widget.isEditing ? 'Cancel' : 'Clear'),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-          ],
-
-          // Row 5: Description (Full Width, single line)
-          TextFormField(
-            controller: _descriptionController,
-            decoration: const InputDecoration(labelText: 'Description/Notes (Optional)'),
-            // Set maxLines to 1 for single line input
-            maxLines: 1,
-          ),
-          const SizedBox(height: 24),
-
-          // Row 6: Submit Button (Full Width)
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _submitForm,
-              child: Text(buttonText),
-            ),
+              ),
+              const SizedBox(width: 16),
+              Flexible(
+                flex: 3,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _submitForm,
+                    child: Text(buttonText),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -479,31 +375,3 @@ class CostRecordFormState extends State<CostRecordForm> {
   }
 }
 
-// start class: CostRecordForm
-class CostRecordForm extends StatefulWidget {
-  final List<Project> availableProjects;
-  final List<String> expenseCategories;
-  final List<String> vendors;
-  final List<String> vehicleDesignations;
-  final Function(JobMaterials expense, bool isEditing) onAddExpense;
-  final Function(bool showCompleted) onProjectFilterToggle;
-  final bool isEditing;
-
-  // start method: constructor
-  const CostRecordForm({
-    super.key,
-    required this.availableProjects,
-    required this.expenseCategories,
-    required this.vendors,
-    required this.vehicleDesignations,
-    required this.onAddExpense,
-    required this.onProjectFilterToggle,
-    required this.isEditing,
-  });
-  // end method: constructor
-
-  @override
-  // Expose the State class type
-  State<CostRecordForm> createState() => CostRecordFormState();
-}
-// end class: CostRecordForm
