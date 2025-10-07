@@ -2,14 +2,15 @@
 
 import 'package:sqflite/sqflite.dart';
 import 'package:time_tracker_pro/database_helper.dart';
+// FIX: Your model is named SettingsModel, not Settings. This keeps it correct.
 import 'package:time_tracker_pro/settings_model.dart';
 
 class SettingsService {
-  // Add a private constructor and a static instance
   SettingsService._privateConstructor();
   static final SettingsService instance = SettingsService._privateConstructor();
 
-  final _databaseHelper = DatabaseHelper.instance;
+  // THE FIX: Point to DatabaseHelperV2
+  final _databaseHelper = DatabaseHelperV2.instance;
   final String tableName = 'settings';
 
   Future<bool> hasSettings() async {
@@ -18,8 +19,6 @@ class SettingsService {
     return maps.isNotEmpty;
   }
 
-  // start method: loadSettings
-  // FIX 1: Change return type to non-nullable (SettingsModel)
   Future<SettingsModel> loadSettings() async {
     final db = await _databaseHelper.database;
     final List<Map<String, dynamic>> maps = await db.query(tableName);
@@ -27,17 +26,13 @@ class SettingsService {
     if (maps.isNotEmpty) {
       return SettingsModel.fromMap(maps.first);
     }
-    // FIX 2: Return a default SettingsModel instance when empty,
-    // preventing all null-related crashes in the calling screen.
+    // Return a default SettingsModel instance when empty
     return SettingsModel();
   }
-  // end method: loadSettings
 
-  // start method: saveSettings
   Future<void> saveSettings(SettingsModel settings) async {
     final db = await _databaseHelper.database;
 
-    // FIX 3: Use robust update-or-insert logic for the single settings row.
     final exists = await hasSettings();
     if (exists) {
       await db.update(
@@ -54,6 +49,6 @@ class SettingsService {
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
     }
+    // Settings changes rarely need immediate UI notification, so notifyDatabaseChanged() is omitted.
   }
-// end method: saveSettings
 }

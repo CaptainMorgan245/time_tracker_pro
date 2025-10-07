@@ -1,25 +1,49 @@
 // lib/time_entry_repository.dart
 
-import 'package:sqflite/sqflite.dart';
-import 'package:path/path.dart';
-import 'package:time_tracker_pro/models.dart';
+//import 'package:sqflite/sqflite.dart';
 import 'package:time_tracker_pro/database_helper.dart';
+import 'package:time_tracker_pro/models.dart';
 
 class TimeEntryRepository {
-  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
+  final _databaseHelper = DatabaseHelperV2.instance;
 
-  Future<int> insertTimeEntry(TimeEntry entry) async {
-    Database db = await _dbHelper.database;
-    return await db.insert(
-      'time_entries',
-      entry.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+  Future<int> insertTimeEntry(TimeEntry timeEntry) async {
+    final db = await _databaseHelper.database;
+    final id = await db.insert('time_entries', timeEntry.toMap());
+    _databaseHelper.notifyDatabaseChanged();
+    return id;
   }
 
+  Future<int> updateTimeEntry(TimeEntry timeEntry) async {
+    final db = await _databaseHelper.database;
+    final result = await db.update(
+      'time_entries',
+      timeEntry.toMap(),
+      where: 'id = ?',
+      whereArgs: [timeEntry.id],
+    );
+    _databaseHelper.notifyDatabaseChanged();
+    return result;
+  }
+
+  // CORRECTED: Method to get a list of all active (non-completed) time entries
+  Future<List<TimeEntry>> getActiveTimeEntries() async {
+    final db = await _databaseHelper.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'time_entries',
+      where: 'end_time IS NULL AND is_deleted = 0',
+      orderBy: 'start_time DESC',
+    );
+    if (maps.isNotEmpty) {
+      return List.generate(maps.length, (i) => TimeEntry.fromMap(maps[i]));
+    }
+    return []; // Return an empty list if none are found
+  }
+
+  // RESTORED: This method is needed by the dashboard's onTap for recent activities.
   Future<TimeEntry?> getTimeEntryById(int id) async {
-    Database db = await _dbHelper.database;
-    List<Map<String, dynamic>> maps = await db.query(
+    final db = await _databaseHelper.database;
+    final List<Map<String, dynamic>> maps = await db.query(
       'time_entries',
       where: 'id = ?',
       whereArgs: [id],
@@ -30,38 +54,12 @@ class TimeEntryRepository {
     return null;
   }
 
-  Future<List<TimeEntry>> getActiveTimeEntries() async {
-    Database db = await _dbHelper.database;
-    List<Map<String, dynamic>> maps = await db.query(
+  Future<List<TimeEntry>> getTimeEntriesForProject(int projectId) async {
+    final db = await _databaseHelper.database;
+    final List<Map<String, dynamic>> maps = await db.query(
       'time_entries',
-      where: 'end_time IS NULL AND is_paused = ?',
-      whereArgs: [0],
-    );
-    return List.generate(maps.length, (i) {
-      return TimeEntry.fromMap(maps[i]);
-    });
-  }
-
-  Future<List<TimeEntry>> getRecentTimeEntries({int limit = 10}) async {
-    Database db = await _dbHelper.database;
-    List<Map<String, dynamic>> maps = await db.query(
-      'time_entries',
-      where: 'is_deleted = ?',
-      whereArgs: [0],
-      orderBy: 'start_time DESC',
-      limit: limit,
-    );
-    return List.generate(maps.length, (i) {
-      return TimeEntry.fromMap(maps[i]);
-    });
-  }
-
-  Future<List<TimeEntry>> getAllTimeEntries() async {
-    Database db = await _dbHelper.database;
-    List<Map<String, dynamic>> maps = await db.query(
-      'time_entries',
-      where: 'is_deleted = ?',
-      whereArgs: [0],
+      where: 'project_id = ? AND is_deleted = 0',
+      whereArgs: [projectId],
       orderBy: 'start_time DESC',
     );
     return List.generate(maps.length, (i) {
@@ -69,32 +67,15 @@ class TimeEntryRepository {
     });
   }
 
-  Future<void> updateTimeEntry(TimeEntry entry) async {
-    Database db = await _dbHelper.database;
-    await db.update(
-      'time_entries',
-      entry.toMap(),
-      where: 'id = ?',
-      whereArgs: [entry.id],
-    );
-  }
-
-  Future<void> deleteTimeEntry(int id) async {
-    Database db = await _dbHelper.database;
-    await db.delete(
-      'time_entries',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
-
-  Future<void> softDeleteTimeEntry(int id) async {
-    Database db = await _dbHelper.database;
-    await db.update(
+  Future<int> deleteTimeEntry(int id) async {
+    final db = await _databaseHelper.database;
+    final result = await db.update(
       'time_entries',
       {'is_deleted': 1},
       where: 'id = ?',
       whereArgs: [id],
     );
+    _databaseHelper.notifyDatabaseChanged();
+    return result;
   }
 }

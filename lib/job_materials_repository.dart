@@ -5,7 +5,7 @@ import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/models.dart';
 
 class JobMaterialsRepository {
-  final _databaseHelper = DatabaseHelper.instance;
+  final _databaseHelper = DatabaseHelperV2.instance;
   final String _tableName = 'materials'; // Confirmed table name from database_helper
 
   // start method: insertJobMaterial

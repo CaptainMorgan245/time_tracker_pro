@@ -1,5 +1,4 @@
 // lib/cost_record_form.dart
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -15,6 +14,9 @@ class CostRecordForm extends StatefulWidget {
   final Function(bool showCompleted) onProjectFilterToggle;
   final VoidCallback onClearForm;
   final bool isEditing;
+  final Function(bool isCompanyExpense) onCompanyExpenseToggle;
+  final bool isCollapsed;
+  final VoidCallback onCollapseToggle;
 
   const CostRecordForm({
     super.key,
@@ -26,6 +28,9 @@ class CostRecordForm extends StatefulWidget {
     required this.onProjectFilterToggle,
     required this.onClearForm,
     required this.isEditing,
+    required this.onCompanyExpenseToggle,
+    required this.isCollapsed,
+    required this.onCollapseToggle,
   });
 
   @override
@@ -40,17 +45,16 @@ class CostRecordFormState extends State<CostRecordForm> {
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _quantityController = TextEditingController();
   final TextEditingController _odometerReadingController = TextEditingController();
-  final TextEditingController _baseQuantityController = TextEditingController();
 
-  Project? _selectedProject;
+  Project? selectedProject;
   DateTime _selectedPurchaseDate = DateTime.now();
-  String? _selectedExpenseCategory;
+  String? selectedExpenseCategory;
   String? _selectedVendorOrSubtrade;
   String? _selectedVehicleDesignation;
+  bool isFuelCategory = false;
 
   static const int _internalProjectId = 0;
-  bool _isCompanyExpense = false;
-  bool _isFuelCategory = false;
+  bool isCompanyExpense = false;
   bool showCompletedProjects = false;
   int? _editingExpenseId;
 
@@ -61,15 +65,15 @@ class CostRecordFormState extends State<CostRecordForm> {
     _descriptionController.dispose();
     _quantityController.dispose();
     _odometerReadingController.dispose();
-    _baseQuantityController.dispose();
     super.dispose();
   }
 
-  Project? _getInternalProject() {
-    return widget.availableProjectsNotifier.value.cast<Project?>().firstWhere(
-          (p) => p?.id == _internalProjectId,
-      orElse: () => null,
-    );
+  Project? getInternalProject() {
+    try {
+      return widget.availableProjectsNotifier.value.firstWhere((p) => p.id == _internalProjectId);
+    } catch (_) {
+      return null;
+    }
   }
 
   void populateForm(JobMaterials expense) {
@@ -80,14 +84,14 @@ class CostRecordFormState extends State<CostRecordForm> {
       _descriptionController.text = expense.description ?? '';
       _quantityController.text = expense.quantity?.toStringAsFixed(2) ?? '';
       _odometerReadingController.text = expense.odometerReading?.toStringAsFixed(0) ?? '';
-      _baseQuantityController.text = expense.baseQuantity?.toStringAsFixed(2) ?? '';
       _selectedPurchaseDate = expense.purchaseDate;
-      _isCompanyExpense = expense.isCompanyExpense;
+      isCompanyExpense = expense.isCompanyExpense;
+      isFuelCategory = expense.expenseCategory == 'Fuel';
 
       if (widget.expenseCategoriesNotifier.value.contains(expense.expenseCategory)) {
-        _selectedExpenseCategory = expense.expenseCategory;
+        selectedExpenseCategory = expense.expenseCategory;
       } else {
-        _selectedExpenseCategory = null;
+        selectedExpenseCategory = null;
       }
       if (widget.vehicleDesignationsNotifier.value.contains(expense.vehicleDesignation)) {
         _selectedVehicleDesignation = expense.vehicleDesignation;
@@ -100,8 +104,7 @@ class CostRecordFormState extends State<CostRecordForm> {
         _selectedVendorOrSubtrade = null;
       }
 
-      _isFuelCategory = expense.expenseCategory == 'Fuel';
-      _selectedProject = widget.availableProjectsNotifier.value.cast<Project?>().firstWhere(
+      selectedProject = widget.availableProjectsNotifier.value.cast<Project?>().firstWhere(
             (p) => p?.id == expense.projectId,
         orElse: () => null,
       );
@@ -115,23 +118,22 @@ class CostRecordFormState extends State<CostRecordForm> {
     _descriptionController.clear();
     _quantityController.clear();
     _odometerReadingController.clear();
-    _baseQuantityController.clear();
     setState(() {
       _editingExpenseId = null;
       _selectedPurchaseDate = DateTime.now();
-      _isCompanyExpense = false;
-      _isFuelCategory = false;
-      _selectedExpenseCategory = null;
+      isCompanyExpense = false;
+      isFuelCategory = false;
+      selectedExpenseCategory = null;
       _selectedVehicleDesignation = null;
       _selectedVendorOrSubtrade = null;
-      _selectedProject = null;
+      selectedProject = null;
     });
   }
 
   void _submitForm() {
     SystemChannels.textInput.invokeMethod('TextInput.hide');
     if (_formKey.currentState!.validate()) {
-      final int submissionProjectId = _isCompanyExpense ? _internalProjectId : _selectedProject!.id!;
+      final int submissionProjectId = isCompanyExpense ? _internalProjectId : selectedProject!.id!;
       final newExpense = JobMaterials(
           id: _editingExpenseId,
           projectId: submissionProjectId,
@@ -139,14 +141,14 @@ class CostRecordFormState extends State<CostRecordForm> {
           cost: double.parse(_costController.text),
           purchaseDate: _selectedPurchaseDate,
           description: _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
-          expenseCategory: _selectedExpenseCategory,
-          isCompanyExpense: _isCompanyExpense,
-          vehicleDesignation: _isCompanyExpense ? _selectedVehicleDesignation : null,
+          expenseCategory: selectedExpenseCategory,
+          isCompanyExpense: isCompanyExpense,
+          vehicleDesignation: isCompanyExpense ? _selectedVehicleDesignation : null,
           vendorOrSubtrade: _selectedVendorOrSubtrade,
-          unit: 'Liters',
-          quantity: _isFuelCategory ? (_quantityController.text.isNotEmpty ? double.tryParse(_quantityController.text) : null) : null,
-          baseQuantity: _baseQuantityController.text.isNotEmpty ? double.tryParse(_baseQuantityController.text) : null,
-          odometerReading: _isCompanyExpense ? (_odometerReadingController.text.isNotEmpty ? double.tryParse(_odometerReadingController.text) : null) : null
+          unit: isFuelCategory ? 'Liters' : null,
+          quantity: isCompanyExpense ? (_quantityController.text.isNotEmpty ? double.tryParse(_quantityController.text) : null) : null,
+          odometerReading: isCompanyExpense ? (_odometerReadingController.text.isNotEmpty ? double.tryParse(_odometerReadingController.text) : null) : null,
+          baseQuantity: null
       );
       widget.onAddExpense(newExpense, widget.isEditing);
     }
@@ -162,187 +164,133 @@ class CostRecordFormState extends State<CostRecordForm> {
   @override
   Widget build(BuildContext context) {
     final buttonText = widget.isEditing ? 'Update Expense' : 'Add Expense';
-    final bool isProjectDropdownEnabled = !_isCompanyExpense;
-    Project? currentProjectSelection = _isCompanyExpense ? _getInternalProject() : _selectedProject;
+    final bool isProjectDropdownEnabled = !isCompanyExpense;
+    Project? currentProjectSelection = isCompanyExpense ? getInternalProject() : selectedProject;
 
-    return Form(
-      key: _formKey,
-      autovalidateMode: AutovalidateMode.disabled,
+    // This is the full body of the form, extracted into a variable for the animation.
+    final formBody = Padding(
+      padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Flexible(
-                flex: 4,
-                child: ValueListenableBuilder<List<Project>>(
-                    valueListenable: widget.availableProjectsNotifier,
-                    builder: (context, projects, _) {
-                      return DropdownButtonFormField<Project>(
-                        decoration: InputDecoration(labelText: 'Select Project', suffixIcon: isProjectDropdownEnabled ? const Text('*') : null,),
-                        isDense: true,
-                        value: currentProjectSelection,
-                        onChanged: isProjectDropdownEnabled ? (Project? newValue) => setState(() => _selectedProject = newValue) : null,
-                        items: projects.map((project) {
-                          final displayName = project.isInternal ? 'Internal Company Project' : project.projectName;
-                          return DropdownMenuItem<Project>(value: project, child: Text(displayName));
-                        }).toList(),
-                        validator: (value) => (isProjectDropdownEnabled && value == null) ? 'Project is required' : null,
-                      );
-                    }
-                ),
-              ),
-              const SizedBox(width: 16),
-              Flexible(
-                flex: 5,
-                child: ValueListenableBuilder<List<String>>(
-                    valueListenable: widget.expenseCategoriesNotifier,
-                    builder: (context, categories, _) {
-                      return DropdownButtonFormField<String>(
-                        decoration: const InputDecoration(labelText: 'Expense Category *'),
-                        value: _selectedExpenseCategory,
-                        items: categories.map((c) => DropdownMenuItem<String>(value: c, child: Text(c))).toList(),
-                        onChanged: (String? newValue) {
-                          setState(() {
-                            _selectedExpenseCategory = newValue;
-                            _isFuelCategory = newValue == 'Fuel';
-                          });
-                        },
-                        validator: (v) => v == null ? 'Category is required' : null,
-                      );
-                    }
-                ),
-              ),
-              const SizedBox(width: 16),
-              Flexible(
-                flex: 4,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Expanded( child: Column( mainAxisSize: MainAxisSize.min, children: [
-                      Checkbox( value: _isCompanyExpense, onChanged: (bool? newValue) {
-                        setState(() {
-                          _isCompanyExpense = newValue ?? false;
-                          if (_isCompanyExpense) {
-                            _selectedProject = null;
-                          }
-                        });
-                      }, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap, ),
-                      const Text('Company Expense', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
-                    ],),),
-                    const SizedBox(width: 8),
-                    Expanded(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                      Checkbox(value: showCompletedProjects, onChanged: (bool? newValue) { setState(() { showCompletedProjects = newValue ?? false; widget.onProjectFilterToggle(showCompletedProjects); }); }, materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,),
-                      const Text('Show Completed', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
-                    ],),),
-                  ],
-                ),
-              ),
-            ],
-          ),
           const Divider(height: 24),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
                 child: ValueListenableBuilder<List<String>>(
-                    valueListenable: widget.vendorsNotifier,
-                    builder: (context, vendors, _) {
-                      return DropdownButtonFormField<String>(
-                        decoration: const InputDecoration(labelText: 'Vendor/Subtrade (Optional)'),
-                        value: _selectedVendorOrSubtrade,
-                        items: vendors.map((v) => DropdownMenuItem<String>(value: v, child: Text(v))).toList(),
-                        onChanged: (String? newValue) => setState(() => _selectedVendorOrSubtrade = newValue),
-                      );
-                    }
+                  valueListenable: widget.vendorsNotifier,
+                  builder: (context, vendors, _) {
+                    return DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(labelText: 'Vendor/Subtrade (Optional)'),
+                      // FIXED: Replaced deprecated 'value' with 'initialValue'.
+                      initialValue: _selectedVendorOrSubtrade,
+                      items: vendors.map((v) => DropdownMenuItem<String>(
+                          value: v,
+                          child: Text(v)
+                      )).toList(),
+                      onChanged: (String? newValue) => setState(() => _selectedVendorOrSubtrade = newValue),
+                    );
+                  },
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
-                child: TextFormField(controller: _itemNameController, inputFormatters: [CapitalizeEachWordInputFormatter()], decoration: const InputDecoration(labelText: 'Item Name (Optional)')),
+                child: TextFormField(
+                  controller: _itemNameController,
+                  inputFormatters: [CapitalizeEachWordInputFormatter()],
+                  decoration: const InputDecoration(labelText: 'Item Name (Optional)'),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          Row( crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(child: TextFormField(controller: _costController, decoration: const InputDecoration(labelText: 'Receipt Total *', prefixText: '\$'), keyboardType: const TextInputType.numberWithOptions(decimal: true), validator: (v) { if (v == null || v.isEmpty) return 'Cost is required'; if (double.tryParse(v) == null) return 'Invalid number'; return null; },),),
-            const SizedBox(width: 16),
-            Expanded(child: TextFormField(readOnly: true, controller: TextEditingController(text: DateFormat('MMM d, yyyy').format(_selectedPurchaseDate)), decoration: InputDecoration(labelText: 'Select Purchase Date', suffixIcon: const Icon(Icons.calendar_today)), onTap: () => _selectPurchaseDate(context),),),
-          ],),
-          const SizedBox(height: 16),
-
-          // --- LOGIC CHANGE IS HERE ---
-          // This section handles showing the conditional fields.
-          // The structure is now cleaner.
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // This entire block only shows for Company Expense.
-              if (_isCompanyExpense)
+              Expanded(
+                child: TextFormField(
+                  controller: _costController,
+                  decoration: const InputDecoration(
+                      labelText: 'Receipt Total *',
+                      prefixText: '\$'
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  validator: (v) {
+                    if (v == null || v.isEmpty) return 'Cost is required';
+                    if (double.tryParse(v) == null) return 'Invalid number';
+                    return null;
+                  },
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: TextFormField(
+                  readOnly: true,
+                  controller: TextEditingController(
+                      text: DateFormat('MMM d, yyyy').format(_selectedPurchaseDate)
+                  ),
+                  decoration: const InputDecoration(
+                      labelText: 'Select Purchase Date',
+                      suffixIcon: Icon(Icons.calendar_today)
+                  ),
+                  onTap: () => _selectPurchaseDate(context),
+                ),
+              ),
+            ],
+          ),
+          if (isCompanyExpense) ...[
+            const SizedBox(height: 16),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Expanded(
-                  // Use a Row to hold Vehicle, Odometer, and Liters
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Vehicle Dropdown
-                      Expanded(
-                        flex: 3,
-                        child: ValueListenableBuilder<List<String>>(
-                            valueListenable: widget.vehicleDesignationsNotifier,
-                            builder: (context, designations, _) {
-                              return DropdownButtonFormField<String>(
-                                isDense: true,
-                                decoration: const InputDecoration(labelText: 'Vehicle *'),
-                                value: _selectedVehicleDesignation,
-                                items: designations.map((v) => DropdownMenuItem<String>(value: v, child: Text(v))).toList(),
-                                onChanged: (String? newValue) => setState(() => _selectedVehicleDesignation = newValue),
-                                validator: (v) => _isCompanyExpense && v == null ? 'Vehicle is required' : null,
-                              );
-                            }),
-                      ),
-                      const SizedBox(width: 8),
-                      // Odometer Field
-                      Expanded(
-                        flex: 2,
-                        child: TextFormField(
-                          controller: _odometerReadingController,
-                          decoration: const InputDecoration(labelText: 'Odometer'),
-                          keyboardType: TextInputType.number,
-                        ),
-                      ),
-                      // Liters field ONLY appears if it's also Fuel category
-                      if (_isFuelCategory) ...[
-                        const SizedBox(width: 8),
-                        Expanded(
-                          flex: 2,
-                          child: TextFormField(
-                            controller: _quantityController,
-                            decoration: const InputDecoration(labelText: 'Liters'),
-                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          ),
-                        ),
-                      ],
-                    ],
+                  flex: 3,
+                  child: ValueListenableBuilder<List<String>>(
+                    valueListenable: widget.vehicleDesignationsNotifier,
+                    builder: (context, designations, _) {
+                      return DropdownButtonFormField<String>(
+                        isDense: true,
+                        decoration: const InputDecoration(labelText: 'Vehicle *'),
+                        // FIXED: Replaced deprecated 'value' with 'initialValue'.
+                        initialValue: _selectedVehicleDesignation,
+                        items: designations.map((v) => DropdownMenuItem<String>(
+                            value: v,
+                            child: Text(v)
+                        )).toList(),
+                        onChanged: (String? newValue) => setState(() => _selectedVehicleDesignation = newValue),
+                        validator: (v) => isCompanyExpense && v == null ? 'Vehicle is required' : null,
+                      );
+                    },
                   ),
                 ),
-              // This handles the case where it's Fuel but NOT a Company Expense.
-              // For example, fuel for a personal vehicle on a specific job.
-              if (!_isCompanyExpense && _isFuelCategory)
+                const SizedBox(width: 8),
                 Expanded(
+                  flex: 2,
+                  child: TextFormField(
+                    controller: _odometerReadingController,
+                    decoration: const InputDecoration(labelText: 'Odometer'),
+                    keyboardType: TextInputType.number,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  flex: 2,
                   child: TextFormField(
                     controller: _quantityController,
-                    decoration: const InputDecoration(labelText: 'Liters'),
+                    decoration: const InputDecoration(labelText: 'Liters: Qty(if fuel)'),
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   ),
                 ),
-            ],
+              ],
+            ),
+          ],
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _descriptionController,
+            decoration: const InputDecoration(labelText: 'Description/Notes (Optional)'),
+            maxLines: 1,
           ),
-          // Add spacing only if any of the above fields were visible.
-          if (_isCompanyExpense || _isFuelCategory) const SizedBox(height: 16),
-          // --- END OF LOGIC CHANGE ---
-
-          TextFormField(controller: _descriptionController, decoration: const InputDecoration(labelText: 'Description/Notes (Optional)'), maxLines: 1),
           const SizedBox(height: 24),
           Row(
             children: [
@@ -351,7 +299,11 @@ class CostRecordFormState extends State<CostRecordForm> {
                 child: SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: widget.onClearForm,
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.grey[600]),
+                    onPressed: () {
+                      resetForm();
+                      widget.onClearForm();
+                    },
                     child: Text(widget.isEditing ? 'Cancel' : 'Clear'),
                   ),
                 ),
@@ -372,6 +324,150 @@ class CostRecordFormState extends State<CostRecordForm> {
         ],
       ),
     );
+
+    // THIS IS THE SINGLE, CORRECT RETURN STATEMENT FOR THE BUILD METHOD
+    return Form(
+      key: _formKey,
+      autovalidateMode: AutovalidateMode.disabled,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Flexible(
+                  flex: 4,
+                  child: ValueListenableBuilder<List<Project>>(
+                    valueListenable: widget.availableProjectsNotifier,
+                    builder: (context, projects, _) {
+                      return DropdownButtonFormField<Project>(
+                        decoration: InputDecoration(
+                          labelText: 'Select Project',
+                          suffixIcon: isProjectDropdownEnabled ? const Text('*') : null,
+                        ),
+                        isDense: true,
+                        // FIXED: Replaced deprecated 'value' with 'initialValue'.
+                        initialValue: currentProjectSelection,
+                        onChanged: isProjectDropdownEnabled
+                            ? (Project? newValue) => setState(() => selectedProject = newValue)
+                            : null,
+                        items: projects.map((project) {
+                          final displayName = project.isInternal
+                              ? 'Internal Company Project'
+                              : project.projectName;
+                          return DropdownMenuItem<Project>(
+                            value: project,
+                            child: Text(displayName, overflow: TextOverflow.ellipsis),
+                          );
+                        }).toList(),
+                        validator: (value) => (isProjectDropdownEnabled && value == null)
+                            ? 'Project is required'
+                            : null,
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Flexible(
+                  flex: 5,
+                  child: ValueListenableBuilder<List<String>>(
+                    valueListenable: widget.expenseCategoriesNotifier,
+                    builder: (context, categories, _) {
+                      return DropdownButtonFormField<String>(
+                        decoration: const InputDecoration(labelText: 'Expense Category *'),
+                        // FIXED: Replaced deprecated 'value' with 'initialValue'.
+                        initialValue: selectedExpenseCategory,
+                        items: categories.map((c) => DropdownMenuItem<String>(
+                            value: c,
+                            child: Text(c)
+                        )).toList(),
+                        onChanged: (String? newValue) => setState(() {
+                          selectedExpenseCategory = newValue;
+                          isFuelCategory = newValue == 'Fuel';
+                        }),
+                        validator: (v) => v == null ? 'Category is required' : null,
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Flexible(
+                  flex: 4,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Checkbox(
+                              value: isCompanyExpense,
+                              onChanged: (bool? newValue) {
+                                setState(() {
+                                  isCompanyExpense = newValue ?? false;
+                                  if (isCompanyExpense) selectedProject = null;
+                                  widget.onCompanyExpenseToggle(isCompanyExpense);
+                                });
+                              },
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            const Text(
+                              'Company Expense',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Checkbox(
+                              value: showCompletedProjects,
+                              onChanged: (bool? newValue) {
+                                setState(() {
+                                  showCompletedProjects = newValue ?? false;
+                                  widget.onProjectFilterToggle(showCompletedProjects);
+                                });
+                              },
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            const Text(
+                              'Show Completed',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // This is the expand/collapse button
+                IconButton(
+                  icon: Icon(widget.isCollapsed ? Icons.expand_more : Icons.expand_less),
+                  onPressed: widget.onCollapseToggle,
+                ),
+              ],
+            ),
+          ),
+          // This widget handles the expand/collapse animation cleanly.
+          AnimatedCrossFade(
+            duration: const Duration(milliseconds: 300),
+            firstChild: const SizedBox.shrink(), // What to show when collapsed
+            secondChild: formBody, // What to show when expanded
+            crossFadeState: widget.isCollapsed
+                ? CrossFadeState.showFirst
+                : CrossFadeState.showSecond,
+          ),
+        ],
+      ),
+    );
   }
 }
-

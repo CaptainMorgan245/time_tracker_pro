@@ -5,9 +5,8 @@ import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/client_repository.dart';
 import 'package:time_tracker_pro/project_repository.dart';
 import 'package:time_tracker_pro/client_and_project_add_form.dart';
-// Import reusable components for structural consistency
-import 'package:time_tracker_pro/widgets/app_input_form_card.dart';
-import 'package:time_tracker_pro/widgets/app_setting_list_card.dart';
+// REPAIRED: Removed unused imports that were causing warnings.
+// The custom widgets AppInputFormCard and AppSettingListCard were not used in this file's build method.
 
 // start class: ClientAndProjectScreen
 class ClientAndProjectScreen extends StatefulWidget {
@@ -40,11 +39,13 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
     setState(() => _isLoading = true);
     final clients = await _clientRepo.getClients();
     final projects = await _projectRepo.getProjects();
-    setState(() {
-      _clients = clients;
-      _projects = projects;
-      _isLoading = false;
-    });
+    if (mounted) {
+      setState(() {
+        _clients = clients;
+        _projects = projects;
+        _isLoading = false;
+      });
+    }
   }
   // end method: _loadData
 
@@ -61,6 +62,21 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
     _loadData();
   }
   // end method: _updateProject
+
+  // ==========================================================
+  //  NEW METHODS TO SUPPORT PROJECT ACTIONS
+  // ==========================================================
+  Future<void> _deleteProject(int id) async {
+    await _projectRepo.deleteProject(id);
+    _loadData();
+  }
+
+  // FIXED: Removed the unused `_completeProject` method. It was never called.
+  // The logic in the edit dialog now correctly uses `_updateProject` to handle completion.
+
+  // ==========================================================
+  //  END OF NEW METHODS
+  // ==========================================================
 
   // start method: _getClientName
   String _getClientName(int clientId) {
@@ -106,7 +122,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
               onPressed: () => Navigator.of(context).pop(),
             ),
             TextButton(
-              child: Text(client.isActive ? 'Delete' : 'Activate', style: TextStyle(color: client.isActive ? Colors.red : Colors.green)),
+              child: Text(client.isActive ? 'Deactivate' : 'Activate', style: TextStyle(color: client.isActive ? Colors.red : Colors.green)),
               onPressed: () {
                 final updatedClient = client.copyWith(isActive: !client.isActive);
                 _updateClient(updatedClient);
@@ -134,7 +150,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
   }
   // end method: _showEditClientDialog
 
-  // start method: _showEditProjectDialog
+  // start method: _showEditProjectDialog (MODIFIED)
   Future<void> _showEditProjectDialog(Project project) async {
     final projectNameController = TextEditingController(text: project.projectName);
     final locationController = TextEditingController(text: project.location);
@@ -146,83 +162,138 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
     await showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('Edit Project'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: projectNameController,
-                  decoration: const InputDecoration(labelText: 'Project Name'),
+        // We need a stateful builder to handle the async check for the action button
+        return StatefulBuilder(
+            builder: (BuildContext context, StateSetter setState) {
+              return AlertDialog(
+                title: const Text('Edit Project'),
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: projectNameController,
+                        decoration: const InputDecoration(labelText: 'Project Name'),
+                      ),
+                      DropdownButtonFormField<int>(
+                        decoration: const InputDecoration(labelText: 'Client'),
+                        // FIXED: Replaced deprecated 'value' with 'initialValue'.
+                        initialValue: selectedClientId,
+                        items: _clients.map((client) {
+                          return DropdownMenuItem<int>(
+                            value: client.id,
+                            child: Text(client.name),
+                          );
+                        }).toList(),
+                        onChanged: (int? newValue) {
+                          setState(() { // Use setState from the StatefulBuilder
+                            selectedClientId = newValue;
+                          });
+                        },
+                      ),
+                      TextField(
+                        controller: locationController,
+                        decoration: const InputDecoration(labelText: 'Location'),
+                      ),
+                      DropdownButtonFormField<String>(
+                        decoration: const InputDecoration(labelText: 'Pricing Model'),
+                        // FIXED: Replaced deprecated 'value' with 'initialValue'.
+                        initialValue: selectedPricingModel,
+                        items: const [
+                          DropdownMenuItem(value: 'hourly', child: Text('Hourly')),
+                          DropdownMenuItem(value: 'fixed price', child: Text('Fixed Price')),
+                          DropdownMenuItem(value: 'project based', child: Text('Project Based')),
+                        ],
+                        onChanged: (String? newValue) {
+                          setState(() { // Use setState from the StatefulBuilder
+                            selectedPricingModel = newValue;
+                          });
+                        },
+                      ),
+                      TextField(
+                        controller: billedHourlyRateController,
+                        decoration: const InputDecoration(labelText: 'Billed Hourly Rate'),
+                        keyboardType: TextInputType.number,
+                      ),
+                    ],
+                  ),
                 ),
-                DropdownButtonFormField<int>(
-                  decoration: const InputDecoration(labelText: 'Client'),
-                  value: selectedClientId,
-                  items: _clients.map((client) {
-                    return DropdownMenuItem<int>(
-                      value: client.id,
-                      child: Text(client.name),
-                    );
-                  }).toList(),
-                  onChanged: (int? newValue) {
-                    selectedClientId = newValue;
-                  },
-                ),
-                TextField(
-                  controller: locationController,
-                  decoration: const InputDecoration(labelText: 'Location'),
-                ),
-                DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(labelText: 'Pricing Model'),
-                  value: selectedPricingModel,
-                  items: const [
-                    DropdownMenuItem(value: 'hourly', child: Text('Hourly')),
-                    DropdownMenuItem(value: 'fixed price', child: Text('Fixed Price')),
-                    DropdownMenuItem(value: 'project based', child: Text('Project Based')),
-                  ],
-                  onChanged: (String? newValue) {
-                    selectedPricingModel = newValue;
-                  },
-                ),
-                TextField(
-                  controller: billedHourlyRateController,
-                  decoration: const InputDecoration(labelText: 'Billed Hourly Rate'),
-                  keyboardType: TextInputType.number,
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              child: const Text('Cancel'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            TextButton(
-              child: Text(project.isCompleted ? 'Re-open' : 'Complete', style: TextStyle(color: project.isCompleted ? Colors.green : Colors.red)),
-              onPressed: () {
-                final updatedProject = project.copyWith(isCompleted: !project.isCompleted);
-                _updateProject(updatedProject);
-                Navigator.of(context).pop();
-              },
-            ),
-            ElevatedButton(
-              child: const Text('Save'),
-              onPressed: () {
-                if (projectNameController.text.isNotEmpty && selectedClientId != null) {
-                  final updatedProject = project.copyWith(
-                    projectName: projectNameController.text,
-                    clientId: selectedClientId!,
-                    location: locationController.text.isNotEmpty ? locationController.text : null,
-                    pricingModel: selectedPricingModel,
-                    billedHourlyRate: double.tryParse(billedHourlyRateController.text),
-                  );
-                  _updateProject(updatedProject);
-                  Navigator.of(context).pop();
-                }
-              },
-            ),
-          ],
+                actions: [
+                  TextButton(
+                    child: const Text('Cancel'),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                  // ==========================================================
+                  //  LOGIC FOR ACTION BUTTON (Complete / Delete / Re-open)
+                  // ==========================================================
+                  FutureBuilder<bool>(
+                    future: _projectRepo.hasAssociatedRecords(project.id!),
+                    builder: (context, snapshot) {
+                      // While checking, show a disabled button
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const TextButton(onPressed: null, child: Text('...'));
+                      }
+
+                      final bool hasRecords = snapshot.data ?? false;
+
+                      // If project is already completed, show Re-open
+                      if (project.isCompleted) {
+                        return TextButton(
+                          child: const Text('Re-open', style: TextStyle(color: Colors.green)),
+                          onPressed: () {
+                            // The method toggles the isCompleted flag
+                            final toggledProject = project.copyWith(isCompleted: !project.isCompleted);
+                            _updateProject(toggledProject);
+                            Navigator.of(context).pop();
+                          },
+                        );
+                      }
+
+                      // If it has records, show Complete
+                      if (hasRecords) {
+                        return TextButton(
+                          child: const Text('Complete', style: TextStyle(color: Colors.blue)),
+                          onPressed: () {
+                            final toggledProject = project.copyWith(isCompleted: !project.isCompleted);
+                            _updateProject(toggledProject);
+                            Navigator.of(context).pop();
+                          },
+                        );
+                      }
+                      // Otherwise, show Delete
+                      else {
+                        return TextButton(
+                          child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                          onPressed: () {
+                            _deleteProject(project.id!);
+                            Navigator.of(context).pop();
+                          },
+                        );
+                      }
+                    },
+                  ),
+                  // ==========================================================
+                  //  END OF ACTION BUTTON LOGIC
+                  // ==========================================================
+                  ElevatedButton(
+                    child: const Text('Save'),
+                    onPressed: () {
+                      if (projectNameController.text.isNotEmpty && selectedClientId != null) {
+                        final updatedProject = project.copyWith(
+                          projectName: projectNameController.text,
+                          clientId: selectedClientId!,
+                          location: locationController.text.isNotEmpty ? locationController.text : null,
+                          pricingModel: selectedPricingModel,
+                          billedHourlyRate: double.tryParse(billedHourlyRateController.text),
+                        );
+                        _updateProject(updatedProject);
+                        Navigator.of(context).pop();
+                      }
+                    },
+                  ),
+                ],
+              );
+            }
         );
       },
     );
@@ -278,6 +349,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
   // start method: build
   @override
   Widget build(BuildContext context) {
+    // MODIFIED: Now we can show/hide completed projects as well if needed. For now, let's keep it simple.
     final activeClients = _clients.where((c) => c.isActive).toList();
     final activeProjects = _projects.where((p) => !p.isCompleted).toList();
     final theme = Theme.of(context);

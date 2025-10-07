@@ -1,4 +1,4 @@
-// lib/dashboard_screen.dart
+// lib/screens/dashboard_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/project_repository.dart';
@@ -16,9 +16,10 @@ import 'package:time_tracker_pro/models.dart' as app_models;
 import 'package:time_tracker_pro/analytics_screen.dart';
 import 'package:time_tracker_pro/cost_entry_screen.dart';
 import 'package:time_tracker_pro/app_bottom_nav_bar.dart';
+import 'package:time_tracker_pro/database_helper.dart';
 
 
-// START REUSABLE DRAWER WIDGET (Secondary Navigation)
+// START REUSABLE DRAWER WIDGET
 class AppDrawer extends StatelessWidget {
   const AppDrawer({super.key});
 
@@ -101,12 +102,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final ProjectRepository _projectRepo = ProjectRepository();
   final EmployeeRepository _employeeRepo = EmployeeRepository();
   final TimeEntryRepository _timeEntryRepo = TimeEntryRepository();
+  // FIXED: The ClientRepository is no longer needed here as clients are not fetched.
+  // However, removing it might cause other issues if it's planned for future use.
+  // For now, we will leave the repository instance but remove the unused fetch call.
   final ClientRepository _clientRepo = ClientRepository();
+  final dbHelper = DatabaseHelperV2.instance;
 
-  List<app_models.Project> _projects = [];
-  List<app_models.Employee> _employees = [];
-  List<app_models.Client> _clients = [];
-  List<app_models.TimeEntry> _recentEntries = [];
+  final ValueNotifier<List<app_models.Project>> _projectsNotifier = ValueNotifier([]);
+  final ValueNotifier<List<app_models.Employee>> _employeesNotifier = ValueNotifier([]);
+
+  List<app_models.AllRecordViewModel> _recentActivities = [];
+
+  // FIXED: Removed the unused `_clients` field.
+  List<app_models.Project> _allProjectsForLookup = [];
+  List<app_models.Employee> _allEmployeesForLookup = [];
 
   final GlobalKey<TimerAddFormState> _timerFormKey = GlobalKey<TimerAddFormState>();
   List<app_models.TimeEntry> _activeEntries = [];
@@ -116,69 +125,66 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _selectedIndex = widget.initialIndex; // Use initial index passed from outside
+    _selectedIndex = widget.initialIndex;
     _loadData();
     _loadActiveTimers();
+    dbHelper.databaseNotifier.addListener(_reloadData);
   }
 
-  // start method: _onItemTapped
+  @override
+  void dispose() {
+    dbHelper.databaseNotifier.removeListener(_reloadData);
+    _projectsNotifier.dispose();
+    _employeesNotifier.dispose();
+    _activeTimers.values.forEach((timer) => timer.cancel());
+    super.dispose();
+  }
+
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
     });
   }
-  // end method: _onItemTapped
 
-  @override
-  void dispose() {
-    _activeTimers.values.forEach((timer) => timer.cancel());
-    super.dispose();
+  void _reloadData() {
+    debugPrint("Dashboard received notification to reload data.");
+    _loadData();
+    _loadActiveTimers();
   }
 
-  // start method: _loadData (No change)
   Future<void> _loadData() async {
     try {
       final projects = await _projectRepo.getProjects();
       final employees = await _employeeRepo.getEmployees();
-      final clients = await _clientRepo.getClients();
-      final allEntries = await _timeEntryRepo.getRecentTimeEntries(limit: 10);
+      // FIXED: Removed fetching of clients as it wasn't being used.
+      final recentActivities = await dbHelper.getAllRecordsV2();
 
-      final filteredEntries = allEntries.where((entry) {
-        final project = projects.firstWhere(
-              (p) => p.id == entry.projectId,
-          orElse: () => app_models.Project(projectName: 'Unknown', clientId: 0, isCompleted: true),
-        );
-        // Only include entries that have an endTime (i.e., are completed)
-        return !entry.isDeleted && !project.isCompleted && entry.endTime != null;
-      }).toList();
+      _projectsNotifier.value = projects.where((p) => !p.isCompleted).toList();
+      _employeesNotifier.value = employees.where((e) => !e.isDeleted).toList();
 
-      setState(() {
-        _projects = projects;
-        _employees = employees;
-        _clients = clients;
-        _recentEntries = filteredEntries;
-      });
+      if (mounted) {
+        setState(() {
+          // FIXED: Removed assignment to the now-deleted `_clients` variable.
+          _recentActivities = recentActivities;
+          _allProjectsForLookup = projects;
+          _allEmployeesForLookup = employees;
+        });
+      }
     } catch (e) {
-      // If loading fails, clear all lists to prevent crashes and log the error
-      setState(() {
-        _projects = [];
-        _employees = [];
-        _clients = [];
-        _recentEntries = [];
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load data: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load dashboard data: $e')),
+        );
+      }
     }
   }
-  // end method: _loadData
 
-  // start method: _loadActiveTimers (No change)
   Future<void> _loadActiveTimers() async {
     try {
       final activeEntries = await _timeEntryRepo.getActiveTimeEntries();
       final projects = await _projectRepo.getProjects();
-      final employees = await _employeeRepo.getEmployees();
+      // FIXED: Removed fetching of `employees` as it was not used in this method.
+      // The `_allEmployeesForLookup` list is used later, which is populated by `_loadData`.
 
       final filteredEntries = activeEntries.where((entry) {
         final project = projects.firstWhere(
@@ -188,7 +194,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         return !entry.isDeleted && !project.isCompleted;
       }).toList();
 
-      // Clear old timers before loading new ones to prevent duplicate timers
       _activeTimers.values.forEach((timer) => timer.cancel());
       _activeTimers.clear();
       _currentDurations.clear();
@@ -197,31 +202,212 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (!_activeTimers.containsKey(entry.id)) {
           final now = DateTime.now();
           final elapsed = now.difference(entry.startTime!);
-          // FIX: pausedDuration is double, convert to int for Duration
           final initialDuration = elapsed - Duration(seconds: entry.pausedDuration.toInt());
           _currentDurations[entry.id!] = initialDuration;
           _startTimerUpdate(entry);
         }
       }
-      setState(() {
-        _activeEntries = filteredEntries;
-      });
+      if (mounted) {
+        setState(() {
+          _activeEntries = filteredEntries;
+        });
+      }
     } catch (e) {
-      // If loading fails, clear active entries and timers
-      _activeTimers.values.forEach((timer) => timer.cancel());
-      _activeTimers.clear();
-      _currentDurations.clear();
-      setState(() {
-        _activeEntries = [];
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load active timers: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load active timers: $e')),
+        );
+      }
     }
   }
-  // end method: _loadActiveTimers
 
-  // START MISSING METHODS RE-INSERTED
+  String _getProjectName(int projectId) {
+    try {
+      return _allProjectsForLookup.firstWhere((p) => p.id == projectId).projectName;
+    } catch (e) {
+      return 'Unknown';
+    }
+  }
+
+  String _getEmployeeName(int? employeeId) {
+    if (employeeId == null) return 'N/A';
+    try {
+      return _allEmployeesForLookup.firstWhere((e) => e.id == employeeId).name;
+    } catch (e) {
+      return 'Unknown';
+    }
+  }
+
+  Widget _buildDashboardContent() {
+    // ==========================================================
+    // THE FIX IS HERE
+    // ==========================================================
+    // Get a list of IDs for all currently active timers.
+    final activeTimerIds = _activeEntries.map((e) => e.id).toSet();
+
+    // Create a new list of recent activities that EXCLUDES any running timers.
+    final filteredRecentActivities = _recentActivities.where((record) {
+      // If the record is an expense, always include it.
+      if (record.type == app_models.RecordType.expense) {
+        return true;
+      }
+      // If the record is a time entry, only include it if its ID is NOT in the set of active timer IDs.
+      return !activeTimerIds.contains(record.id);
+    }).toList();
+    // ==========================================================
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: TimerAddForm(
+            key: _timerFormKey,
+            projectsNotifier: _projectsNotifier,
+            employeesNotifier: _employeesNotifier,
+            isLiveTimerForm: true,
+            onSubmit: (project, employee, workDetails, startTime, stopTime) {
+              _startTimer(
+                project: project,
+                employee: employee,
+                workDetails: workDetails,
+              );
+            },
+            onUpdate: (id, project, employee, workDetails, startTime, stopTime) {
+              _updateLiveEntry(id, project, employee, workDetails, startTime, stopTime);
+            },
+          ),
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 24),
+                  const Text(
+                    "Currently Active Timers",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 10),
+                  _activeEntries.isEmpty
+                      ? const Center(child: Text("No active timers."))
+                      : ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _activeEntries.length,
+                    itemBuilder: (context, index) {
+                      final entry = _activeEntries[index];
+                      final duration = _currentDurations[entry.id] ?? Duration.zero;
+                      return Card(
+                        color: Theme.of(context).cardColor,
+                        margin: const EdgeInsets.symmetric(vertical: 2.0),
+                        child: ListTile(
+                          visualDensity: VisualDensity.compact,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16.0),
+                          title: Text(
+                            '${_getProjectName(entry.projectId)} - ${_formatDuration(duration)}',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          ),
+                          subtitle: Text(
+                            'Emp: ${_getEmployeeName(entry.employeeId)} | Details: ${entry.workDetails ?? "N/A"}',
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: Icon(entry.isPaused ? Icons.play_arrow : Icons.pause, color: entry.isPaused ? Colors.green : Colors.amber),
+                                onPressed: () => entry.isPaused ? _resumeTimer(entry.id!) : _pauseTimer(entry.id!),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.stop, color: Colors.red),
+                                onPressed: () => _stopTimer(entry.id!),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 32),
+                  const Text(
+                    'Recent Activities',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 10),
+                  // Use the newly filtered list for the UI
+                  filteredRecentActivities.isEmpty
+                      ? const Center(child: Text('No recent activities found.'))
+                      : ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: filteredRecentActivities.length,
+                    itemBuilder: (context, index) {
+                      final record = filteredRecentActivities[index];
+                      final isTime = record.type == app_models.RecordType.time;
+
+                      return Card(
+                        child: ListTile(
+                          leading: Icon(isTime ? Icons.timer_outlined : Icons.shopping_cart_outlined, color: Theme.of(context).primaryColor),
+                          title: Text(record.categoryOrProject, style: Theme.of(context).textTheme.titleMedium),
+                          subtitle: Text(
+                            '${DateFormat('MMM d, yyyy').format(record.date)} | ${record.description}',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                          trailing: Text(
+                            isTime
+                                ? _formatDuration(Duration(seconds: (record.value * 3600).toInt()))
+                                : NumberFormat.currency(locale: 'en_US', symbol: '\$').format(record.value),
+                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                          onTap: () async {
+                            if (isTime) {
+                              final entry = await _timeEntryRepo.getTimeEntryById(record.id);
+                              if (entry != null) {
+                                _populateForm(entry);
+                              }
+                            }
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Widget> widgetOptions = [
+      _buildDashboardContent(),
+      const CostEntryScreen(),
+      const AnalyticsScreen(),
+    ];
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      appBar: AppBar(
+        title: const Text('Time Tracker Pro'),
+      ),
+      drawer: const AppDrawer(),
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: widgetOptions,
+      ),
+      bottomNavigationBar: AppBottomNavBar(
+        currentIndex: _selectedIndex,
+        onTap: _onItemTapped,
+      ),
+    );
+  }
+
+  // --- All helper methods remain the same ---
   Future<void> _startTimer({
     app_models.Project? project,
     app_models.Employee? employee,
@@ -242,20 +428,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       pausedDuration: 0.0,
     );
     try {
-      final id = await _timeEntryRepo.insertTimeEntry(newEntry);
-      final insertedEntry = await _timeEntryRepo.getTimeEntryById(id);
-
-      if (insertedEntry != null) {
-        setState(() {
-          _activeEntries.add(insertedEntry);
-          _currentDurations[insertedEntry.id!] = Duration.zero;
-        });
-        _startTimerUpdate(insertedEntry);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Timer started.')),
-        );
-        _timerFormKey.currentState?.resetForm();
-      }
+      await _timeEntryRepo.insertTimeEntry(newEntry);
+      // Reload all data to ensure UI consistency everywhere
+      _reloadData();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Timer started.')),
+      );
+      _timerFormKey.currentState?.resetForm();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to start timer: $e')),
@@ -289,33 +468,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
 
       await _timeEntryRepo.updateTimeEntry(updatedEntry);
-
-      setState(() {
-        final index = _activeEntries.indexWhere((e) => e.id == entryId);
-        if (index != -1) {
-          _activeEntries[index] = updatedEntry;
-        }
-      });
+      _reloadData();
       _timerFormKey.currentState?.resetForm();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Live timer updated.')),
       );
     } catch (e) {
-      // If the timer is not found (Bad state: No element), we assume it's a new timer.
       _startTimer(project: project, employee: employee, workDetails: workDetails);
       _timerFormKey.currentState?.resetForm();
     }
   }
-  // END MISSING METHODS RE-INSERTED
-
   void _startTimerUpdate(app_models.TimeEntry entry) {
     _activeTimers[entry.id!] = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!entry.isPaused) {
         final elapsed = DateTime.now().difference(entry.startTime!);
-        setState(() {
-          // FIX: pausedDuration is double, convert to int for Duration
-          _currentDurations[entry.id!] = elapsed - Duration(seconds: entry.pausedDuration.toInt());
-        });
+        if(mounted){
+          setState(() {
+            _currentDurations[entry.id!] = elapsed - Duration(seconds: entry.pausedDuration.toInt());
+          });
+        }
       }
     });
   }
@@ -323,7 +494,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _stopTimer(int entryId) async {
     try {
       final entry = _activeEntries.firstWhere((e) => e.id == entryId);
-      // FIX: pausedDuration is double, convert to int for Duration
       final duration = DateTime.now().difference(entry.startTime!) - Duration(seconds: entry.pausedDuration.toInt());
 
       final stoppedEntry = entry.copyWith(
@@ -334,14 +504,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       await _timeEntryRepo.updateTimeEntry(stoppedEntry);
 
-      setState(() {
-        _activeEntries.removeWhere((e) => e.id == entryId);
-        _currentDurations.remove(entryId);
-      });
-
       _activeTimers[entryId]?.cancel();
       _activeTimers.remove(entryId);
-      _loadData();
+
+      // Reload all data after stopping a timer
+      _reloadData();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to stop timer: $e')),
@@ -360,12 +527,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
 
       await _timeEntryRepo.updateTimeEntry(pausedEntry);
-
-      setState(() {
-        final index = _activeEntries.indexWhere((e) => e.id == entryId);
-        _activeEntries[index] = pausedEntry;
-        _activeTimers[entryId]?.cancel();
-      });
+      _reloadData();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to pause timer: $e')),
@@ -388,12 +550,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
 
       await _timeEntryRepo.updateTimeEntry(resumedEntry);
-
-      setState(() {
-        final index = _activeEntries.indexWhere((e) => e.id == entryId);
-        _activeEntries[index] = resumedEntry;
-      });
-      _startTimerUpdate(resumedEntry);
+      _reloadData();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to resume timer: $e')),
@@ -409,214 +566,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return '$hours:$minutes:$seconds';
   }
 
-  String _getClientName(int clientId) {
-    final client = _clients.firstWhere(
-          (c) => c.id == clientId,
-      orElse: () => app_models.Client(name: 'Unknown', id: 0),
-    );
-    return client.name;
-  }
-
-  String _getProjectName(int projectId) {
-    try {
-      return _projects.firstWhere((p) => p.id == projectId).projectName;
-    } catch (e) {
-      return 'Unknown';
-    }
-  }
-
-  String _getEmployeeName(int? employeeId) {
-    if (employeeId == null) return 'N/A';
-    try {
-      return _employees.firstWhere((e) => e.id == employeeId).name;
-    } catch (e) {
-      return 'Unknown';
-    }
-  }
-
   void _populateForm(app_models.TimeEntry entry) {
     try {
-      final project = _projects.firstWhere((p) => p.id == entry.projectId);
-      final employee = entry.employeeId != null
-          ? _employees.firstWhere((e) => e.id == entry.employeeId)
-          : null;
-
       _timerFormKey.currentState?.populateForm(entry);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Cannot populate form with a completed or deleted record.')),
       );
     }
-  }
-
-  Widget _buildDashboardContent() {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: TimerAddForm(
-            key: _timerFormKey,
-            projects: _projects.where((p) => !p.isCompleted).toList(),
-            employees: _employees.where((e) => !e.isDeleted).toList(),
-            isLiveTimerForm: true,
-            onSubmit: (project, employee, workDetails, startTime, stopTime) {
-              _startTimer(
-                project: project,
-                employee: employee,
-                workDetails: workDetails,
-              );
-            },
-            onUpdate: (id, project, employee, workDetails, startTime, stopTime) {
-              _updateLiveEntry(
-                id,
-                project,
-                employee,
-                workDetails,
-                startTime,
-                stopTime,
-              );
-            },
-          ),
-        ),
-        Expanded(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 24),
-                  const Text(
-                    "Currently Active Timers",
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  _activeEntries.isEmpty
-                      ? const Center(child: Text("No active timers."))
-                      : ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _activeEntries.length,
-                    itemBuilder: (context, index) {
-                      final entry = _activeEntries[index];
-                      final duration = _currentDurations[entry.id] ?? Duration.zero;
-                      return Card(
-                        color: Theme.of(context).cardColor,
-                        margin: const EdgeInsets.symmetric(vertical: 2.0),
-                        child: ListTile(
-                          visualDensity: VisualDensity.compact,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16.0),
-                          title: Text(
-                            '${_getProjectName(entry.projectId)} - ${_formatDuration(duration)}',
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                          ),
-                          subtitle: Text(
-                            'Emp: ${_getEmployeeName(entry.employeeId)} | Details: ${entry.workDetails ?? "N/A"}',
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              SizedBox(
-                                width: 80,
-                                child: IconButton(
-                                  icon: Icon(
-                                    entry.isPaused ? Icons.play_arrow : Icons.pause,
-                                    color: entry.isPaused ? Colors.green : Colors.amber,
-                                    size: 24,
-                                  ),
-                                  onPressed: () {
-                                    if (entry.isPaused) {
-                                      _resumeTimer(entry.id!);
-                                    } else {
-                                      _pauseTimer(entry.id!);
-                                    }
-                                  },
-                                ),
-                              ),
-                              SizedBox(
-                                width: 40,
-                                child: IconButton(
-                                  icon: const Icon(Icons.stop, color: Colors.red, size: 24),
-                                  onPressed: () => _stopTimer(entry.id!),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 32),
-                  const Text(
-                    'Recent Activities',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 10),
-                  _recentEntries.isEmpty
-                      ? const Center(child: Text('No recent activities found.'))
-                      : ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: _recentEntries.length,
-                    itemBuilder: (context, index) {
-                      final entry = _recentEntries[index];
-                      return Card(
-                        child: ListTile(
-                          title: Text(
-                            _getProjectName(entry.projectId),
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          subtitle: Text(
-                            'Emp: ${_getEmployeeName(entry.employeeId)} | ${DateFormat('MMM d, yyyy').format(entry.startTime!)} | Details: ${entry.workDetails ?? "N/A"}',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                          trailing: Text(
-                            _formatDuration(Duration(seconds: entry.finalBilledDurationSeconds?.toInt() ?? 0)),
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                          onTap: () => _populateForm(entry),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // FIX: The _widgetOptions must reflect the three items in AppBottomNavBar:
-    // 0: Dashboard, 1: CostEntryScreen, 2: AnalyticsScreen
-    final List<Widget> widgetOptions = [
-      _buildDashboardContent(),
-      const CostEntryScreen(), // Index 1: The Cost Entry Screen
-      const AnalyticsScreen(), // Index 2: The Analytics Screen
-    ];
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text('Time Tracker Pro'),
-      ),
-      drawer: const AppDrawer(), // Use reusable AppDrawer
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: widgetOptions,
-      ),
-      // Use the reusable modular bottom navigation bar
-      bottomNavigationBar: AppBottomNavBar(
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
-      ),
-    );
   }
 }

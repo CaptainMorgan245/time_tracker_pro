@@ -1,6 +1,7 @@
 // lib/time_tracker_page.dart
 
 import 'package:flutter/material.dart';
+import 'package:time_tracker_pro/database_helper.dart'; // Import DatabaseHelper
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/project_repository.dart';
 import 'package:time_tracker_pro/employee_repository.dart';
@@ -21,44 +22,80 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
   final ProjectRepository _projectRepo = ProjectRepository();
   final EmployeeRepository _employeeRepo = EmployeeRepository();
   final ClientRepository _clientRepo = ClientRepository();
+  // ADD: Instance of the V2 database helper
+  final dbHelper = DatabaseHelperV2.instance;
 
   final GlobalKey<TimerAddFormState> _timerFormKey = GlobalKey<TimerAddFormState>();
 
+  final ValueNotifier<List<Project>> _projectsNotifier = ValueNotifier([]);
+  final ValueNotifier<List<Employee>> _employeesNotifier = ValueNotifier([]);
+
+  // This list will now hold TimeEntry models, converted from AllRecordViewModel
   List<TimeEntry> _allEntries = [];
-  List<Project> _projects = [];
-  List<Employee> _employees = [];
   List<Client> _clients = [];
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
+    // Listen for database changes to reload the data
+    dbHelper.databaseNotifier.addListener(_loadData);
     _loadData();
   }
 
+  @override
+  void dispose() {
+    // Clean up listeners and notifiers
+    dbHelper.databaseNotifier.removeListener(_loadData);
+    _projectsNotifier.dispose();
+    _employeesNotifier.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
-    final allEntries = await _timeEntryRepo.getAllTimeEntries();
+    if (mounted) {
+      setState(() => _isLoading = true);
+    }
+
+    // THE FIX: Use the new, efficient V2 method to get all records
+    // We then fetch other data needed for filtering and UI.
+    final allRecords = await dbHelper.getAllRecordsV2();
     final projects = await _projectRepo.getProjects();
     final employees = await _employeeRepo.getEmployees();
     final clients = await _clientRepo.getClients();
 
-    final filteredEntries = allEntries.where((entry) {
-      final project = projects.firstWhere(
-            (p) => p.id == entry.projectId,
-        orElse: () => Project(projectName: 'Unknown', clientId: 0, isCompleted: true),
-      );
-      // Ensure entry.endTime is NOT null to filter out active timers
-      return entry.endTime != null && !entry.isDeleted && !project.isCompleted;
-    }).toList();
+    _projectsNotifier.value = projects.where((p) => !p.isCompleted).toList();
+    _employeesNotifier.value = employees.where((e) => !e.isDeleted).toList();
 
-    setState(() {
-      _allEntries = filteredEntries;
-      _projects = projects;
-      _employees = employees;
-      _clients = clients;
-      _isLoading = false;
-    });
+    // Filter the AllRecordViewModel list to only get completed time entries
+    // and then fetch the full TimeEntry object for each.
+    List<TimeEntry> filteredEntries = [];
+    for (var record in allRecords) {
+      if (record.type == RecordType.time) {
+        // We need the full entry to populate the form, so we fetch it by ID.
+        final fullEntry = await _timeEntryRepo.getTimeEntryById(record.id);
+        if (fullEntry != null && fullEntry.endTime != null && !fullEntry.isDeleted) {
+          final project = projects.firstWhere(
+                (p) => p.id == fullEntry.projectId,
+            orElse: () => Project(projectName: 'Unknown', clientId: 0, isCompleted: true),
+          );
+          if (!project.isCompleted) {
+            filteredEntries.add(fullEntry);
+          }
+        }
+      }
+    }
+
+    // Sort the final list by date
+    filteredEntries.sort((a, b) => b.startTime!.compareTo(a.startTime!));
+
+    if (mounted) {
+      setState(() {
+        _allEntries = filteredEntries;
+        _clients = clients;
+        _isLoading = false;
+      });
+    }
   }
 
   String _getClientName(int clientId) {
@@ -71,7 +108,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
 
   String _getProjectName(int projectId) {
     try {
-      return _projects.firstWhere((p) => p.id == projectId).projectName;
+      return _projectsNotifier.value.firstWhere((p) => p.id == projectId).projectName;
     } catch (e) {
       return 'Unknown';
     }
@@ -80,7 +117,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
   String _getEmployeeName(int? employeeId) {
     if (employeeId == null) return 'N/A';
     try {
-      return _employees.firstWhere((e) => e.id == employeeId).name;
+      return _employeesNotifier.value.firstWhere((e) => e.id == employeeId).name;
     } catch (e) {
       return 'Unknown';
     }
@@ -122,11 +159,13 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
     );
 
     await _timeEntryRepo.insertTimeEntry(newEntry);
-    await _loadData();
+    // No need to call _loadData() manually, the listener will do it.
     _timerFormKey.currentState?.resetForm();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Time record added.')),
-    );
+    if(mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Time record added.')),
+      );
+    }
   }
 
   Future<void> _updateManualEntry({
@@ -157,22 +196,22 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
     );
 
     await _timeEntryRepo.updateTimeEntry(updatedEntry);
-    await _loadData();
+    // No need to call _loadData() manually, the listener will do it.
     _timerFormKey.currentState?.resetForm();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Time record updated.')),
-    );
+    if(mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Time record updated.')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    // FIX 1: Define the theme variable here to apply styles consistently.
     final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Time Records'),
-        // FIX 2: Apply primary color to AppBar for global consistency.
         backgroundColor: theme.primaryColor,
         foregroundColor: Colors.white,
       ),
@@ -184,8 +223,8 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
             padding: const EdgeInsets.all(16.0),
             child: TimerAddForm(
               key: _timerFormKey,
-              projects: _projects.where((p) => !p.isCompleted).toList(),
-              employees: _employees.where((e) => !e.isDeleted).toList(),
+              projectsNotifier: _projectsNotifier,
+              employeesNotifier: _employeesNotifier,
               isLiveTimerForm: false,
               onSubmit: (project, employee, workDetails, startTime, stopTime) {
                 _submitManualEntry(
@@ -228,24 +267,28 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
                     itemCount: _allEntries.length,
                     itemBuilder: (context, index) {
                       final entry = _allEntries[index];
+                      // Find the project to get the client ID
+                      Project? project;
+                      try {
+                        project = _projectsNotifier.value.firstWhere((p) => p.id == entry.projectId);
+                      } catch (e) {
+                        project = null;
+                      }
+
                       return Card(
-                        // FIX 3: Apply Theme CardColor for consistency
                         color: theme.cardColor,
                         child: ListTile(
                           title: Text(
                             _getProjectName(entry.projectId),
-                            // FIX 4: Apply Theme titleLarge style
                             style: theme.textTheme.titleLarge,
                           ),
                           subtitle: Text(
-                            'Client: ${_getClientName(_projects.firstWhere((p) => p.id == entry.projectId).clientId)} | Emp: ${_getEmployeeName(entry.employeeId)} | Details: ${entry.workDetails ?? "N/A"}',
-                            // FIX 5: Apply Theme bodyMedium style
+                            'Client: ${project != null ? _getClientName(project.clientId) : 'Unknown'} | Emp: ${_getEmployeeName(entry.employeeId)} | Details: ${entry.workDetails ?? "N/A"}',
                             style: theme.textTheme.bodyMedium,
                           ),
                           trailing: Text(
                             '${DateFormat('MM/dd').format(entry.startTime!)}\n${_formatDuration(Duration(seconds: entry.finalBilledDurationSeconds?.toInt() ?? 0))}',
                             textAlign: TextAlign.right,
-                            // FIX 6: Apply Theme bodySmall style
                             style: theme.textTheme.bodySmall,
                           ),
                           onTap: () => _populateForm(entry),

@@ -4,7 +4,7 @@ import 'package:time_tracker_pro/models.dart';
 
 class ExpenseCategoryRepository {
   // Corrected to use the singleton instance
-  final _databaseHelper = DatabaseHelper.instance;
+  final _databaseHelper = DatabaseHelperV2.instance;
 
   // start method: insertExpenseCategory
   Future<int> insertExpenseCategory(ExpenseCategory category) async {

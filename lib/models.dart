@@ -1,20 +1,28 @@
 // lib/models.dart
 
+// FIX 1: Import the equatable package
+import 'package:equatable/equatable.dart';
+
 // start class: Client
-class Client {
+// FIX 2: Extend Equatable
+class Client extends Equatable {
   final int? id;
   final String name;
   final bool isActive;
   final String? contactPerson;
   final String? phoneNumber;
 
-  Client({
+  const Client({
     this.id,
     required this.name,
     this.isActive = true,
     this.contactPerson,
     this.phoneNumber,
   });
+
+  // FIX 3: Add props for Equatable comparison
+  @override
+  List<Object?> get props => [id];
 
   Map<String, dynamic> toMap() {
     return {
@@ -55,7 +63,8 @@ class Client {
 // end class: Client
 
 // start class: Project
-class Project {
+// FIX 4: Extend Equatable
+class Project extends Equatable {
   final int? id;
   final String projectName;
   final int clientId;
@@ -66,7 +75,7 @@ class Project {
   final bool isInternal;
   final double? billedHourlyRate;
 
-  Project({
+  const Project({
     this.id,
     required this.projectName,
     required this.clientId,
@@ -77,6 +86,10 @@ class Project {
     this.isInternal = false,
     this.billedHourlyRate,
   });
+
+  // FIX 5: Add props for Equatable comparison
+  @override
+  List<Object?> get props => [id];
 
   Map<String, dynamic> toMap() {
     return {
@@ -133,20 +146,25 @@ class Project {
 // end class: Project
 
 // start class: Employee
-class Employee {
+// FIX 6: Extend Equatable
+class Employee extends Equatable {
   final int? id;
   final String? employeeNumber;
   final String name;
   final int? titleId;
   final bool isDeleted;
 
-  Employee({
+  const Employee({
     this.id,
     this.employeeNumber,
     required this.name,
     this.titleId,
     this.isDeleted = false,
   });
+
+  // FIX 7: Add props for Equatable comparison
+  @override
+  List<Object?> get props => [id];
 
   Map<String, dynamic> toMap() {
     return {
@@ -563,3 +581,4 @@ class AllRecordViewModel {
     required this.categoryOrProject,
   });
 }
+

@@ -5,12 +5,16 @@ import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/models.dart';
 
 class ClientRepository {
-  final _databaseHelper = DatabaseHelper.instance;
+  // Use the V2 instance to get access to the notifier
+  final _databaseHelper = DatabaseHelperV2.instance;
 
   // start method: insertClient
   Future<int> insertClient(Client client) async {
     final db = await _databaseHelper.database;
-    return await db.insert('clients', client.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    final id = await db.insert('clients', client.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    // FIX: Call the new PUBLIC method to notify listeners.
+    _databaseHelper.notifyDatabaseChanged();
+    return id;
   }
   // end method: insertClient
 
@@ -42,23 +46,29 @@ class ClientRepository {
   // start method: updateClient
   Future<int> updateClient(Client client) async {
     final db = await _databaseHelper.database;
-    return await db.update(
+    final result = await db.update(
       'clients',
       client.toMap(),
       where: 'id = ?',
       whereArgs: [client.id],
     );
+    // FIX: Call the new PUBLIC method to notify listeners.
+    _databaseHelper.notifyDatabaseChanged();
+    return result;
   }
   // end method: updateClient
 
   // start method: deleteClient
   Future<int> deleteClient(int id) async {
     final db = await _databaseHelper.database;
-    return await db.delete(
+    final result = await db.delete(
       'clients',
       where: 'id = ?',
       whereArgs: [id],
     );
+    // FIX: Call the new PUBLIC method to notify listeners.
+    _databaseHelper.notifyDatabaseChanged();
+    return result;
   }
 // end method: deleteClient
 }

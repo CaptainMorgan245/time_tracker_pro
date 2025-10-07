@@ -9,6 +9,7 @@ class SettingsModel {
   final List<String> vehicleDesignations;
   final List<String> vendors;
   final double? companyHourlyRate;
+  final double burdenRate; // <-- 1. ADDED PROPERTY
 
   // New settings fields
   final int timeRoundingInterval; // 0 = no rounding, 15 or 30 minutes
@@ -24,6 +25,7 @@ class SettingsModel {
     List<String>? vehicleDesignations,
     List<String>? vendors,
     this.companyHourlyRate,
+    this.burdenRate = 0.0, // <-- 2. ADDED TO CONSTRUCTOR
     this.timeRoundingInterval = 0,
     this.autoBackupReminderFrequency = 10,
     this.appRunsSinceBackup = 0,
@@ -53,6 +55,7 @@ class SettingsModel {
       companyHourlyRate: map['company_hourly_rate'] != null
           ? (map['company_hourly_rate'] as num).toDouble()
           : null,
+      burdenRate: (map['burden_rate'] as num?)?.toDouble() ?? 0.0, // <-- 3. ADDED TO fromMap
       timeRoundingInterval: map['time_rounding_interval'] ?? 15,
       autoBackupReminderFrequency: map['auto_backup_reminder_frequency'] ?? 10,
       appRunsSinceBackup: map['app_runs_since_backup'] ?? 0,
@@ -71,6 +74,7 @@ class SettingsModel {
       'vehicle_designations': jsonEncode(vehicleDesignations),
       'vendors': jsonEncode(vendors),
       'company_hourly_rate': companyHourlyRate,
+      'burden_rate': burdenRate, // <-- 4. ADDED TO toMap
       'time_rounding_interval': timeRoundingInterval,
       'auto_backup_reminder_frequency': autoBackupReminderFrequency,
       'app_runs_since_backup': appRunsSinceBackup,
@@ -88,6 +92,7 @@ class SettingsModel {
     List<String>? vehicleDesignations,
     List<String>? vendors,
     double? companyHourlyRate,
+    double? burdenRate, // <-- 5. ADDED TO copyWith
     int? timeRoundingInterval,
     int? autoBackupReminderFrequency,
     int? appRunsSinceBackup,
@@ -101,6 +106,7 @@ class SettingsModel {
       vehicleDesignations: vehicleDesignations ?? this.vehicleDesignations,
       vendors: vendors ?? this.vendors,
       companyHourlyRate: companyHourlyRate ?? this.companyHourlyRate,
+      burdenRate: burdenRate ?? this.burdenRate, // <-- 5. ADDED LOGIC
       timeRoundingInterval: timeRoundingInterval ?? this.timeRoundingInterval,
       autoBackupReminderFrequency: autoBackupReminderFrequency ?? this.autoBackupReminderFrequency,
       appRunsSinceBackup: appRunsSinceBackup ?? this.appRunsSinceBackup,

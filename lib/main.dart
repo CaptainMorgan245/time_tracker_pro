@@ -4,10 +4,24 @@ import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/dashboard_screen.dart';
 import 'package:time_tracker_pro/settings_screen.dart';
 import 'package:time_tracker_pro/settings_service.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'dart:io' show Platform;
 
-void main() {
+// THIS IS THE FUNCTION WE ARE FIXING
+Future<void> main() async {
+  // Add this line to ensure that plugin services are initialized
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // This block checks if the app is on a desktop and initializes the database
+  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
+
+  // This line remains the same
   runApp(const TrialApp());
 }
+// THE REST OF YOUR FILE IS PERFECT AND REMAINS THE SAME
 
 class TrialApp extends StatelessWidget {
   const TrialApp({super.key});
@@ -30,7 +44,6 @@ class TrialApp extends StatelessWidget {
             color: Colors.white,
           ),
         ),
-
         cardTheme: const CardThemeData(
           color: Colors.white,
           elevation: 4.0,
@@ -38,16 +51,15 @@ class TrialApp extends StatelessWidget {
             borderRadius: BorderRadius.all(Radius.circular(8.0)),
           ),
         ),
-
         inputDecorationTheme: InputDecorationTheme(
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(8.0),
           ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+          contentPadding:
+          const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
           filled: true,
           fillColor: Colors.grey[100],
         ),
-
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.blueGrey,
@@ -55,23 +67,23 @@ class TrialApp extends StatelessWidget {
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8.0),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+            padding:
+            const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
           ),
         ),
-
         textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
             foregroundColor: Colors.blueGrey,
           ),
         ),
-
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
             foregroundColor: Colors.blueGrey,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8.0),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
+            padding:
+            const EdgeInsets.symmetric(horizontal: 24.0, vertical: 12.0),
           ),
         ),
       ),
