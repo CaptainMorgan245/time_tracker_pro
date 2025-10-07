@@ -1,13 +1,10 @@
 // lib/timer_add_form.dart
 
 import 'package:flutter/material.dart';
-import 'package:time_tracker_pro/models.dart';
-// FIXED: Removed unused import 'package:intl/intl.dart'.
 import 'package:flutter/services.dart';
-import 'package:time_tracker_pro/input_formatters.dart';
+import 'package:time_tracker_pro/input_formatters.dart';import 'package:time_tracker_pro/models.dart';
 
 class TimerAddForm extends StatefulWidget {
-  // FIX 1: Change from static lists to ValueNotifiers.
   final ValueNotifier<List<Project>> projectsNotifier;
   final ValueNotifier<List<Employee>> employeesNotifier;
 
@@ -17,7 +14,6 @@ class TimerAddForm extends StatefulWidget {
 
   const TimerAddForm({
     super.key,
-    // FIX 2: Update the constructor to require the notifiers.
     required this.projectsNotifier,
     required this.employeesNotifier,
     required this.onSubmit,
@@ -58,7 +54,6 @@ class TimerAddFormState extends State<TimerAddForm> {
     setState(() {
       _editingRecordId = record.id.toString();
 
-      // FIX 3: Read the current list from the notifier's .value
       final currentProjects = widget.projectsNotifier.value;
       final currentEmployees = widget.employeesNotifier.value;
 
@@ -82,11 +77,84 @@ class TimerAddFormState extends State<TimerAddForm> {
     });
   }
 
-  // FIXED: Removed the unused `_selectDateTime` method.
-  // This method was defined but never called anywhere in the code.
+  Future<void> _showStartTimeInputDialog() async {
+    final timeController = TextEditingController();
+    final now = DateTime.now();
 
-  // FIXED: Removed the unused `_showTimeInputDialog` method.
-  // This method became unused after its only caller was removed.
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Set Start Time'),
+        content: TextField(
+          controller: timeController,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(4),
+          ],
+          // YOUR REFINED DECORATION
+          decoration: const InputDecoration(
+            labelText: 'Start Time (4-digit 24-hour)',
+            hintText: 'HHmm, e.g., 0830',
+            helperText: 'Add 12 for 24 hr time.\nExample: 2:30 PM = 1430',
+            helperMaxLines: 2,
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (_) => Navigator.of(context).pop(true),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && timeController.text.length == 4) { // Check length
+      try {
+        final hours = int.parse(timeController.text.substring(0, 2));
+        final minutes = int.parse(timeController.text.substring(2));
+
+        if (hours >= 0 && hours < 24 && minutes >= 0 && minutes < 60) {
+          setState(() {
+            _selectedStartTime = DateTime(now.year, now.month, now.day, hours, minutes);
+          });
+          _submit(); // Immediately submit after setting time
+        } else {
+          // Show error for invalid time range
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Invalid time. Hours 00-23, Mins 00-59.')),
+            );
+          }
+        }
+      } catch (e) {
+        // Show error for parsing issue
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Invalid format. Please use HHmm.')),
+          );
+        }
+      }
+    } else if (confirmed == true && timeController.text.isNotEmpty) {
+      // Handle incomplete input like "830"
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please enter 4 digits (HHmm).')),
+        );
+      }
+    }
+  }
+
+  Future<void> _selectStartTime() async {
+    await _showStartTimeInputDialog();
+  }
 
   void _submit() {
     SystemChannels.textInput.invokeMethod('TextInput.hide');
@@ -132,14 +200,11 @@ class TimerAddFormState extends State<TimerAddForm> {
     }
   }
 
-  // FIXED: Removed the unused `_formatDateTime` method.
-  // This method was defined but never called anywhere in the code.
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final primaryColor = theme.primaryColor;
-    final inputBorder = const OutlineInputBorder();
+    const inputBorder = OutlineInputBorder();
 
     return Card(
       color: theme.cardColor,
@@ -150,11 +215,9 @@ class TimerAddFormState extends State<TimerAddForm> {
             Row(
               children: [
                 Expanded(
-                  // FIX 4: Wrap the dropdown in a ValueListenableBuilder for PROJECTS.
                   child: ValueListenableBuilder<List<Project>>(
                     valueListenable: widget.projectsNotifier,
                     builder: (context, projects, child) {
-                      // Ensure the selected project is still valid
                       if (_selectedProject != null && !projects.any((p) => p.id == _selectedProject!.id)) {
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           setState(() {
@@ -164,12 +227,11 @@ class TimerAddFormState extends State<TimerAddForm> {
                       }
 
                       return DropdownButtonFormField<Project>(
-                        decoration: InputDecoration(
+                        decoration: const InputDecoration(
                           border: inputBorder,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12),
                           labelText: 'Select Project',
                         ),
-                        // FIXED: Replaced deprecated 'value' with 'initialValue'.
                         initialValue: _selectedProject,
                         items: projects.map((project) {
                           return DropdownMenuItem<Project>(
@@ -189,11 +251,9 @@ class TimerAddFormState extends State<TimerAddForm> {
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  // FIX 5: Wrap the dropdown in a ValueListenableBuilder for EMPLOYEES.
                   child: ValueListenableBuilder<List<Employee>>(
                     valueListenable: widget.employeesNotifier,
                     builder: (context, employees, child) {
-                      // Ensure the selected employee is still valid
                       if (_selectedEmployee != null && !employees.any((e) => e.id == _selectedEmployee!.id)) {
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           setState(() {
@@ -203,12 +263,11 @@ class TimerAddFormState extends State<TimerAddForm> {
                       }
 
                       return DropdownButtonFormField<Employee?>(
-                        decoration: InputDecoration(
+                        decoration: const InputDecoration(
                           border: inputBorder,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12),
                           labelText: 'Select Employee',
                         ),
-                        // FIXED: Replaced deprecated 'value' with 'initialValue'.
                         initialValue: _selectedEmployee,
                         items: [
                           const DropdownMenuItem<Employee?>(
@@ -241,10 +300,10 @@ class TimerAddFormState extends State<TimerAddForm> {
                   child: TextFormField(
                     controller: _workDetailsController,
                     inputFormatters: [CapitalizeFirstWordInputFormatter()],
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       hintText: "Enter details about work performed...",
                       border: inputBorder,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                      contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                       labelText: 'Work Details',
                     ),
                     maxLines: 1,
@@ -257,17 +316,39 @@ class TimerAddFormState extends State<TimerAddForm> {
             ],
             if (widget.isLiveTimerForm) ...[
               const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _submit,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryColor,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      onPressed: _selectStartTime,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: theme.colorScheme.secondary,
+                        foregroundColor: theme.colorScheme.onSecondary,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                      child: const Text('Set Start'),
+                    ),
                   ),
-                  child: Text(_editingRecordId != null ? 'Update Live Timer' : 'Start New Timer'),
-                ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 5,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          _selectedStartTime = null;
+                        });
+                        _submit();
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
+                      child: Text(_editingRecordId != null ? 'Update' : 'Start Now'),
+                    ),
+                  ),
+                ],
               ),
             ],
           ],

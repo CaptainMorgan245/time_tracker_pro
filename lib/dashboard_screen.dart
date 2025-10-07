@@ -196,6 +196,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       for (var entry in filteredEntries) {
         if (!_activeTimers.containsKey(entry.id)) {
           final now = DateTime.now();
+          // This is where the visual timer gets its initial value.
+          // Because the startTime in the DB was wrong, this was also wrong.
+          // Now that we're saving the correct startTime, this will work.
           final elapsed = now.difference(entry.startTime!);
           final initialDuration = elapsed - Duration(seconds: entry.pausedDuration.toInt());
           _currentDurations[entry.id!] = initialDuration;
@@ -251,11 +254,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
             projectsNotifier: _projectsNotifier,
             employeesNotifier: _employeesNotifier,
             isLiveTimerForm: true,
+            // FIX 1: Pass the startTime from the form to the _startTimer function
             onSubmit: (project, employee, workDetails, startTime, stopTime) {
               _startTimer(
                 project: project,
                 employee: employee,
                 workDetails: workDetails,
+                startTime: startTime, // Pass the value through
               );
             },
             onUpdate: (id, project, employee, workDetails, startTime, stopTime) {
@@ -307,7 +312,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 icon: Icon(entry.isPaused ? Icons.play_arrow : Icons.pause, color: entry.isPaused ? Colors.green : Colors.amber),
                                 onPressed: () => entry.isPaused ? _resumeTimer(entry.id!) : _pauseTimer(entry.id!),
                               ),
-                              // FIXED: Removed invalid const
                               IconButton(
                                 icon: const Icon(Icons.stop, color: Colors.red),
                                 onPressed: () => _stopTimer(entry.id!),
@@ -406,10 +410,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
+  // FIX 2: Update the _startTimer function to accept and use the startTime
   Future<void> _startTimer({
     app_models.Project? project,
     app_models.Employee? employee,
     String? workDetails,
+    DateTime? startTime, // Add the parameter here
   }) async {
     if (project == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -421,7 +427,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final newEntry = app_models.TimeEntry(
       projectId: project.id!,
       employeeId: employee?.id,
-      startTime: DateTime.now(),
+      // Use the provided startTime, or fallback to DateTime.now()
+      startTime: startTime ?? DateTime.now(),
       workDetails: workDetails,
       pausedDuration: 0.0,
     );
@@ -479,7 +486,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         const SnackBar(content: Text('Live timer updated.')),
       );
     } catch (e) {
-      _startTimer(project: project, employee: employee, workDetails: workDetails);
+      // If we can't find the entry to update, it's safer to just start a new one.
+      _startTimer(
+        project: project,
+        employee: employee,
+        workDetails: workDetails,
+        startTime: startTime, // Pass it through here too
+      );
       _timerFormKey.currentState?.resetForm();
     }
   }
