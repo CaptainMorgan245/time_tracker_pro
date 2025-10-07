@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/models.dart';
-import 'package:intl/intl.dart';
+// FIXED: Removed unused import 'package:intl/intl.dart'.
 import 'package:flutter/services.dart';
 import 'package:time_tracker_pro/input_formatters.dart';
 
@@ -85,93 +85,8 @@ class TimerAddFormState extends State<TimerAddForm> {
   // FIXED: Removed the unused `_selectDateTime` method.
   // This method was defined but never called anywhere in the code.
 
-  Future<void> _showTimeInputDialog(BuildContext context, bool isStartTime, DateTime pickedDate) async {
-    final TextEditingController hourController = TextEditingController();
-    final TextEditingController minuteController = TextEditingController();
-    String? amPm = 'AM';
-
-    await showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text(isStartTime ? 'Set Start Time' : 'Set Stop Time'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: hourController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Hour (01-12)'),
-              ),
-              TextField(
-                controller: minuteController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Minute (00-59)'),
-              ),
-              DropdownButtonFormField<String>(
-                // FIXED: Replaced deprecated 'value' with 'initialValue'.
-                initialValue: amPm,
-                items: ['AM', 'PM'].map((String value) {
-                  return DropdownMenuItem<String>(
-                    value: value,
-                    child: Text(value),
-                  );
-                }).toList(),
-                onChanged: (String? newValue) {
-                  amPm = newValue;
-                },
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              child: const Text('Cancel'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
-            ),
-            ElevatedButton(
-              child: const Text('OK'),
-              onPressed: () {
-                final int hour = int.tryParse(hourController.text) ?? 0;
-                final int minute = int.tryParse(minuteController.text) ?? 0;
-                if (hour < 1 || hour > 12 || minute < 0 || minute > 59) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Invalid time. Please enter a valid hour and minute.')),
-                  );
-                  return;
-                }
-                int finalHour = hour;
-                if (amPm == 'PM' && hour != 12) {
-                  finalHour += 12;
-                }
-                if (amPm == 'AM' && hour == 12) {
-                  finalHour = 0;
-                }
-
-                final newDateTime = DateTime(
-                  pickedDate.year,
-                  pickedDate.month,
-                  pickedDate.day,
-                  finalHour,
-                  minute,
-                );
-
-                setState(() {
-                  if (isStartTime) {
-                    _selectedStartTime = newDateTime;
-                  } else {
-                    _selectedStopTime = newDateTime;
-                  }
-                });
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
+  // FIXED: Removed the unused `_showTimeInputDialog` method.
+  // This method became unused after its only caller was removed.
 
   void _submit() {
     SystemChannels.textInput.invokeMethod('TextInput.hide');

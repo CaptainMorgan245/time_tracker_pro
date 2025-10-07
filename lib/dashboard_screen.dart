@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/project_repository.dart';
 import 'package:time_tracker_pro/employee_repository.dart';
 import 'package:time_tracker_pro/time_entry_repository.dart';
-import 'package:time_tracker_pro/client_repository.dart';
 import 'dart:async';
 import 'package:time_tracker_pro/settings_screen.dart';
 import 'package:time_tracker_pro/client_and_project_screen.dart';
@@ -102,10 +101,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final ProjectRepository _projectRepo = ProjectRepository();
   final EmployeeRepository _employeeRepo = EmployeeRepository();
   final TimeEntryRepository _timeEntryRepo = TimeEntryRepository();
-  // FIXED: The ClientRepository is no longer needed here as clients are not fetched.
-  // However, removing it might cause other issues if it's planned for future use.
-  // For now, we will leave the repository instance but remove the unused fetch call.
-  final ClientRepository _clientRepo = ClientRepository();
   final dbHelper = DatabaseHelperV2.instance;
 
   final ValueNotifier<List<app_models.Project>> _projectsNotifier = ValueNotifier([]);
@@ -113,7 +108,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   List<app_models.AllRecordViewModel> _recentActivities = [];
 
-  // FIXED: Removed the unused `_clients` field.
   List<app_models.Project> _allProjectsForLookup = [];
   List<app_models.Employee> _allEmployeesForLookup = [];
 
@@ -136,7 +130,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     dbHelper.databaseNotifier.removeListener(_reloadData);
     _projectsNotifier.dispose();
     _employeesNotifier.dispose();
-    _activeTimers.values.forEach((timer) => timer.cancel());
+    for (final timer in _activeTimers.values) {
+      timer.cancel();
+    }
     super.dispose();
   }
 
@@ -156,26 +152,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       final projects = await _projectRepo.getProjects();
       final employees = await _employeeRepo.getEmployees();
-      // FIXED: Removed fetching of clients as it wasn't being used.
       final recentActivities = await dbHelper.getAllRecordsV2();
+
+      if (!mounted) return;
 
       _projectsNotifier.value = projects.where((p) => !p.isCompleted).toList();
       _employeesNotifier.value = employees.where((e) => !e.isDeleted).toList();
 
-      if (mounted) {
-        setState(() {
-          // FIXED: Removed assignment to the now-deleted `_clients` variable.
-          _recentActivities = recentActivities;
-          _allProjectsForLookup = projects;
-          _allEmployeesForLookup = employees;
-        });
-      }
+      setState(() {
+        _recentActivities = recentActivities;
+        _allProjectsForLookup = projects;
+        _allEmployeesForLookup = employees;
+      });
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load dashboard data: $e')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load dashboard data: $e')),
+      );
     }
   }
 
@@ -183,18 +176,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       final activeEntries = await _timeEntryRepo.getActiveTimeEntries();
       final projects = await _projectRepo.getProjects();
-      // FIXED: Removed fetching of `employees` as it was not used in this method.
-      // The `_allEmployeesForLookup` list is used later, which is populated by `_loadData`.
+
+      if (!mounted) return;
 
       final filteredEntries = activeEntries.where((entry) {
         final project = projects.firstWhere(
               (p) => p.id == entry.projectId,
-          orElse: () => app_models.Project(projectName: 'Unknown', clientId: 0, isCompleted: true),
+          orElse: () => const app_models.Project(projectName: 'Unknown', clientId: 0, isCompleted: true),
         );
         return !entry.isDeleted && !project.isCompleted;
       }).toList();
 
-      _activeTimers.values.forEach((timer) => timer.cancel());
+      for (final timer in _activeTimers.values) {
+        timer.cancel();
+      }
       _activeTimers.clear();
       _currentDurations.clear();
 
@@ -213,11 +208,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         });
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load active timers: $e')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load active timers: $e')),
+      );
     }
   }
 
@@ -239,22 +233,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildDashboardContent() {
-    // ==========================================================
-    // THE FIX IS HERE
-    // ==========================================================
-    // Get a list of IDs for all currently active timers.
     final activeTimerIds = _activeEntries.map((e) => e.id).toSet();
 
-    // Create a new list of recent activities that EXCLUDES any running timers.
     final filteredRecentActivities = _recentActivities.where((record) {
-      // If the record is an expense, always include it.
       if (record.type == app_models.RecordType.expense) {
         return true;
       }
-      // If the record is a time entry, only include it if its ID is NOT in the set of active timer IDs.
       return !activeTimerIds.contains(record.id);
     }).toList();
-    // ==========================================================
 
     return Column(
       children: [
@@ -321,6 +307,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 icon: Icon(entry.isPaused ? Icons.play_arrow : Icons.pause, color: entry.isPaused ? Colors.green : Colors.amber),
                                 onPressed: () => entry.isPaused ? _resumeTimer(entry.id!) : _pauseTimer(entry.id!),
                               ),
+                              // FIXED: Removed invalid const
                               IconButton(
                                 icon: const Icon(Icons.stop, color: Colors.red),
                                 onPressed: () => _stopTimer(entry.id!),
@@ -337,7 +324,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 10),
-                  // Use the newly filtered list for the UI
                   filteredRecentActivities.isEmpty
                       ? const Center(child: Text('No recent activities found.'))
                       : ListView.builder(
@@ -407,7 +393,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // --- All helper methods remain the same ---
+  void _startTimerUpdate(app_models.TimeEntry entry) {
+    _activeTimers[entry.id!] = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!entry.isPaused) {
+        final elapsed = DateTime.now().difference(entry.startTime!);
+        if(mounted){
+          setState(() {
+            _currentDurations[entry.id!] = elapsed - Duration(seconds: entry.pausedDuration.toInt());
+          });
+        }
+      }
+    });
+  }
+
   Future<void> _startTimer({
     app_models.Project? project,
     app_models.Employee? employee,
@@ -420,22 +418,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return;
     }
 
-    app_models.TimeEntry newEntry = app_models.TimeEntry(
+    final newEntry = app_models.TimeEntry(
       projectId: project.id!,
       employeeId: employee?.id,
       startTime: DateTime.now(),
       workDetails: workDetails,
       pausedDuration: 0.0,
     );
+
     try {
       await _timeEntryRepo.insertTimeEntry(newEntry);
-      // Reload all data to ensure UI consistency everywhere
+
+      if (!mounted) return;
+
       _reloadData();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Timer started.')),
       );
       _timerFormKey.currentState?.resetForm();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to start timer: $e')),
       );
@@ -468,6 +470,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
 
       await _timeEntryRepo.updateTimeEntry(updatedEntry);
+
+      if (!mounted) return;
+
       _reloadData();
       _timerFormKey.currentState?.resetForm();
       ScaffoldMessenger.of(context).showSnackBar(
@@ -477,18 +482,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _startTimer(project: project, employee: employee, workDetails: workDetails);
       _timerFormKey.currentState?.resetForm();
     }
-  }
-  void _startTimerUpdate(app_models.TimeEntry entry) {
-    _activeTimers[entry.id!] = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!entry.isPaused) {
-        final elapsed = DateTime.now().difference(entry.startTime!);
-        if(mounted){
-          setState(() {
-            _currentDurations[entry.id!] = elapsed - Duration(seconds: entry.pausedDuration.toInt());
-          });
-        }
-      }
-    });
   }
 
   Future<void> _stopTimer(int entryId) async {
@@ -504,12 +497,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       await _timeEntryRepo.updateTimeEntry(stoppedEntry);
 
+      if (!mounted) return;
+
       _activeTimers[entryId]?.cancel();
       _activeTimers.remove(entryId);
 
-      // Reload all data after stopping a timer
       _reloadData();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to stop timer: $e')),
       );
@@ -527,8 +522,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
 
       await _timeEntryRepo.updateTimeEntry(pausedEntry);
+
+      if (!mounted) return;
       _reloadData();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to pause timer: $e')),
       );
@@ -550,8 +548,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
 
       await _timeEntryRepo.updateTimeEntry(resumedEntry);
+
+      if (!mounted) return;
       _reloadData();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to resume timer: $e')),
       );
@@ -570,6 +571,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       _timerFormKey.currentState?.populateForm(entry);
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Cannot populate form with a completed or deleted record.')),
       );
