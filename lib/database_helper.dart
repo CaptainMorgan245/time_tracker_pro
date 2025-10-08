@@ -130,7 +130,7 @@ class DatabaseHelperV2 {
       String displayCategory = category ?? projectName ?? 'Uncategorized';
       allRecords.add(AllRecordViewModel(id: map['id'] as int, type: RecordType.expense, date: DateTime.parse(map['purchase_date'] as String), description: map['item_name'] as String? ?? 'Unnamed Item', value: (map['cost'] as num? ?? 0.0).toDouble(), categoryOrProject: displayCategory,));
     }
-    allRecords.sort((a, b) => b.date.compareTo(a.date));
+    allRecords.sort((a, b) => b.id.compareTo(a.id));
     return allRecords;
   }
   Future<List<ExpenseCategory>> getExpenseCategoriesV2() async {

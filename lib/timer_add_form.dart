@@ -2,7 +2,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:time_tracker_pro/input_formatters.dart';import 'package:time_tracker_pro/models.dart';
+import 'package:intl/intl.dart';
+import 'package:time_tracker_pro/input_formatters.dart';
+import 'package:time_tracker_pro/models.dart';
 
 class TimerAddForm extends StatefulWidget {
   final ValueNotifier<List<Project>> projectsNotifier;
@@ -33,6 +35,8 @@ class TimerAddFormState extends State<TimerAddForm> {
   DateTime? _selectedStopTime;
   String? _editingRecordId;
 
+  DateTime _selectedDate = DateTime.now();
+
   @override
   void dispose() {
     _workDetailsController.dispose();
@@ -47,44 +51,40 @@ class TimerAddFormState extends State<TimerAddForm> {
       _selectedStartTime = null;
       _selectedStopTime = null;
       _editingRecordId = null;
+      _selectedDate = DateTime.now();
     });
   }
 
   void populateForm(TimeEntry record) {
     setState(() {
       _editingRecordId = record.id.toString();
-
       final currentProjects = widget.projectsNotifier.value;
       final currentEmployees = widget.employeesNotifier.value;
-
       try {
         _selectedProject = currentProjects.firstWhere((p) => p.id == record.projectId);
       } catch (e) {
-        _selectedProject = null; // Project not found in the list
+        _selectedProject = null;
       }
-
       try {
         _selectedEmployee = record.employeeId != null
             ? currentEmployees.firstWhere((e) => e.id == record.employeeId)
             : null;
       } catch (e) {
-        _selectedEmployee = null; // Employee not found
+        _selectedEmployee = null;
       }
-
       _workDetailsController.text = record.workDetails ?? '';
       _selectedStartTime = record.startTime;
       _selectedStopTime = record.endTime;
+      _selectedDate = record.startTime ?? DateTime.now();
     });
   }
 
-  Future<void> _showStartTimeInputDialog() async {
+  Future<DateTime?> _showTimeInputDialog({required String title, required DateTime initialDate}) async {
     final timeController = TextEditingController();
-    final now = DateTime.now();
-
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Set Start Time'),
+        title: Text(title),
         content: TextField(
           controller: timeController,
           autofocus: true,
@@ -93,9 +93,8 @@ class TimerAddFormState extends State<TimerAddForm> {
             FilteringTextInputFormatter.digitsOnly,
             LengthLimitingTextInputFormatter(4),
           ],
-          // YOUR REFINED DECORATION
           decoration: const InputDecoration(
-            labelText: 'Start Time (4-digit 24-hour)',
+            labelText: 'Time (4-digit 24-hour)',
             hintText: 'HHmm, e.g., 0830',
             helperText: 'Add 12 for 24 hr time.\nExample: 2:30 PM = 1430',
             helperMaxLines: 2,
@@ -115,19 +114,13 @@ class TimerAddFormState extends State<TimerAddForm> {
         ],
       ),
     );
-
-    if (confirmed == true && timeController.text.length == 4) { // Check length
+    if (confirmed == true && timeController.text.length == 4) {
       try {
         final hours = int.parse(timeController.text.substring(0, 2));
         final minutes = int.parse(timeController.text.substring(2));
-
         if (hours >= 0 && hours < 24 && minutes >= 0 && minutes < 60) {
-          setState(() {
-            _selectedStartTime = DateTime(now.year, now.month, now.day, hours, minutes);
-          });
-          _submit(); // Immediately submit after setting time
+          return DateTime(initialDate.year, initialDate.month, initialDate.day, hours, minutes);
         } else {
-          // Show error for invalid time range
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('Invalid time. Hours 00-23, Mins 00-59.')),
@@ -135,7 +128,6 @@ class TimerAddFormState extends State<TimerAddForm> {
           }
         }
       } catch (e) {
-        // Show error for parsing issue
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Invalid format. Please use HHmm.')),
@@ -143,17 +135,61 @@ class TimerAddFormState extends State<TimerAddForm> {
         }
       }
     } else if (confirmed == true && timeController.text.isNotEmpty) {
-      // Handle incomplete input like "830"
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please enter 4 digits (HHmm).')),
         );
       }
     }
+    return null;
   }
 
-  Future<void> _selectStartTime() async {
-    await _showStartTimeInputDialog();
+  Future<void> _startLiveTimer() async {
+    final time = await _showTimeInputDialog(title: 'Set Start Time', initialDate: DateTime.now());
+    if (time != null) {
+      setState(() {
+        _selectedStartTime = time;
+      });
+      _submit();
+    }
+  }
+
+  Future<void> _selectDate() async {
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2101),
+    );
+    if (pickedDate != null && pickedDate != _selectedDate) {
+      setState(() {
+        _selectedDate = pickedDate;
+        if (_selectedStartTime != null) {
+          _selectedStartTime = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, _selectedStartTime!.hour, _selectedStartTime!.minute);
+        }
+        if (_selectedStopTime != null) {
+          _selectedStopTime = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, _selectedStopTime!.hour, _selectedStopTime!.minute);
+        }
+      });
+    }
+  }
+
+  Future<void> _selectManualStartTime() async {
+    final time = await _showTimeInputDialog(title: 'Set Start Time', initialDate: _selectedDate);
+    if (time != null) {
+      setState(() {
+        _selectedStartTime = time;
+      });
+    }
+  }
+
+  Future<void> _selectManualStopTime() async {
+    final time = await _showTimeInputDialog(title: 'Set Stop Time', initialDate: _selectedDate);
+    if (time != null) {
+      setState(() {
+        _selectedStopTime = time;
+      });
+    }
   }
 
   void _submit() {
@@ -164,7 +200,6 @@ class TimerAddFormState extends State<TimerAddForm> {
       );
       return;
     }
-
     if (!widget.isLiveTimerForm) {
       if (_selectedStartTime == null || _selectedStopTime == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -179,7 +214,6 @@ class TimerAddFormState extends State<TimerAddForm> {
         return;
       }
     }
-
     if (_editingRecordId != null) {
       widget.onUpdate(
         _editingRecordId!,
@@ -203,8 +237,22 @@ class TimerAddFormState extends State<TimerAddForm> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final primaryColor = theme.primaryColor;
+    final primaryColor = theme.primaryColor; // This is Colors.blueGrey
     const inputBorder = OutlineInputBorder();
+
+    String formatButtonText(DateTime? dt, String prefix) {
+      if (dt == null) return 'Set $prefix';
+      return '$prefix: ${DateFormat.Hm().format(dt)}';
+    }
+
+    // CORRECTED: Use the secondary color scheme from the theme, just like in the dashboard.
+    final secondaryButtonStyle = ElevatedButton.styleFrom(
+      backgroundColor: theme.colorScheme.secondary,
+      foregroundColor: theme.colorScheme.onSecondary,
+      elevation: 2,
+      textStyle: theme.textTheme.labelMedium,
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+    );
 
     return Card(
       color: theme.cardColor,
@@ -225,7 +273,6 @@ class TimerAddFormState extends State<TimerAddForm> {
                           });
                         });
                       }
-
                       return DropdownButtonFormField<Project>(
                         decoration: const InputDecoration(
                           border: inputBorder,
@@ -261,7 +308,6 @@ class TimerAddFormState extends State<TimerAddForm> {
                           });
                         });
                       }
-
                       return DropdownButtonFormField<Employee?>(
                         decoration: const InputDecoration(
                           border: inputBorder,
@@ -294,34 +340,28 @@ class TimerAddFormState extends State<TimerAddForm> {
               ],
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _workDetailsController,
-                    inputFormatters: [CapitalizeFirstWordInputFormatter()],
-                    decoration: const InputDecoration(
-                      hintText: "Enter details about work performed...",
-                      border: inputBorder,
-                      contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                      labelText: 'Work Details',
-                    ),
-                    maxLines: 1,
-                  ),
-                ),
-              ],
+            TextFormField(
+              controller: _workDetailsController,
+              inputFormatters: [CapitalizeFirstWordInputFormatter()],
+              decoration: const InputDecoration(
+                hintText: "Enter details about work performed...",
+                border: inputBorder,
+                contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                labelText: 'Work Details',
+              ),
+              maxLines: 1,
             ),
-            if (!widget.isLiveTimerForm) ...[
-              // This section for non-live form remains the same
-            ],
+
             if (widget.isLiveTimerForm) ...[
+              // Live Timer UI
               const SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
                     flex: 2,
                     child: ElevatedButton(
-                      onPressed: _selectStartTime,
+                      onPressed: _startLiveTimer,
+                      // This is the style we are now replicating
                       style: ElevatedButton.styleFrom(
                         backgroundColor: theme.colorScheme.secondary,
                         foregroundColor: theme.colorScheme.onSecondary,
@@ -335,9 +375,11 @@ class TimerAddFormState extends State<TimerAddForm> {
                     flex: 5,
                     child: ElevatedButton(
                       onPressed: () {
-                        setState(() {
-                          _selectedStartTime = null;
-                        });
+                        if(_editingRecordId == null) {
+                          setState(() {
+                            _selectedStartTime = DateTime.now();
+                          });
+                        }
                         _submit();
                       },
                       style: ElevatedButton.styleFrom(
@@ -345,7 +387,68 @@ class TimerAddFormState extends State<TimerAddForm> {
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                       ),
-                      child: Text(_editingRecordId != null ? 'Update' : 'Start Now'),
+                      child: Text(_editingRecordId != null ? 'Update Live Timer' : 'Start Now'),
+                    ),
+                  ),
+                ],
+              ),
+            ] else ...[
+              // Manual Entry UI - Using correctly derived styles
+              const SizedBox(height: 16),
+              // ROW 1: Date, Start Time, Stop Time
+              Row(
+                children: [
+                  Expanded(
+                    flex: 5,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.calendar_today, size: 18),
+                      label: Text(DateFormat.yMd().format(_selectedDate)),
+                      onPressed: _selectDate,
+                      style: secondaryButtonStyle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 4,
+                    child: ElevatedButton(
+                      onPressed: _selectManualStartTime,
+                      style: secondaryButtonStyle,
+                      child: Text(formatButtonText(_selectedStartTime, 'Start')),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    flex: 4,
+                    child: ElevatedButton(
+                      onPressed: _selectManualStopTime,
+                      style: secondaryButtonStyle,
+                      child: Text(formatButtonText(_selectedStopTime, 'Stop')),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              // ROW 2: Clear and Add/Update Record
+              Row(
+                children: [
+                  Expanded(
+                    flex: 1, // 25%
+                    child: ElevatedButton(
+                      onPressed: resetForm,
+                      style: secondaryButtonStyle,
+                      child: const Text('Clear'),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    flex: 3, // 75%
+                    child: ElevatedButton(
+                      onPressed: _submit,
+                      style: ElevatedButton.styleFrom( // This is the primary button style
+                        backgroundColor: primaryColor,
+                        foregroundColor: Colors.white,
+                      ),
+                      child: Text(_editingRecordId != null ? 'Update Record' : 'Add Record'),
                     ),
                   ),
                 ],
@@ -357,3 +460,4 @@ class TimerAddFormState extends State<TimerAddForm> {
     );
   }
 }
+

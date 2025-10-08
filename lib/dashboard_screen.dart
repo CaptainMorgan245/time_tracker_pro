@@ -150,17 +150,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _loadData() async {
     try {
+      // These fetches are correct.
       final projects = await _projectRepo.getProjects();
       final employees = await _employeeRepo.getEmployees();
-      final recentActivities = await dbHelper.getAllRecordsV2();
+      final allRecentActivities = await dbHelper.getAllRecordsV2();
 
       if (!mounted) return;
 
-      _projectsNotifier.value = projects.where((p) => !p.isCompleted).toList();
+      // 1. As you said, filter the list to ONLY include time records for the dashboard.
+      final recentTimeActivities = allRecentActivities
+          .where((record) => record.type == app_models.RecordType.time)
+          .toList();
+
+      // 2. Sort the projects dropdown list to show newest first.
+      final sortedProjects = projects.where((p) => !p.isCompleted).toList();
+      sortedProjects.sort((a, b) => b.id!.compareTo(a.id!)); // Sort by ID descending
+
+      // 3. Update the notifiers and state with the correct, prepared data.
+      _projectsNotifier.value = sortedProjects;
       _employeesNotifier.value = employees.where((e) => !e.isDeleted).toList();
 
       setState(() {
-        _recentActivities = recentActivities;
+        // Use the new, filtered, and correctly sorted list.
+        _recentActivities = recentTimeActivities;
         _allProjectsForLookup = projects;
         _allEmployeesForLookup = employees;
       });
@@ -171,6 +183,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     }
   }
+
 
   Future<void> _loadActiveTimers() async {
     try {
@@ -236,12 +249,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildDashboardContent() {
-    final activeTimerIds = _activeEntries.map((e) => e.id).toSet();
-
+    final activeTimerIds = _activeEntries.map((e) => e.id).toSet();// SIMPLIFIED LOGIC:
+    // `_recentActivities` now only contains time entries, so we just need
+    // to filter out the ones that are currently active.
     final filteredRecentActivities = _recentActivities.where((record) {
-      if (record.type == app_models.RecordType.expense) {
-        return true;
-      }
       return !activeTimerIds.contains(record.id);
     }).toList();
 
