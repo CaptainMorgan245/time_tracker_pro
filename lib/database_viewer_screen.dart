@@ -15,11 +15,108 @@ class DatabaseViewerScreen extends StatefulWidget {
 
 class _DatabaseViewerScreenState extends State<DatabaseViewerScreen> {
 
+  // **** NEW METHOD TO SHOW THE SCHEMA ****
+  // This contains all the logic, without touching the database_helper.dart file.
+  Future<void> _showDatabaseSchema() async {
+    // Show a loading indicator so the user knows something is happening
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // 1. Get a direct reference to the database instance from our helper.
+      final db = await DatabaseHelperV2.instance.database;
+
+      // 2. Query the special 'sqlite_master' table to get schema info.
+      // This is a standard SQLite command.
+      final List<Map<String, dynamic>> tables = await db.query(
+        'sqlite_master',
+        columns: ['name', 'sql'],
+        where: "type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'android_%'",
+      );
+
+      // 3. Build a readable string from the query results.
+      String schema;
+      if (tables.isEmpty) {
+        schema = 'No user-created tables found in the database.';
+      } else {
+        final schemaBuffer = StringBuffer();
+        schemaBuffer.writeln('DATABASE SCHEMA:\n');
+
+        for (final table in tables) {
+          final tableName = table['name'];
+          // This makes the output more readable by adding newlines
+          final creationSql = table['sql']?.toString().replaceAll(', ', ',\n  ') ?? 'Could not retrieve schema.';
+
+          schemaBuffer.writeln('--- TABLE: $tableName ---');
+          schemaBuffer.writeln('$creationSql;\n');
+        }
+        schema = schemaBuffer.toString();
+      }
+
+      if (!mounted) return;
+      Navigator.pop(context); // Close the loading indicator
+
+      // 4. Show the final schema string in a scrollable dialog.
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Database Schema'),
+          // **** THIS IS THE ONLY CHANGE ****
+          // Using SelectableText allows you to long-press and copy the content.
+          content: Scrollbar(
+            child: SingleChildScrollView(
+              child: SelectableText( // CHANGED FROM Text to SelectableText
+                schema,
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // Close loading indicator on error too
+      // If something goes wrong (e.g., table doesn't exist), show an error.
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Error Fetching Schema'),
+          content: Text(e.toString()),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Database Viewer (V2)'),
+        // **** NEW ACTION BUTTON ADDED HERE ****
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline),
+            tooltip: 'View Database Schema',
+            onPressed: _showDatabaseSchema, // This calls the new method above
+          ),
+        ],
       ),
       body: ValueListenableBuilder<int>(
         valueListenable: DatabaseHelperV2.instance.databaseNotifier,

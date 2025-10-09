@@ -3,11 +3,10 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
-// We do NOT import path.dart or dart:io because we are letting the plugin handle the path.
 import 'package:time_tracker_pro/models.dart';
 
 // ============================================================================
-// |                         ACTIVE V2 DATABASE HELPER                        |
+// |                  FINAL, STABLE V2 DATABASE HELPER                      |
 // ============================================================================
 
 class DatabaseHelperV2 {
@@ -22,7 +21,6 @@ class DatabaseHelperV2 {
 
   void _notifyListeners() {
     databaseNotifier.value++;
-    debugPrint('[DB_V2] Database change notified. Version: ${databaseNotifier.value}');
   }
 
   void notifyDatabaseChanged() {
@@ -35,31 +33,40 @@ class DatabaseHelperV2 {
     return _database!;
   }
 
-  // ================================================================================
-  // THIS IS THE FINAL, CORRECTED LOGIC.
-  // It specifies NO PATH, forcing sqflite to use its correct default location.
-  // ================================================================================
   Future<Database> _initDatabase() async {
-    // By providing only the name, we let the sqflite_common_ffi plugin manage
-    // the path automatically, which correctly places it in the .dart_tool folder.
-    debugPrint("[DB_V2_DEFAULT_PATH] Initializing database with default path logic...");
+    debugPrint("[DB_V2] Initializing database...");
     return await openDatabase(
-      _dbName, // Just the name, no path.
+      _dbName,
       version: _dbVersion,
       onCreate: _onCreate,
+      onUpgrade: (db, oldVersion, newVersion) async {
+        debugPrint('[DB_V2] Upgrading database from version $oldVersion to $newVersion...');
+        // Future schema migrations (ALTER TABLE, etc.) go here.
+      },
+      onDowngrade: onDatabaseDowngradeDelete,
     );
   }
 
-  // This _onCreate method is still correct and will ONLY RUN IF THE DB FILE DOES NOT EXIST.
+  /// This method is called ONLY when the database file does not exist.
   Future<void> _onCreate(Database db, int version) async {
-    debugPrint('[DB_V2] ERROR: _onCreate was called but DB should exist. Creating tables anyway...');
+    debugPrint('[DB_V2] _onCreate called. Creating all tables for a fresh install...');
+
     await db.transaction((txn) async {
-      // All the CREATE TABLE statements are here, unchanged.
+      // 1. Create the settings table
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS settings (
             id INTEGER PRIMARY KEY, employee_number_prefix TEXT, next_employee_number INTEGER, vehicle_designations TEXT, vendors TEXT, company_hourly_rate REAL, burden_rate REAL, time_rounding_interval INTEGER, auto_backup_reminder_frequency INTEGER, app_runs_since_backup INTEGER, measurement_system TEXT, default_report_months INTEGER
           )
         ''');
+
+      // 2. *** THE CRITICAL FIX ***
+      //    Immediately insert the default settings row to prevent the "empty database" bug.
+      await txn.execute('''
+          INSERT INTO settings(id, next_employee_number, company_hourly_rate, burden_rate, time_rounding_interval, auto_backup_reminder_frequency, app_runs_since_backup, default_report_months) 
+          VALUES(1, 1, 0.0, 0.0, 15, 10, 0, 3)
+        ''');
+
+      // 3. Create all other tables
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS clients (
             id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, is_active INTEGER NOT NULL DEFAULT 1, contact_person TEXT, phone_number TEXT
@@ -96,12 +103,13 @@ class DatabaseHelperV2 {
           )
         ''');
     });
-    debugPrint('[DB_V2] All tables created successfully.');
+    debugPrint('[DB_V2] All tables created and default settings inserted successfully.');
   }
 
-  // --- V2 PUBLIC METHODS --- (Unchanged)
+  // --- V2 PUBLIC METHODS ---
+  // (The rest of the file is correct and unchanged)
+
   Future<List<AllRecordViewModel>> getAllRecordsV2() async {
-    // ... same as before
     final db = await database;
     final List<AllRecordViewModel> allRecords = [];
     final timeQuery = '''

@@ -2,53 +2,64 @@
 
 import 'package:sqflite/sqflite.dart';
 import 'package:time_tracker_pro/database_helper.dart';
-// FIX: Your model is named SettingsModel, not Settings. This keeps it correct.
 import 'package:time_tracker_pro/settings_model.dart';
 
 class SettingsService {
   SettingsService._privateConstructor();
   static final SettingsService instance = SettingsService._privateConstructor();
 
-  // THE FIX: Point to DatabaseHelperV2
   final _databaseHelper = DatabaseHelperV2.instance;
   final String tableName = 'settings';
 
+  /// Checks if the settings table has at least one row.
   Future<bool> hasSettings() async {
     final db = await _databaseHelper.database;
-    final List<Map<String, dynamic>> maps = await db.query(tableName);
+    final List<Map<String, dynamic>> maps = await db.query(tableName, limit: 1);
     return maps.isNotEmpty;
   }
 
+  /// Loads settings from the database.
+  /// If no settings exist, it returns a default SettingsModel instance.
   Future<SettingsModel> loadSettings() async {
     final db = await _databaseHelper.database;
-    final List<Map<String, dynamic>> maps = await db.query(tableName);
+    final List<Map<String, dynamic>> maps = await db.query(tableName, limit: 1);
 
     if (maps.isNotEmpty) {
       return SettingsModel.fromMap(maps.first);
     }
-    // Return a default SettingsModel instance when empty
+    // This should theoretically not be hit on subsequent runs, but it's safe to have.
     return SettingsModel();
   }
 
-  Future<void> saveSettings(SettingsModel settings) async {
+  /// Saves settings. Returns `true` if it was a new insert, `false` if it was an update.
+  Future<bool> saveSettings(SettingsModel settings) async {
     final db = await _databaseHelper.database;
 
-    final exists = await hasSettings();
+    final List<Map<String, dynamic>> existingMaps = await db.query(tableName, limit: 1);
+    final bool exists = existingMaps.isNotEmpty;
+
     if (exists) {
+      // Update existing settings. The 'id' is always 1.
       await db.update(
         tableName,
         settings.toMap(),
         where: 'id = ?',
-        whereArgs: [1], // Targets the single settings row
+        whereArgs: [1],
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
+      return false; // Return FALSE because it was an update.
     } else {
+      // Insert new settings for the very first time.
+      // Ensure the first record has the static ID of 1.
+      final settingsMap = settings.toMap();
+      settingsMap['id'] = 1;
+
       await db.insert(
         tableName,
-        settings.toMap(),
+        settingsMap,
         conflictAlgorithm: ConflictAlgorithm.replace,
       );
+      return true; // Return TRUE because it was a new insert.
     }
-    // Settings changes rarely need immediate UI notification, so notifyDatabaseChanged() is omitted.
   }
 }

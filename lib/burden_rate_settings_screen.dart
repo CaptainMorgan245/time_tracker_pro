@@ -2,12 +2,26 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:time_tracker_pro/settings_service.dart';
-import 'package:time_tracker_pro/settings_model.dart';
+import 'package:time_tracker_pro/settings_service.dart';import 'package:time_tracker_pro/settings_model.dart';
 
 // start class: BurdenRateSettingsScreen
 class BurdenRateSettingsScreen extends StatefulWidget {
-  const BurdenRateSettingsScreen({super.key});
+  // **** ADDED ****: These are the controllers from the parent screen.
+  final TextEditingController employeeNumberPrefixController;
+  final TextEditingController nextEmployeeNumberController;
+  final TextEditingController backupFrequencyController;
+  final TextEditingController reportMonthsController;
+  final SettingsModel settingsModel; // And the settings model for dropdowns
+
+  // **** MODIFIED ****: The constructor now requires these new parameters.
+  const BurdenRateSettingsScreen({
+    super.key,
+    required this.employeeNumberPrefixController,
+    required this.nextEmployeeNumberController,
+    required this.backupFrequencyController,
+    required this.reportMonthsController,
+    required this.settingsModel,
+  });
 
   @override
   State<BurdenRateSettingsScreen> createState() => _BurdenRateSettingsScreenState();
@@ -18,19 +32,25 @@ class BurdenRateSettingsScreen extends StatefulWidget {
 class _BurdenRateSettingsScreenState extends State<BurdenRateSettingsScreen> {
   final SettingsService _settingsService = SettingsService.instance;
   final TextEditingController _rateController = TextEditingController();
+
+  // These controllers are for the calculator part only.
   final TextEditingController _overheadController = TextEditingController();
   final TextEditingController _wagesController = TextEditingController();
   final TextEditingController _hoursController = TextEditingController();
   final TextEditingController _profitController = TextEditingController();
 
   double? _calculatedRate;
-  bool _isLoading = true;
+
+  // Removed _isLoading and _loadCurrentRate as the data is now passed in directly.
 
   // start method: initState
   @override
   void initState() {
     super.initState();
-    _loadCurrentRate();
+    // **** MODIFIED ****: Load the rate from the settings model passed by the parent.
+    if (widget.settingsModel.companyHourlyRate != null) {
+      _rateController.text = widget.settingsModel.companyHourlyRate!.toStringAsFixed(2);
+    }
   }
   // end method: initState
 
@@ -46,39 +66,39 @@ class _BurdenRateSettingsScreenState extends State<BurdenRateSettingsScreen> {
   }
   // end method: dispose
 
-  // start method: _loadCurrentRate
-  Future<void> _loadCurrentRate() async {
-    final settings = await _settingsService.loadSettings();
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-        if (settings != null && settings.companyHourlyRate != null) {
-          _rateController.text = settings.companyHourlyRate!.toStringAsFixed(2);
-        }
-      });
-    }
-  }
-  // end method: _loadCurrentRate
-
-  // start method: _saveRate
+  // **** COMPLETELY REWRITTEN _saveRate METHOD ****
+  // This is the core of the fix. It now reads the values from the other tab's
+  // controllers before saving.
   Future<void> _saveRate(double rate) async {
-    final settings = await _settingsService.loadSettings() ?? SettingsModel();
-    final updatedSettings = settings.copyWith(companyHourlyRate: rate);
+    // 1. Get the current values from the General tab's controllers.
+    final generalSettings = widget.settingsModel.copyWith(
+      employeeNumberPrefix: widget.employeeNumberPrefixController.text.isEmpty
+          ? null
+          : widget.employeeNumberPrefixController.text,
+      nextEmployeeNumber: int.tryParse(widget.nextEmployeeNumberController.text),
+      autoBackupReminderFrequency: int.tryParse(widget.backupFrequencyController.text) ?? 10,
+      defaultReportMonths: int.tryParse(widget.reportMonthsController.text) ?? 3,
+    );
 
+    // 2. Create the final, fully updated settings object.
+    // This includes the general settings from step 1 AND the new burden rate.
+    final updatedSettings = generalSettings.copyWith(companyHourlyRate: rate);
+
+    // 3. Save the single, unified settings object.
     await _settingsService.saveSettings(updatedSettings);
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Burden rate saved: \$${rate.toStringAsFixed(2)}/hour')),
-      );
-      setState(() {
-        _rateController.text = rate.toStringAsFixed(2);
-      });
-    }
+    // 4. Update UI.
+    if (!mounted) return; // This is the fix
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Burden rate saved: \$${rate.toStringAsFixed(2)}/hour')),
+    );
+
+    // No need to set controller text here as it's already set by the user
+
   }
   // end method: _saveRate
 
-  // start method: _calculateBurdenRate
+  // start method: _calculateBurdenRate (No changes to this method)
   void _calculateBurdenRate() {
     final overhead = double.tryParse(_overheadController.text) ?? 0;
     final wages = double.tryParse(_wagesController.text) ?? 0;
@@ -106,16 +126,14 @@ class _BurdenRateSettingsScreenState extends State<BurdenRateSettingsScreen> {
   // start method: build
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
+    // No more _isLoading check needed
     return Scaffold(
       resizeToAvoidBottomInset: false,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
+            // ... The entire UI below this line has NO CHANGES ...
             // Manual Rate Entry Card
             Card(
               child: Padding(
@@ -150,7 +168,7 @@ class _BurdenRateSettingsScreenState extends State<BurdenRateSettingsScreen> {
                           onPressed: () {
                             final rate = double.tryParse(_rateController.text);
                             if (rate != null && rate > 0) {
-                              _saveRate(rate);
+                              _saveRate(rate); // This now saves ALL settings correctly
                             } else {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(content: Text('Please enter a valid rate')),
@@ -254,7 +272,7 @@ class _BurdenRateSettingsScreenState extends State<BurdenRateSettingsScreen> {
                             child: Container(
                               padding: const EdgeInsets.all(8.0),
                               decoration: BoxDecoration(
-                                color: Colors.green.withOpacity(0.1),
+                                color: Colors.green.withAlpha((255 * 0.1).round()),
                                 borderRadius: BorderRadius.circular(4),
                                 border: Border.all(color: Colors.green),
                               ),
@@ -265,10 +283,20 @@ class _BurdenRateSettingsScreenState extends State<BurdenRateSettingsScreen> {
                                     'Calculated Rate: \$${_calculatedRate!.toStringAsFixed(2)}/hour',
                                     style: const TextStyle(fontWeight: FontWeight.bold),
                                   ),
+                                  // The corrected TextButton
                                   TextButton(
-                                    onPressed: () => _saveRate(_calculatedRate!),
-                                    child: const Text('Use This Rate'),
+                                    onPressed: () {
+                                      // 1. Get the rate value first.
+                                      final rateToSave = _calculatedRate!;
+                                      _rateController.text = rateToSave.toStringAsFixed(2);
+                                      _saveRate(rateToSave);
+                                      setState(() {
+                                        _calculatedRate = null;
+                                      });
+                                    },
+                                    child: const Text('Use This Rate & Save'),
                                   ),
+
                                 ],
                               ),
                             ),
@@ -288,3 +316,4 @@ class _BurdenRateSettingsScreenState extends State<BurdenRateSettingsScreen> {
 // end method: build
 }
 // end class: _BurdenRateSettingsScreenState
+

@@ -55,6 +55,24 @@ class TimerAddFormState extends State<TimerAddForm> {
     });
   }
 
+  /// Pre-fills the form for starting a new timer based on a previous record.
+  /// This only sets the project and employee, and clears all other fields
+  /// to ensure the form is in a "new entry" state.
+  void prefillForNewTimer(Project? project, Employee? employee) {
+    setState(() {
+      // First, reset everything to a clean slate.
+      _editingRecordId = null;
+      _workDetailsController.clear();
+      _selectedStartTime = null;
+      _selectedStopTime = null;
+      _selectedDate = DateTime.now();
+
+      // Then, set only the project and employee.
+      _selectedProject = project;
+      _selectedEmployee = employee;
+    });
+  }
+
   void populateForm(TimeEntry record) {
     setState(() {
       _editingRecordId = record.id.toString();
@@ -237,7 +255,7 @@ class TimerAddFormState extends State<TimerAddForm> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final primaryColor = theme.primaryColor; // This is Colors.blueGrey
+    final primaryColor = theme.colorScheme.primary;
     const inputBorder = OutlineInputBorder();
 
     String formatButtonText(DateTime? dt, String prefix) {
@@ -245,7 +263,6 @@ class TimerAddFormState extends State<TimerAddForm> {
       return '$prefix: ${DateFormat.Hm().format(dt)}';
     }
 
-    // CORRECTED: Use the secondary color scheme from the theme, just like in the dashboard.
     final secondaryButtonStyle = ElevatedButton.styleFrom(
       backgroundColor: theme.colorScheme.secondary,
       foregroundColor: theme.colorScheme.onSecondary,
@@ -355,27 +372,49 @@ class TimerAddFormState extends State<TimerAddForm> {
             if (widget.isLiveTimerForm) ...[
               // Live Timer UI
               const SizedBox(height: 16),
+              // START --- NEW BUTTON LAYOUT
               Row(
                 children: [
+                  // This Expanded widget takes up ~30% of the space
                   Expanded(
-                    flex: 2,
-                    child: ElevatedButton(
-                      onPressed: _startLiveTimer,
-                      // This is the style we are now replicating
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: theme.colorScheme.secondary,
-                        foregroundColor: theme.colorScheme.onSecondary,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      ),
-                      child: const Text('Set Start'),
+                    flex: 3,
+                    child: Row(
+                      children: [
+                        // "Clear" button takes 25% of this sub-space
+                        Expanded(
+                          flex: 1,
+                          child: ElevatedButton(
+                            onPressed: resetForm,
+                            style: secondaryButtonStyle.copyWith(
+                              // UPDATED: MaterialStateProperty -> WidgetStateProperty
+                              padding: WidgetStateProperty.all(const EdgeInsets.symmetric(vertical: 12)),
+                            ),
+                            child: const Text('Clear', style: TextStyle(fontSize: 12)), // Smaller font
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // "Set Start Time" button takes 75% of this sub-space
+                        Expanded(
+                          flex: 3,
+                          child: ElevatedButton(
+                            onPressed: _startLiveTimer,
+                            style: secondaryButtonStyle.copyWith(
+                              // UPDATED: MaterialStateProperty -> WidgetStateProperty
+                              padding: WidgetStateProperty.all(const EdgeInsets.symmetric(vertical: 12)),
+                            ),
+                            child: const Text('Set Time', style: TextStyle(fontSize: 12)), // Smaller font
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(width: 8),
+                  // This Expanded widget takes up ~70% of the space
                   Expanded(
-                    flex: 5,
+                    flex: 7,
                     child: ElevatedButton(
                       onPressed: () {
-                        if(_editingRecordId == null) {
+                        if (_editingRecordId == null) {
                           setState(() {
                             _selectedStartTime = DateTime.now();
                           });
@@ -385,15 +424,16 @@ class TimerAddFormState extends State<TimerAddForm> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: primaryColor,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
-                      child: Text(_editingRecordId != null ? 'Update Live Timer' : 'Start Now'),
+                      child: Text(_editingRecordId != null ? 'Update' : 'Start Timer'),
                     ),
                   ),
                 ],
               ),
+              // END --- NEW BUTTON LAYOUT
             ] else ...[
-              // Manual Entry UI - Using correctly derived styles
+              // Manual Entry UI
               const SizedBox(height: 16),
               // ROW 1: Date, Start Time, Stop Time
               Row(
@@ -432,7 +472,7 @@ class TimerAddFormState extends State<TimerAddForm> {
               Row(
                 children: [
                   Expanded(
-                    flex: 1, // 25%
+                    flex: 1,
                     child: ElevatedButton(
                       onPressed: resetForm,
                       style: secondaryButtonStyle,
@@ -441,10 +481,10 @@ class TimerAddFormState extends State<TimerAddForm> {
                   ),
                   const SizedBox(width: 16),
                   Expanded(
-                    flex: 3, // 75%
+                    flex: 3,
                     child: ElevatedButton(
                       onPressed: _submit,
-                      style: ElevatedButton.styleFrom( // This is the primary button style
+                      style: ElevatedButton.styleFrom(
                         backgroundColor: primaryColor,
                         foregroundColor: Colors.white,
                       ),
@@ -460,4 +500,3 @@ class TimerAddFormState extends State<TimerAddForm> {
     );
   }
 }
-

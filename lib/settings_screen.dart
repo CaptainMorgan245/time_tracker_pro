@@ -25,10 +25,12 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   final SettingsService _settingsService = SettingsService.instance;
 
   SettingsModel _settings = SettingsModel();
-  final TextEditingController _employeeNumberPrefixController = TextEditingController();
-  final TextEditingController _nextEmployeeNumberController = TextEditingController();
-  final TextEditingController _backupFrequencyController = TextEditingController();
-  final TextEditingController _reportMonthsController = TextEditingController();
+
+  // These controllers are now public so the child screen can access their text
+  final TextEditingController employeeNumberPrefixController = TextEditingController();
+  final TextEditingController nextEmployeeNumberController = TextEditingController();
+  final TextEditingController backupFrequencyController = TextEditingController();
+  final TextEditingController reportMonthsController = TextEditingController();
 
   // start method: initState
   @override
@@ -43,43 +45,50 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   @override
   void dispose() {
     _tabController.dispose();
-    _employeeNumberPrefixController.dispose();
-    _nextEmployeeNumberController.dispose();
-    _backupFrequencyController.dispose();
-    _reportMonthsController.dispose();
+    employeeNumberPrefixController.dispose();
+    nextEmployeeNumberController.dispose();
+    backupFrequencyController.dispose();
+    reportMonthsController.dispose();
     super.dispose();
   }
   // end method: dispose
 
   // start method: _loadSettings
+  // start method: _loadSettings
   Future<void> _loadSettings() async {
     final loadedSettings = await _settingsService.loadSettings();
-    setState(() {
-      _settings = loadedSettings ?? SettingsModel();
-      _employeeNumberPrefixController.text = _settings.employeeNumberPrefix ?? '';
-      _nextEmployeeNumberController.text = (_settings.nextEmployeeNumber ?? 1).toString();
-      _backupFrequencyController.text = _settings.autoBackupReminderFrequency.toString();
-      _reportMonthsController.text = _settings.defaultReportMonths.toString();
+    setState(() {_settings = loadedSettings; // Corrected line, removed dead code
+    employeeNumberPrefixController.text = _settings.employeeNumberPrefix ?? '';
+    nextEmployeeNumberController.text = (_settings.nextEmployeeNumber ?? 1).toString();
+    backupFrequencyController.text = _settings.autoBackupReminderFrequency.toString();
+    reportMonthsController.text = _settings.defaultReportMonths.toString();
     });
   }
-  // end method: _loadSettings
+// end method: _loadSettings
 
-  // start method: _saveSettings
-  Future<void> _saveSettings() async {
+
+  // MODIFIED: This method now also gets the current rate from the Burden Rate screen's controller
+  // if it exists, to ensure it's not overwritten.
+  Future<void> _saveSettings({double? currentBurdenRate}) async {
     final settings = _settings.copyWith(
-      employeeNumberPrefix: _employeeNumberPrefixController.text.isEmpty
-          ? null
-          : _employeeNumberPrefixController.text,
-      nextEmployeeNumber: int.tryParse(_nextEmployeeNumberController.text),
-      autoBackupReminderFrequency: int.tryParse(_backupFrequencyController.text) ?? 10,
-      defaultReportMonths: int.tryParse(_reportMonthsController.text) ?? 3,
+        employeeNumberPrefix: employeeNumberPrefixController.text.isEmpty
+            ? null
+            : employeeNumberPrefixController.text,
+        nextEmployeeNumber: int.tryParse(nextEmployeeNumberController.text),
+        autoBackupReminderFrequency: int.tryParse(backupFrequencyController.text) ?? 10,
+        defaultReportMonths: int.tryParse(reportMonthsController.text) ?? 3,
+        // If a burden rate is passed, use it. Otherwise, keep the existing one.
+        companyHourlyRate: currentBurdenRate ?? _settings.companyHourlyRate
     );
 
+    // The corrected code
     await _settingsService.saveSettings(settings);
 
+    if (!mounted) return; // This is the fix. It checks if the widget is still on screen.
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Settings Saved!')),
     );
+
   }
   // end method: _saveSettings
 
@@ -136,6 +145,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // ... (No changes to the UI cards below this point)
                 Row(
                   children: [
                     const Text(
@@ -155,8 +165,6 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   ],
                 ),
                 const SizedBox(height: 16),
-
-                // Employee Number Settings
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(12.0),
@@ -184,7 +192,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                           children: [
                             Expanded(
                               child: TextField(
-                                controller: _employeeNumberPrefixController,
+                                controller: employeeNumberPrefixController, // Use public controller
                                 decoration: const InputDecoration(
                                   labelText: 'Employee Number Prefix',
                                 ),
@@ -193,7 +201,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                             const SizedBox(width: 12),
                             Expanded(
                               child: TextField(
-                                controller: _nextEmployeeNumberController,
+                                controller: nextEmployeeNumberController, // Use public controller
                                 decoration: const InputDecoration(
                                   labelText: 'Next Employee Number',
                                 ),
@@ -207,8 +215,6 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // Time & Measurement Settings
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(12.0),
@@ -234,12 +240,11 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                         const SizedBox(height: 8),
                         Row(
                           children: [
+                            // This is the new, corrected "Time Rounding" block
                             Expanded(
-                              child: DropdownButtonFormField<int>(
+                              child: DropdownButton<int>(
                                 value: _settings.timeRoundingInterval,
-                                decoration: const InputDecoration(
-                                  labelText: 'Time Rounding',
-                                ),
+                                isExpanded: true, // This makes it fill the available space
                                 items: const [
                                   DropdownMenuItem(value: 0, child: Text('No Rounding')),
                                   DropdownMenuItem(value: 15, child: Text('15 Minutes')),
@@ -256,13 +261,13 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                                 },
                               ),
                             ),
+
                             const SizedBox(width: 12),
+                            // This is the new, corrected block
                             Expanded(
-                              child: DropdownButtonFormField<String>(
+                              child: DropdownButton<String>(
                                 value: _settings.measurementSystem,
-                                decoration: const InputDecoration(
-                                  labelText: 'Measurement System',
-                                ),
+                                isExpanded: true, // This makes it fill the available space
                                 items: const [
                                   DropdownMenuItem(value: 'metric', child: Text('Metric (km/L)')),
                                   DropdownMenuItem(value: 'imperial', child: Text('Imperial (mi/gal)')),
@@ -278,6 +283,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                                 },
                               ),
                             ),
+
                           ],
                         ),
                       ],
@@ -285,8 +291,6 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   ),
                 ),
                 const SizedBox(height: 16),
-
-                // Backup & Reports Settings
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(12.0),
@@ -314,42 +318,28 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                           children: [
                             Expanded(
                               child: TextField(
-                                controller: _backupFrequencyController,
+                                controller: backupFrequencyController, // Use public controller
                                 decoration: const InputDecoration(
                                   labelText: 'Backup Reminder (app runs)',
                                   helperText: 'Set to 0 to disable',
                                 ),
                                 keyboardType: TextInputType.number,
                                 onChanged: (value) {
-                                  final freq = int.tryParse(value);
-                                  if (freq != null) {
-                                    setState(() {
-                                      _settings = _settings.copyWith(
-                                        autoBackupReminderFrequency: freq,
-                                      );
-                                    });
-                                  }
+                                  // No need for setState here as we read from controller on save
                                 },
                               ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: TextField(
-                                controller: _reportMonthsController,
+                                controller: reportMonthsController, // Use public controller
                                 decoration: const InputDecoration(
                                   labelText: 'Default Report Period (months)',
                                   helperText: 'Quick report timeframe',
                                 ),
                                 keyboardType: TextInputType.number,
                                 onChanged: (value) {
-                                  final months = int.tryParse(value);
-                                  if (months != null && months > 0) {
-                                    setState(() {
-                                      _settings = _settings.copyWith(
-                                        defaultReportMonths: months,
-                                      );
-                                    });
-                                  }
+                                  // No need for setState here as we read from controller on save
                                 },
                               ),
                             ),
@@ -360,11 +350,10 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   ),
                 ),
                 const SizedBox(height: 32),
-
                 Align(
                   alignment: Alignment.centerLeft,
                   child: ElevatedButton(
-                    onPressed: _saveSettings,
+                    onPressed: _saveSettings, // This now saves all settings correctly
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Theme.of(context).colorScheme.primary,
                       foregroundColor: Colors.white,
@@ -376,17 +365,19 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             ),
           ),
 
-          // Tab 2: Personnel (now using separate screen)
           const PersonnelScreen(),
-
-          // Tab 3: Expenses
           const ExpensesScreen(),
-
-          // Tab 4: Email
           const Center(child: Text('Email settings coming soon...')),
 
-          // Tab 5: Burden Rate
-          const BurdenRateSettingsScreen(),
+          // **** CHANGE IS HERE ****
+          // We now pass the controllers from this screen to the BurdenRateSettingsScreen
+          BurdenRateSettingsScreen(
+            employeeNumberPrefixController: employeeNumberPrefixController,
+            nextEmployeeNumberController: nextEmployeeNumberController,
+            backupFrequencyController: backupFrequencyController,
+            reportMonthsController: reportMonthsController,
+            settingsModel: _settings, // Also pass the model for dropdown values
+          ),
         ],
       ),
     );

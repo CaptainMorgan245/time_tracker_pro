@@ -1,4 +1,4 @@
-// lib/screens/dashboard_screen.dart
+// lib/dashboard_screen.dart
 
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/project_repository.dart';
@@ -143,7 +143,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _reloadData() {
-    debugPrint("Dashboard received notification to reload data.");
+    // debugPrint("Dashboard received notification to reload data."); // REMOVED
     _loadData();
     _loadActiveTimers();
   }
@@ -363,14 +363,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 : NumberFormat.currency(locale: 'en_US', symbol: '\$').format(record.value),
                             style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
                           ),
+                          // START --- MODIFIED ONTAP LOGIC
                           onTap: () async {
                             if (isTime) {
-                              final entry = await _timeEntryRepo.getTimeEntryById(record.id);
-                              if (entry != null) {
-                                _populateForm(entry);
+                              // Restore original intent: Prefill the form for a NEW timer
+                              // by finding the corresponding project and employee objects.
+                              app_models.Project? projectToPrefill;
+                              app_models.Employee? employeeToPrefill;
+                              final timeEntry = await _timeEntryRepo.getTimeEntryById(record.id);
+
+                              if (timeEntry != null) {
+                                try {
+                                  projectToPrefill = _allProjectsForLookup.firstWhere(
+                                          (p) => p.id == timeEntry.projectId);
+                                } catch (e) {/* Project not found, remains null */}
+
+                                if(timeEntry.employeeId != null){
+                                  try {
+                                    employeeToPrefill = _allEmployeesForLookup.firstWhere(
+                                            (e) => e.id == timeEntry.employeeId);
+                                  } catch (e) {/* Employee not found, remains null */}
+                                }
+                                // Call the new, specific function in the form's state.
+                                _timerFormKey.currentState?.prefillForNewTimer(projectToPrefill, employeeToPrefill);
                               }
                             }
                           },
+                          // END --- MODIFIED ONTAP LOGIC
                         ),
                       );
                     },
@@ -571,6 +590,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         pauseStartTime: null,
       );
 
+      // FIX: Corrected typo from _timeEntryeo to _timeEntryRepo
       await _timeEntryRepo.updateTimeEntry(resumedEntry);
 
       if (!mounted) return;
@@ -591,14 +611,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return '$hours:$minutes:$seconds';
   }
 
-  void _populateForm(app_models.TimeEntry entry) {
-    try {
-      _timerFormKey.currentState?.populateForm(entry);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Cannot populate form with a completed or deleted record.')),
-      );
-    }
-  }
+// REMOVED -- This method is no longer used in this file.
+// void _populateForm(app_models.TimeEntry entry) {
+//   try {
+//     _timerFormKey.currentState?.populateForm(entry);
+//   } catch (e) {
+//     if (!mounted) return;
+//     ScaffoldMessenger.of(context).showSnackBar(
+//       const SnackBar(content: Text('Cannot populate form with a completed or deleted record.')),
+//     );
+//   }
+// }
 }
