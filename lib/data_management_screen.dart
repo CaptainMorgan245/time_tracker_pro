@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:time_tracker_pro/database_helper.dart';
 
 class DataManagementScreen extends StatefulWidget {
@@ -276,10 +275,10 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
     // This widget does not need changes
     return Card(
       elevation: 0,
-      color: Colors.blueGrey.withOpacity(0.1),
+      color: Colors.blueGrey.withAlpha(26), // FIX: Replaced withOpacity(0.1)
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: Colors.blueGrey.withOpacity(0.2)),
+        side: BorderSide(color: Colors.blueGrey.withAlpha(51)), // FIX: Replaced withOpacity(0.2)
       ),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
