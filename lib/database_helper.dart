@@ -2,9 +2,12 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io'; // <-- NEW: Import for platform detection and file operations
 import 'package:flutter/foundation.dart';
+import 'package:path_provider/path_provider.dart'; // <-- NEW: Import for finding Documents directory
 import 'package:sqflite/sqflite.dart';
 import 'package:time_tracker_pro/models.dart';
+import 'package:time_tracker_pro/models/project_summary.dart';
 
 // ============================================================================
 // |                  FINAL, STABLE V2 DATABASE HELPER                      |
@@ -51,10 +54,31 @@ class DatabaseHelperV2 {
     return _dbCompleter!.future;
   }
 
+  // == MODIFIED: THIS FUNCTION NOW HANDLES DESKTOP vs MOBILE PATHS ==
+  Future<String> _getDatabasePath() async {
+    // Check if running on a desktop platform
+    if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      // Use a stable location like the Documents folder for desktop
+      final docDir = await getApplicationDocumentsDirectory();
+      final dataDir = Directory('${docDir.path}/TimeTrackerPro');
+
+      // Create the subdirectory if it doesn't exist
+      if (!await dataDir.exists()) {
+        await dataDir.create(recursive: true);
+      }
+      return '${dataDir.path}/$_dbName';
+    } else {
+      // Use the default path for mobile (Android/iOS)
+      final path = await getDatabasesPath();
+      return '$path/$_dbName';
+    }
+  }
+  // == END MODIFICATION ==
+
   Future<Database> _initDatabase() async {
     debugPrint("[DB_V2] Initializing database...");
-    final path = await getDatabasesPath();
-    final dbPath = '$path/$_dbName';
+    // MODIFIED: Use the new function to get the correct path
+    final dbPath = await _getDatabasePath();
     debugPrint("[DB_V2] Database path: $dbPath");
 
     return await openDatabase(
@@ -280,12 +304,12 @@ class DatabaseHelperV2 {
     debugPrint('[DB_V2] Import successful. Database has been restored from backup.');
   }
 
+  // MODIFIED: deleteAllData now also uses the platform-aware path getter
   Future<void> deleteAllData() async {
     debugPrint('[DB_V2] ⚠️ WARNING: deleteAllData() called!');
     debugPrint('[DB_V2] Stack trace: ${StackTrace.current}');
 
-    final path = await getDatabasesPath();
-    final dbPath = '$path/$_dbName';
+    final dbPath = await _getDatabasePath(); // <-- Uses the corrected path
 
     if (_database?.isOpen == true) {
       await _database!.close();

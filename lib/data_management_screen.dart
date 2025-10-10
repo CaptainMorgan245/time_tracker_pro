@@ -5,7 +5,8 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:file_picker/file_picker.dart'; // Still using this for getDirectoryPath()
+import 'package:file_picker/file_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:time_tracker_pro/database_helper.dart';
 
 class DataManagementScreen extends StatefulWidget {
@@ -20,116 +21,102 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
   bool _isImporting = false;
   bool _isClearing = false;
 
-  // == FINAL, CORRECTED EXPORT FUNCTION USING A NEW STRATEGY ==
+  bool get _isMobilePlatform => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
   Future<void> _exportData() async {
+    if (!_isMobilePlatform) return;
     if (_isExporting) return;
     setState(() => _isExporting = true);
 
+    final messenger = ScaffoldMessenger.of(context);
+
     try {
-      // 1. GET DATA FROM DATABASE (This is working perfectly)
       final dbHelper = DatabaseHelperV2.instance;
       final jsonString = await dbHelper.exportDatabaseToJson();
 
-      // Simple check to ensure we have data
       if (jsonString.isEmpty || jsonString.length < 100) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
+        messenger.showSnackBar(
+          const SnackBar(
               content: Text('Database is empty. Nothing to export.'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
+              backgroundColor: Colors.orange),
+        );
         setState(() => _isExporting = false);
         return;
       }
 
-      // 2. NEW STRATEGY: ASK USER TO SELECT A DIRECTORY
-      // The FilePicker.platform.saveFile() method is buggy and causes the crash.
-      // We will use getDirectoryPath() instead, which is more stable.
-      String? selectedDirectory = await FilePicker.platform.getDirectoryPath(
-        dialogTitle: 'Please select a folder to save your backup:',
-      );
-
-      // If the user cancels the directory picker
-      if (selectedDirectory == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Export cancelled: No folder was selected.')),
-          );
-        }
-        setState(() => _isExporting = false);
-        return;
-      }
-
-      // 3. MANUALLY CREATE THE FILE PATH AND WRITE THE FILE
       final timestamp = DateFormat('yyyy-MM-dd_HH-mm-ss').format(DateTime.now());
       final fileName = 'time_tracker_pro_backup_$timestamp.json';
-      // Combine the selected directory path and the new file name
-      final filePath = '$selectedDirectory/$fileName';
 
+      // --- CHANGE: Save to Documents folder instead ---
+      const exportPath = '/storage/emulated/0/Documents';
+      final exportDir = Directory(exportPath);
+
+      if (!await exportDir.exists()) {
+        await exportDir.create(recursive: true);
+      }
+
+      final filePath = '${exportDir.path}/$fileName';
       final file = File(filePath);
-      // Use writeAsString, as the crash was not with this, but with the plugin's native code.
       await file.writeAsString(jsonString, encoding: utf8);
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ Backup saved successfully in your selected folder!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
+      messenger.showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 8),
+          // --- CHANGE: Update success message ---
+          content: Text('✅ Backup saved to Documents/$fileName'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
-          content: Text('❌ Export failed: $e'),
-          backgroundColor: Colors.red,
-        ),
+            content: Text('❌ Export failed: $e'), backgroundColor: Colors.red),
       );
     } finally {
       if (mounted) setState(() => _isExporting = false);
     }
   }
-  // == END FINAL, CORRECTED EXPORT FUNCTION ==
-
 
   Future<void> _importData() async {
-    // This function remains the same and should work correctly.
+    if (!_isMobilePlatform) return;
     if (_isImporting) return;
 
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['json'],
-    );
+    setState(() => _isImporting = true);
+    final messenger = ScaffoldMessenger.of(context);
 
-    if (result == null) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Import cancelled.')));
-      return;
-    }
+    try {
+      // --- CHANGE: Ensure import starts in Documents ---
+      const importPath = '/storage/emulated/0/Documents';
 
-    final String path = result.files.single.path!;
-    final file = File(path);
-    final jsonString = await file.readAsString();
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        initialDirectory: importPath, // Explicitly point to Documents
+      );
 
-    if (jsonString.trim().isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('❌ Import Failed: The selected backup file is empty.'),
-            backgroundColor: Colors.red,
-          ),
-        );
+      if (result == null) {
+        messenger.showSnackBar(const SnackBar(content: Text('Import cancelled.')));
+        setState(() => _isImporting = false);
+        return;
       }
-      return;
-    }
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext context) {
-        return AlertDialog(
+      final path = result.files.single.path;
+      if (path == null || path.isEmpty) {
+        throw Exception("Selected file path is invalid.");
+      }
+
+      final file = File(path);
+      final jsonString = await file.readAsString();
+
+      if (jsonString.trim().isEmpty) {
+        throw Exception("The selected backup file is empty.");
+      }
+
+      final confirmed = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) => AlertDialog(
           title: const Text('⚠️ Overwrite All Data?'),
           content: const Text(
               'Restoring from this backup will completely ERASE and REPLACE all current data in the app. This action cannot be undone.\n\nAre you absolutely sure you want to continue?'),
@@ -143,32 +130,26 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
               onPressed: () => Navigator.of(context).pop(true),
             ),
           ],
-        );
-      },
-    );
+        ),
+      );
 
-    if (confirmed != true) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Import cancelled.')));
-      return;
-    }
-
-    setState(() => _isImporting = true);
-
-    try {
-      final dbHelper = DatabaseHelperV2.instance;
-      await dbHelper.importDatabaseFromJson(jsonString);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('✅ Import successful! All data has been restored.'),
-            backgroundColor: Colors.green,
-          ),
-        );
+      if (confirmed != true) {
+        messenger.showSnackBar(const SnackBar(content: Text('Import cancelled.')));
+        setState(() => _isImporting = false);
+        return;
       }
+
+      await DatabaseHelperV2.instance.importDatabaseFromJson(jsonString);
+
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('✅ Import successful! All data has been restored.'),
+          backgroundColor: Colors.green,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text('❌ Import Failed: $e. Your original data has been preserved.'),
           backgroundColor: Colors.red,
@@ -180,7 +161,8 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
   }
 
   Future<void> _clearAllData() async {
-    // This function remains the same
+    // This function does not need changes
+    if (!_isMobilePlatform) return;
     if (_isClearing) return;
 
     final confirmed = await showDialog<bool>(
@@ -204,7 +186,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
     );
 
     if (confirmed != true) {
-      if(mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Operation cancelled.')));
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Operation cancelled.')));
       return;
     }
 
@@ -232,7 +214,6 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // This part is unchanged.
     return Scaffold(
       appBar: AppBar(
         title: const Text('Data Management'),
@@ -245,20 +226,21 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
           children: [
             _buildSectionHeader(context, 'Database Backup & Restore'),
             const SizedBox(height: 8),
-            _buildInfoCard('Use the options below to save a backup (Export) or restore from a backup file (Import).'),
+            // --- CHANGE: Update info card text ---
+            _buildInfoCard('Use the options below to save a backup (Export) or restore from a backup file (Import). Backups are saved in your device\'s "Documents" folder.'),
             const SizedBox(height: 24),
             _buildActionButton(
               context: context,
               icon: Icons.file_upload_outlined,
               label: _isExporting ? 'Saving...' : 'Export Full Backup',
-              onPressed: _isExporting ? () {} : _exportData,
+              onPressed: _isMobilePlatform && !_isExporting ? _exportData : null,
             ),
             const SizedBox(height: 16),
             _buildActionButton(
               context: context,
               icon: Icons.file_download_outlined,
               label: _isImporting ? 'Importing...' : 'Import From Backup',
-              onPressed: _isImporting ? () {} : _importData,
+              onPressed: _isMobilePlatform && !_isImporting ? _importData : null,
             ),
             const Divider(height: 48),
             _buildSectionHeader(context, 'Danger Zone'),
@@ -269,7 +251,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
               context: context,
               icon: Icons.delete_forever_outlined,
               label: _isClearing ? 'Clearing...' : 'Clear All Data',
-              onPressed: _isClearing ? () {} : _clearAllData,
+              onPressed: _isMobilePlatform && !_isClearing ? _clearAllData : null,
               color: Colors.red.shade700,
             ),
           ],
@@ -279,6 +261,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
   }
 
   Widget _buildSectionHeader(BuildContext context, String title) {
+    // This widget does not need changes
     return Text(
       title.toUpperCase(),
       style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -290,6 +273,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
   }
 
   Widget _buildInfoCard(String text) {
+    // This widget does not need changes
     return Card(
       elevation: 0,
       color: Colors.blueGrey.withOpacity(0.1),
@@ -308,9 +292,10 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
     required BuildContext context,
     required IconData icon,
     required String label,
-    required VoidCallback onPressed,
+    required VoidCallback? onPressed,
     Color? color,
   }) {
+    // This widget does not need changes
     final theme = Theme.of(context);
     final buttonColor = color ?? theme.colorScheme.primary;
     final onButtonColor = theme.colorScheme.onPrimary;
