@@ -1,6 +1,7 @@
 // lib/database_helper.dart
 
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:time_tracker_pro/models.dart';
@@ -14,6 +15,7 @@ class DatabaseHelperV2 {
   static final DatabaseHelperV2 instance = DatabaseHelperV2._privateConstructor();
 
   static Database? _database;
+  static Completer<Database>? _dbCompleter;
   static const String _dbName = 'time_tracker_pro.db';
   static const int _dbVersion = 1;
 
@@ -28,45 +30,57 @@ class DatabaseHelperV2 {
   }
 
   Future<Database> get database async {
-    if (_database != null) return _database!;
-    _database = await _initDatabase();
-    return _database!;
+    if (_database != null && _database!.isOpen) {
+      return _database!;
+    }
+
+    if (_dbCompleter != null) {
+      return _dbCompleter!.future;
+    }
+
+    _dbCompleter = Completer<Database>();
+
+    try {
+      _database = await _initDatabase();
+      _dbCompleter!.complete(_database);
+    } catch (e) {
+      _dbCompleter!.completeError(e);
+      _dbCompleter = null;
+    }
+
+    return _dbCompleter!.future;
   }
 
   Future<Database> _initDatabase() async {
     debugPrint("[DB_V2] Initializing database...");
+    final path = await getDatabasesPath();
+    final dbPath = '$path/$_dbName';
+    debugPrint("[DB_V2] Database path: $dbPath");
+
     return await openDatabase(
-      _dbName,
+      dbPath,
       version: _dbVersion,
       onCreate: _onCreate,
       onUpgrade: (db, oldVersion, newVersion) async {
         debugPrint('[DB_V2] Upgrading database from version $oldVersion to $newVersion...');
-        // Future schema migrations (ALTER TABLE, etc.) go here.
       },
       onDowngrade: onDatabaseDowngradeDelete,
     );
   }
 
-  /// This method is called ONLY when the database file does not exist.
   Future<void> _onCreate(Database db, int version) async {
     debugPrint('[DB_V2] _onCreate called. Creating all tables for a fresh install...');
 
     await db.transaction((txn) async {
-      // 1. Create the settings table
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS settings (
             id INTEGER PRIMARY KEY, employee_number_prefix TEXT, next_employee_number INTEGER, vehicle_designations TEXT, vendors TEXT, company_hourly_rate REAL, burden_rate REAL, time_rounding_interval INTEGER, auto_backup_reminder_frequency INTEGER, app_runs_since_backup INTEGER, measurement_system TEXT, default_report_months INTEGER
           )
         ''');
-
-      // 2. *** THE CRITICAL FIX ***
-      //    Immediately insert the default settings row to prevent the "empty database" bug.
       await txn.execute('''
-          INSERT INTO settings(id, next_employee_number, company_hourly_rate, burden_rate, time_rounding_interval, auto_backup_reminder_frequency, app_runs_since_backup, default_report_months) 
+          INSERT INTO settings(id, next_employee_number, company_hourly_rate, burden_rate, time_rounding_interval, auto_backup_reminder_frequency, app_runs_since_backup, default_report_months)
           VALUES(1, 1, 0.0, 0.0, 15, 10, 0, 3)
         ''');
-
-      // 3. Create all other tables
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS clients (
             id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, is_active INTEGER NOT NULL DEFAULT 1, contact_person TEXT, phone_number TEXT
@@ -106,9 +120,6 @@ class DatabaseHelperV2 {
     debugPrint('[DB_V2] All tables created and default settings inserted successfully.');
   }
 
-  // --- V2 PUBLIC METHODS ---
-  // (The rest of the file is correct and unchanged)
-
   Future<List<AllRecordViewModel>> getAllRecordsV2() async {
     final db = await database;
     final List<AllRecordViewModel> allRecords = [];
@@ -141,36 +152,43 @@ class DatabaseHelperV2 {
     allRecords.sort((a, b) => b.id.compareTo(a.id));
     return allRecords;
   }
+
   Future<List<ExpenseCategory>> getExpenseCategoriesV2() async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query('expense_categories', orderBy: 'name');
     return List.generate(maps.length, (i) => ExpenseCategory.fromMap(maps[i]));
   }
+
   Future<List<JobMaterials>> getRecentMaterialsV2() async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query('materials', where: 'is_deleted = 0', orderBy: 'purchase_date DESC', limit: 100,);
     return List.generate(maps.length, (i) => JobMaterials.fromMap(maps[i]));
   }
+
   Future<void> addMaterialV2(JobMaterials expense) async {
     final db = await database;
     await db.insert('materials', expense.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
     _notifyListeners();
   }
+
   Future<void> updateMaterialV2(JobMaterials expense) async {
     final db = await database;
     await db.update('materials', expense.toMap(), where: 'id = ?', whereArgs: [expense.id]);
     _notifyListeners();
   }
+
   Future<void> addExpenseCategoryV2(ExpenseCategory category) async {
     final db = await database;
     await db.insert('expense_categories', category.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
     _notifyListeners();
   }
+
   Future<void> updateExpenseCategoryV2(ExpenseCategory category) async {
     final db = await database;
     await db.update('expense_categories', category.toMap(), where: 'id = ?', whereArgs: [category.id]);
     _notifyListeners();
   }
+
   Future<void> deleteRecordV2({required int id, required String fromTable}) async {
     final db = await database;
     if (fromTable == 'time_entries' || fromTable == 'materials') {
@@ -179,5 +197,110 @@ class DatabaseHelperV2 {
       await db.delete(fromTable, where: 'id = ?', whereArgs: [id]);
     }
     _notifyListeners();
+  }
+
+  // ============================================================================
+  // |                      EXPORT/IMPORT METHODS                             |
+  // ============================================================================
+
+  Future<String> exportDatabaseToJson() async {
+    debugPrint('[DB_V2] ===== STARTING EXPORT =====');
+    final db = await database;
+    debugPrint('[DB_V2] Database obtained: ${db.path}');
+    debugPrint('[DB_V2] Database isOpen: ${db.isOpen}');
+
+    final Map<String, List<Map<String, dynamic>>> allTables = {};
+
+    const List<String> tableNames = [
+      'settings',
+      'clients',
+      'projects',
+      'roles',
+      'employees',
+      'time_entries',
+      'materials',
+      'expense_categories'
+    ];
+
+    for (String tableName in tableNames) {
+      final List<Map<String, dynamic>> tableRows = await db.query(tableName);
+      debugPrint('[DB_V2] Table "$tableName" has ${tableRows.length} rows');
+      allTables[tableName] = tableRows;
+    }
+
+    final Map<String, dynamic> exportData = {
+      'export_format_version': 1,
+      'export_timestamp_utc': DateTime.now().toUtc().toIso8601String(),
+      'database_version': _dbVersion,
+      'tables': allTables,
+    };
+
+    final jsonString = const JsonEncoder.withIndent('  ').convert(exportData);
+    debugPrint('[DB_V2] Export JSON length: ${jsonString.length} characters');
+    debugPrint('[DB_V2] ===== EXPORT COMPLETE =====');
+    return jsonString;
+  }
+
+  Future<void> importDatabaseFromJson(String jsonString) async {
+    final db = await database;
+
+    const List<String> deletionOrder = [
+      'time_entries',
+      'materials',
+      'projects',
+      'employees',
+      'clients',
+      'roles',
+      'expense_categories',
+      'settings'
+    ];
+
+    final List<String> insertionOrder = deletionOrder.reversed.toList();
+
+    final Map<String, dynamic> importData = json.decode(jsonString);
+    final Map<String, dynamic> tables = importData['tables'];
+
+    await db.transaction((txn) async {
+      for (String tableName in deletionOrder) {
+        await txn.delete(tableName);
+      }
+
+      for (String tableName in insertionOrder) {
+        if (tables.containsKey(tableName)) {
+          List<dynamic> rows = tables[tableName];
+          for (var row in rows) {
+            row.removeWhere((key, value) => value == null);
+            await txn.insert(tableName, row as Map<String, dynamic>);
+          }
+        }
+      }
+    });
+
+    notifyDatabaseChanged();
+    debugPrint('[DB_V2] Import successful. Database has been restored from backup.');
+  }
+
+  Future<void> deleteAllData() async {
+    debugPrint('[DB_V2] ⚠️ WARNING: deleteAllData() called!');
+    debugPrint('[DB_V2] Stack trace: ${StackTrace.current}');
+
+    final path = await getDatabasesPath();
+    final dbPath = '$path/$_dbName';
+
+    if (_database?.isOpen == true) {
+      await _database!.close();
+      _database = null;
+      _dbCompleter = null;
+    }
+
+    try {
+      await deleteDatabase(dbPath);
+      debugPrint('[DB_V2] Database file at $dbPath deleted successfully.');
+    } catch (e) {
+      debugPrint('[DB_V2] Error deleting database file: $e');
+    }
+
+    notifyDatabaseChanged();
+    debugPrint('[DB_V2] Database has been reset. It will re-initialize on next use.');
   }
 }

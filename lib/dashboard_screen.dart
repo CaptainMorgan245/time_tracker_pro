@@ -16,6 +16,7 @@ import 'package:time_tracker_pro/analytics_screen.dart';
 import 'package:time_tracker_pro/cost_entry_screen.dart';
 import 'package:time_tracker_pro/app_bottom_nav_bar.dart';
 import 'package:time_tracker_pro/database_helper.dart';
+import 'package:time_tracker_pro/data_management_screen.dart';// <-- ADD THIS LINE// START REUSABLE DRAWER WIDGET
 
 
 // START REUSABLE DRAWER WIDGET
@@ -50,6 +51,20 @@ class AppDrawer extends StatelessWidget {
               );
             },
           ),
+          // START: ADDED TILE
+          ListTile(
+            leading: const Icon(Icons.storage_outlined),
+            title: const Text('Data Management'),
+            onTap: () {
+              Navigator.of(context).pop(); // Close the drawer first
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const DataManagementScreen(),
+                ),
+              );
+            },
+          ),
+          // END: ADDED TILE
           ListTile(
             leading: const Icon(Icons.person_pin_circle),
             title: const Text('Clients/Projects'),
@@ -86,6 +101,7 @@ class AppDrawer extends StatelessWidget {
   }
 }
 // END REUSABLE DRAWER WIDGET
+
 
 class DashboardScreen extends StatefulWidget {
   final int initialIndex;
