@@ -7,7 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart'; // <-- NEW: Import for finding Documents directory
 import 'package:sqflite/sqflite.dart';
 import 'package:time_tracker_pro/models.dart';
-import 'package:time_tracker_pro/models/project_summary.dart';
+//import 'package:time_tracker_pro/models/project_summary.dart';
 
 // ============================================================================
 // |                  FINAL, STABLE V2 DATABASE HELPER                      |
