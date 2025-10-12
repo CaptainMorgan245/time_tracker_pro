@@ -20,7 +20,9 @@ class DatabaseHelperV2 {
   static Database? _database;
   static Completer<Database>? _dbCompleter;
   static const String _dbName = 'time_tracker_pro.db';
-  static const int _dbVersion = 1;
+  // START MODIFICATION 1: Bump version from 1 to 2
+  static const int _dbVersion = 2;
+  // END MODIFICATION 1
 
   final ValueNotifier<int> databaseNotifier = ValueNotifier(0);
 
@@ -85,9 +87,15 @@ class DatabaseHelperV2 {
       dbPath,
       version: _dbVersion,
       onCreate: _onCreate,
+      // START MODIFICATION 2: Add upgrade logic
       onUpgrade: (db, oldVersion, newVersion) async {
         debugPrint('[DB_V2] Upgrading database from version $oldVersion to $newVersion...');
+        if (oldVersion < 2) {
+          await db.execute("ALTER TABLE projects ADD COLUMN fixedPrice REAL");
+          debugPrint('[DB_V2] Added fixedPrice column to projects table.');
+        }
       },
+      // END MODIFICATION 2
       onDowngrade: onDatabaseDowngradeDelete,
     );
   }
@@ -271,60 +279,65 @@ class DatabaseHelperV2 {
     const List<String> deletionOrder = [
       'time_entries',
       'materials',
-      'projects',
       'employees',
+      'projects',
       'clients',
       'roles',
       'expense_categories',
       'settings'
     ];
 
-    final List<String> insertionOrder = deletionOrder.reversed.toList();
-
-    final Map<String, dynamic> importData = json.decode(jsonString);
-    final Map<String, dynamic> tables = importData['tables'];
-
     await db.transaction((txn) async {
       for (String tableName in deletionOrder) {
         await txn.delete(tableName);
       }
 
-      for (String tableName in insertionOrder) {
-        if (tables.containsKey(tableName)) {
-          List<dynamic> rows = tables[tableName];
-          for (var row in rows) {
-            row.removeWhere((key, value) => value == null);
-            await txn.insert(tableName, row as Map<String, dynamic>);
-          }
+      final Map<String, dynamic> jsonData = jsonDecode(jsonString);
+      final Map<String, dynamic> tables = jsonData['tables'];
+
+      for (String tableName in tables.keys) {
+        final List<dynamic> rows = tables[tableName];
+        for (var row in rows) {
+          await txn.insert(
+            tableName,
+            row as Map<String, dynamic>,
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
         }
       }
     });
 
-    notifyDatabaseChanged();
-    debugPrint('[DB_V2] Import successful. Database has been restored from backup.');
+    _notifyListeners();
+    debugPrint('[DB_V2] ===== IMPORT COMPLETE =====');
   }
 
-  // MODIFIED: deleteAllData now also uses the platform-aware path getter
+  // START: ADDED MISSING FUNCTION
   Future<void> deleteAllData() async {
-    debugPrint('[DB_V2] ⚠️ WARNING: deleteAllData() called!');
-    debugPrint('[DB_V2] Stack trace: ${StackTrace.current}');
+    debugPrint('[DB_V2] ===== DELETING ALL DATA =====');
+    final db = await database;
 
-    final dbPath = await _getDatabasePath(); // <-- Uses the corrected path
+    const List<String> tableNames = [
+      'time_entries',
+      'materials',
+      'employees',
+      'projects',
+      'clients',
+      'roles',
+      'expense_categories',
+      'settings'
+    ];
 
-    if (_database?.isOpen == true) {
-      await _database!.close();
-      _database = null;
-      _dbCompleter = null;
-    }
+    await db.transaction((txn) async {
+      for (String tableName in tableNames) {
+        await txn.delete(tableName);
+      }
+    });
 
-    try {
-      await deleteDatabase(dbPath);
-      debugPrint('[DB_V2] Database file at $dbPath deleted successfully.');
-    } catch (e) {
-      debugPrint('[DB_V2] Error deleting database file: $e');
-    }
+    // After deleting, re-create the settings with default values
+    await _onCreate(db, _dbVersion);
 
-    notifyDatabaseChanged();
-    debugPrint('[DB_V2] Database has been reset. It will re-initialize on next use.');
+    _notifyListeners();
+    debugPrint('[DB_V2] ===== ALL DATA DELETED =====');
   }
+// END: ADDED MISSING FUNCTION
 }
