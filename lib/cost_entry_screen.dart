@@ -89,7 +89,9 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
 
       final internalProjectExists = _allProjects.any((p) => p.id == 0);
       if (!internalProjectExists) {
-        _allProjects.insert(0, Project(id: 0, projectName: 'Internal Company Project', clientId: 0, isInternal: true));
+        // START FINAL FIX: Add the required 'pricingModel' parameter
+        _allProjects.insert(0, Project(id: 0, projectName: 'Internal Company Project', clientId: 0, isInternal: true, pricingModel: 'hourly'));
+        // END FINAL FIX
       }
 
       final formState = _formStateKey.currentState;

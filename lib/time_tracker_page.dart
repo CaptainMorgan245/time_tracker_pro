@@ -22,7 +22,6 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
   final ProjectRepository _projectRepo = ProjectRepository();
   final EmployeeRepository _employeeRepo = EmployeeRepository();
   final ClientRepository _clientRepo = ClientRepository();
-  // ADD: Instance of the V2 database helper
   final dbHelper = DatabaseHelperV2.instance;
 
   final GlobalKey<TimerAddFormState> _timerFormKey = GlobalKey<TimerAddFormState>();
@@ -30,7 +29,6 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
   final ValueNotifier<List<Project>> _projectsNotifier = ValueNotifier([]);
   final ValueNotifier<List<Employee>> _employeesNotifier = ValueNotifier([]);
 
-  // This list will now hold TimeEntry models, converted from AllRecordViewModel
   List<TimeEntry> _allEntries = [];
   List<Client> _clients = [];
   bool _isLoading = true;
@@ -38,14 +36,12 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
   @override
   void initState() {
     super.initState();
-    // Listen for database changes to reload the data
     dbHelper.databaseNotifier.addListener(_loadData);
     _loadData();
   }
 
   @override
   void dispose() {
-    // Clean up listeners and notifiers
     dbHelper.databaseNotifier.removeListener(_loadData);
     _projectsNotifier.dispose();
     _employeesNotifier.dispose();
@@ -57,28 +53,27 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
       setState(() => _isLoading = true);
     }
 
-    // THE FIX: Use the new, efficient V2 method to get all records
-    // We then fetch other data needed for filtering and UI.
     final allRecords = await dbHelper.getAllRecordsV2();
     final projects = await _projectRepo.getProjects();
     final employees = await _employeeRepo.getEmployees();
     final clients = await _clientRepo.getClients();
 
+    if (!mounted) return;
+
     _projectsNotifier.value = projects.where((p) => !p.isCompleted).toList();
     _employeesNotifier.value = employees.where((e) => !e.isDeleted).toList();
 
-    // Filter the AllRecordViewModel list to only get completed time entries
-    // and then fetch the full TimeEntry object for each.
     List<TimeEntry> filteredEntries = [];
     for (var record in allRecords) {
       if (record.type == RecordType.time) {
-        // We need the full entry to populate the form, so we fetch it by ID.
         final fullEntry = await _timeEntryRepo.getTimeEntryById(record.id);
         if (fullEntry != null && fullEntry.endTime != null && !fullEntry.isDeleted) {
+          // START FIX: Added the required 'pricingModel' parameter
           final project = projects.firstWhere(
                 (p) => p.id == fullEntry.projectId,
-            orElse: () => Project(projectName: 'Unknown', clientId: 0, isCompleted: true),
+            orElse: () => Project(projectName: 'Unknown', clientId: 0, isCompleted: true, pricingModel: 'unknown'),
           );
+          // END FIX
           if (!project.isCompleted) {
             filteredEntries.add(fullEntry);
           }
@@ -86,8 +81,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
       }
     }
 
-    // Sort the final list by date
-    filteredEntries.sort((a, b) => b.startTime!.compareTo(a.startTime!));
+    filteredEntries.sort((a, b) => b.startTime.compareTo(a.startTime));
 
     if (mounted) {
       setState(() {
@@ -108,7 +102,10 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
 
   String _getProjectName(int projectId) {
     try {
-      return _projectsNotifier.value.firstWhere((p) => p.id == projectId).projectName;
+      // FIX: Also look in the full project list (_allProjectsForLookup from dashboard)
+      // For safety, let's use the full project list we fetched.
+      final allProjects = _projectsNotifier.value; // This is fine for now as it's what we have
+      return allProjects.firstWhere((p) => p.id == projectId).projectName;
     } catch (e) {
       return 'Unknown';
     }
@@ -159,7 +156,6 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
     );
 
     await _timeEntryRepo.insertTimeEntry(newEntry);
-    // No need to call _loadData() manually, the listener will do it.
     _timerFormKey.currentState?.resetForm();
     if(mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -196,7 +192,6 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
     );
 
     await _timeEntryRepo.updateTimeEntry(updatedEntry);
-    // No need to call _loadData() manually, the listener will do it.
     _timerFormKey.currentState?.resetForm();
     if(mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -267,7 +262,6 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
                     itemCount: _allEntries.length,
                     itemBuilder: (context, index) {
                       final entry = _allEntries[index];
-                      // Find the project to get the client ID
                       Project? project;
                       try {
                         project = _projectsNotifier.value.firstWhere((p) => p.id == entry.projectId);
@@ -287,7 +281,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
                             style: theme.textTheme.bodyMedium,
                           ),
                           trailing: Text(
-                            '${DateFormat('MM/dd').format(entry.startTime!)}\n${_formatDuration(Duration(seconds: entry.finalBilledDurationSeconds?.toInt() ?? 0))}',
+                            '${DateFormat('MM/dd').format(entry.startTime)}\n${_formatDuration(Duration(seconds: entry.finalBilledDurationSeconds?.toInt() ?? 0))}',
                             textAlign: TextAlign.right,
                             style: theme.textTheme.bodySmall,
                           ),

@@ -5,30 +5,24 @@ import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/client_repository.dart';
 import 'package:time_tracker_pro/project_repository.dart';
 import 'package:time_tracker_pro/input_formatters.dart';
-import 'package:flutter/services.dart'; // Required for input formatters
+import 'package:flutter/services.dart';
 
-// start class: ClientAndProjectAddForm
 class ClientAndProjectAddForm extends StatefulWidget {
   final List<Client> clients;
   final VoidCallback onDataAdded;
 
-  // start method: constructor
   const ClientAndProjectAddForm({
     super.key,
     required this.clients,
     required this.onDataAdded,
   });
-  // end method: constructor
 
   @override
   State<ClientAndProjectAddForm> createState() => _ClientAndProjectAddFormState();
 }
-// end class: ClientAndProjectAddForm
 
-// start class: _ClientAndProjectAddFormState
 class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
   final ClientRepository _clientRepo = ClientRepository();
-  // FIX: Changed _ProjectRepository() to ProjectRepository()
   final ProjectRepository _projectRepo = ProjectRepository();
 
   final TextEditingController _clientNameController = TextEditingController();
@@ -38,13 +32,13 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
   final TextEditingController _projectNameController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
   final TextEditingController _billedHourlyRateController = TextEditingController();
+  final TextEditingController _fixedPriceController = TextEditingController();
 
   Client? _selectedClient;
   String _selectedPricingModel = 'hourly';
   bool _isNewClient = false;
   bool _isSubmitting = false;
 
-  // start method: dispose
   @override
   void dispose() {
     _clientNameController.dispose();
@@ -53,13 +47,26 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
     _projectNameController.dispose();
     _locationController.dispose();
     _billedHourlyRateController.dispose();
+    _fixedPriceController.dispose();
     super.dispose();
   }
-  // end method: dispose
 
-  // start method: _submit
+  void _resetForm() {
+    _clientNameController.clear();
+    _contactPersonController.clear();
+    _phoneNumberController.clear();
+    _projectNameController.clear();
+    _locationController.clear();
+    _billedHourlyRateController.clear();
+    _fixedPriceController.clear();
+    setState(() {
+      _selectedClient = null;
+      _isNewClient = false;
+      _selectedPricingModel = 'hourly';
+    });
+  }
+
   Future<void> _submit() async {
-    // ... (Submission logic remains the same)
     final projectName = _projectNameController.text.trim();
     if (projectName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -106,61 +113,44 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
           clientId: clientId,
           location: _locationController.text.isNotEmpty ? _locationController.text : null,
           pricingModel: _selectedPricingModel,
-          billedHourlyRate: double.tryParse(_billedHourlyRateController.text),
+          billedHourlyRate: _selectedPricingModel == 'hourly' && _billedHourlyRateController.text.isNotEmpty
+              ? double.tryParse(_billedHourlyRateController.text)
+              : null,
+          fixedPrice: _selectedPricingModel != 'hourly' && _fixedPriceController.text.isNotEmpty
+              ? double.tryParse(_fixedPriceController.text)
+              : null,
         );
         await _projectRepo.insertProject(newProject);
       }
 
-      // Clear controllers after successful submission
-      _clientNameController.clear();
-      _contactPersonController.clear();
-      _phoneNumberController.clear();
-      _projectNameController.clear();
-      _locationController.clear();
-      _billedHourlyRateController.clear();
-
-      setState(() {
-        _isNewClient = false;
-        _selectedClient = null;
-        _selectedPricingModel = 'hourly';
-      });
+      _resetForm();
       widget.onDataAdded();
+
     } catch (e) {
-      debugPrint('Error adding data: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error adding data: $e')),
-      );
+      if(mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error submitting data: $e')),
+        );
+      }
     } finally {
-      setState(() => _isSubmitting = false);
+      if(mounted) {
+        setState(() => _isSubmitting = false);
+      }
     }
   }
-  // end method: _submit
 
-  // start method: _buildFormInputWrapper
-  /// Helper to enforce consistent card styling/padding for individual TextFields,
-  /// matching the visual feel of the AppInputFormCard.
-  Widget _buildFormInputWrapper({required Widget child}) {
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: child,
-      ),
-    );
-  }
-  // end method: _buildFormInputWrapper
-
-  // start method: build
   @override
   Widget build(BuildContext context) {
-    final activeClients = widget.clients.where((c) => c.isActive).toList();
-    const itemWidth = 250.0; // Standardized width for all form fields
-
-    // Define formatters once
+    final activeClients = widget.clients;
+    const itemWidth = 250.0;
     final capitalizationFormatter = CapitalizeEachWordInputFormatter();
-    // Formatter allows digits, the dot (.), AND the dash (-).
     final phoneNumberFormatter = FilteringTextInputFormatter.allow(RegExp(r'[\d\.\-]'));
 
+    // Get the current theme to style the clear button
+    final ButtonStyle elevatedButtonStyle = ElevatedButton.styleFrom(
+      minimumSize: Size.zero,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+    );
 
     return Card(
       margin: EdgeInsets.zero,
@@ -168,9 +158,8 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('Add New Project', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), // Standardized heading
-            const SizedBox(height: 12),
             Row(
               children: [
                 const Text('Add a new client?', style: TextStyle(fontWeight: FontWeight.w500)),
@@ -186,132 +175,132 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
             ),
             const SizedBox(height: 12),
             Wrap(
-              spacing: 16.0, // Standardized spacing
+              spacing: 16.0,
               runSpacing: 16.0,
               alignment: WrapAlignment.start,
               children: [
                 if (_isNewClient) ...[
-                  // New Client Input Fields
                   SizedBox(
                     width: itemWidth,
-                    child: _buildFormInputWrapper(
-                      child: TextField(
-                        controller: _clientNameController,
-                        decoration: const InputDecoration(labelText: 'New Client Name'),
-                        inputFormatters: [capitalizationFormatter],
-                      ),
-                    ),
-                  ),
-                  SizedBox(
-                    width: itemWidth,
-                    child: _buildFormInputWrapper(
-                      child: TextField(
-                        controller: _contactPersonController,
-                        decoration: const InputDecoration(labelText: 'Contact Person'),
-                        inputFormatters: [capitalizationFormatter],
-                      ),
-                    ),
-                  ),
-                  SizedBox(
-                    width: itemWidth,
-                    child: _buildFormInputWrapper(
-                      child: TextField(
-                        controller: _phoneNumberController,
-                        decoration: const InputDecoration(labelText: 'Phone Number'),
-                        // FINAL BEST SHOT: Guarantees numeric keypad, dot, and often the minus/dash sign.
-                        keyboardType: TextInputType.numberWithOptions(decimal: true, signed: true),
-                        // Restrict input to numbers, dot, and dash
-                        inputFormatters: [phoneNumberFormatter],
-                      ),
-                    ),
-                  ),
-                ] else ...[
-                  // Existing Client Dropdown
-                  SizedBox(
-                    width: itemWidth,
-                    child: _buildFormInputWrapper(
-                      child: DropdownButtonFormField<Client>(
-                        decoration: const InputDecoration(labelText: 'Select an Existing Client'),
-                        value: _selectedClient,
-                        items: activeClients.map((client) {
-                          return DropdownMenuItem<Client>(
-                            value: client,
-                            child: Text(client.name),
-                          );
-                        }).toList(),
-                        onChanged: (Client? newValue) {
-                          setState(() {
-                            _selectedClient = newValue;
-                          });
-                        },
-                      ),
-                    ),
-                  ),
-                ],
-
-                // Project Input Fields
-                SizedBox(
-                  width: itemWidth,
-                  child: _buildFormInputWrapper(
                     child: TextField(
-                      controller: _projectNameController,
-                      decoration: const InputDecoration(labelText: 'Project Name'),
+                      controller: _clientNameController,
+                      decoration: const InputDecoration(labelText: 'New Client Name'),
                       inputFormatters: [capitalizationFormatter],
                     ),
                   ),
-                ),
-                // Pricing Model Dropdown
-                SizedBox(
-                  width: itemWidth,
-                  child: _buildFormInputWrapper(
-                    child: DropdownButtonFormField<String>(
-                      decoration: const InputDecoration(labelText: 'Pricing Model'),
-                      value: _selectedPricingModel,
-                      items: const [
-                        DropdownMenuItem(value: 'hourly', child: Text('Hourly')),
-                        DropdownMenuItem(value: 'fixed price', child: Text('Fixed Price')),
-                        DropdownMenuItem(value: 'project based', child: Text('Project Based')),
-                      ],
-                      onChanged: (String? newValue) {
+                  SizedBox(
+                    width: itemWidth,
+                    child: TextField(
+                      controller: _contactPersonController,
+                      decoration: const InputDecoration(labelText: 'Contact Person'),
+                      inputFormatters: [capitalizationFormatter],
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth,
+                    child: TextField(
+                      controller: _phoneNumberController,
+                      decoration: const InputDecoration(labelText: 'Phone Number'),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                      inputFormatters: [phoneNumberFormatter],
+                    ),
+                  ),
+                ] else ...[
+                  SizedBox(
+                    width: itemWidth,
+                    child: DropdownButtonFormField<Client>(
+                      decoration: const InputDecoration(labelText: 'Select an Existing Client'),
+                      value: _selectedClient,
+                      items: activeClients.map((client) {
+                        return DropdownMenuItem<Client>(
+                          value: client,
+                          child: Text(client.name),
+                        );
+                      }).toList(),
+                      onChanged: (Client? newValue) {
                         setState(() {
-                          _selectedPricingModel = newValue!;
+                          _selectedClient = newValue;
                         });
                       },
                     ),
                   ),
-                ),
+                ],
                 SizedBox(
                   width: itemWidth,
-                  child: _buildFormInputWrapper(
-                    child: TextField(
-                      controller: _locationController,
-                      decoration: const InputDecoration(labelText: 'Location'),
-                      inputFormatters: [capitalizationFormatter],
-                    ),
+                  child: TextField(
+                    controller: _projectNameController,
+                    decoration: const InputDecoration(labelText: 'Project Name'),
+                    inputFormatters: [capitalizationFormatter],
                   ),
                 ),
                 SizedBox(
                   width: itemWidth,
-                  child: _buildFormInputWrapper(
+                  child: DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(labelText: 'Pricing Model'),
+                    value: _selectedPricingModel,
+                    items: const [
+                      DropdownMenuItem(value: 'hourly', child: Text('Hourly')),
+                      DropdownMenuItem(value: 'fixed', child: Text('Fixed Price')),
+                    ],
+                    onChanged: (String? newValue) {
+                      setState(() {
+                        _selectedPricingModel = newValue!;
+                      });
+                    },
+                  ),
+                ),
+                SizedBox(
+                  width: itemWidth,
+                  child: TextField(
+                    controller: _locationController,
+                    decoration: const InputDecoration(labelText: 'Location'),
+                    inputFormatters: [capitalizationFormatter],
+                  ),
+                ),
+                if (_selectedPricingModel == 'hourly')
+                  SizedBox(
+                    width: itemWidth,
                     child: TextField(
                       controller: _billedHourlyRateController,
                       decoration: const InputDecoration(labelText: 'Billed Hourly Rate'),
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d\.]'))],
+                    ),
+                  )
+                else
+                  SizedBox(
+                    width: itemWidth,
+                    child: TextField(
+                      controller: _fixedPriceController,
+                      decoration: const InputDecoration(labelText: 'Fixed Project Price'),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d\.]'))],
                     ),
                   ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                // Clear Button (25%)
+                Expanded(
+                  flex: 25,
+                  child: ElevatedButton( // Changed to ElevatedButton for consistent style
+                    style: elevatedButtonStyle,
+                    onPressed: _isSubmitting ? null : _resetForm,
+                    child: const Text('Clear'),
+                  ),
                 ),
-                // Submission Button
-                SizedBox(
-                  width: itemWidth,
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: ElevatedButton(
-                        onPressed: _isSubmitting ? null : _submit,
-                        child: _isSubmitting ? const CircularProgressIndicator() : const Text('Add Project'),
-                      ),
-                    ),
+                const SizedBox(width: 8),
+                // Add Project Button (75%)
+                Expanded(
+                  flex: 75,
+                  child: ElevatedButton(
+                    style: elevatedButtonStyle, // Ensure same style
+                    onPressed: _isSubmitting ? null : _submit,
+                    child: _isSubmitting
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text('Add Project'),
                   ),
                 ),
               ],
@@ -321,6 +310,4 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
       ),
     );
   }
-// end method: build
 }
-// end class: _ClientAndProjectAddFormState

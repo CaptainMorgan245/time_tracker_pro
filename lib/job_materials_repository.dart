@@ -79,13 +79,14 @@ class JobMaterialsRepository {
   // end method: getAllJobMaterials
 
   // start method: getCostSummaryByCategory
+  /*  <- Start of commented-out block
   Future<List<CostSummary>> getCostSummaryByCategory() async {
     final db = await _databaseHelper.database;
 
     final List<Map<String, dynamic>> maps = await db.rawQuery('''
-      SELECT 
-        expense_category AS categoryName, 
-        SUM(cost) AS totalCost, 
+      SELECT
+        expense_category AS categoryName,
+        SUM(cost) AS totalCost,
         COUNT(id) AS recordCount
       FROM $_tableName
       GROUP BY expense_category
@@ -102,6 +103,7 @@ class JobMaterialsRepository {
       );
     });
   }
+  */ // <- End of commented-out block. A multi-line comment uses /* to begin and */ to end. [2, 5]
   // end method: getCostSummaryByCategory
 
   // start method: deleteJobMaterial

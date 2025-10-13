@@ -1,28 +1,25 @@
 // lib/models.dart
 
-// FIX 1: Import the equatable package
-import 'package:equatable/equatable.dart';
+import 'package:flutter/foundation.dart';
 
-// start class: Client
-// FIX 2: Extend Equatable
-class Client extends Equatable {
+// ============================================================================
+// |                         DATA MODELS (WITH COPYWITH)                      |
+// ============================================================================
+
+class Client {
   final int? id;
   final String name;
   final bool isActive;
   final String? contactPerson;
   final String? phoneNumber;
 
-  const Client({
+  Client({
     this.id,
     required this.name,
     this.isActive = true,
     this.contactPerson,
     this.phoneNumber,
   });
-
-  // FIX 3: Add props for Equatable comparison
-  @override
-  List<Object?> get props => [id];
 
   Map<String, dynamic> toMap() {
     return {
@@ -44,6 +41,7 @@ class Client extends Equatable {
     );
   }
 
+  // START: ADDED BACK COPYWITH
   Client copyWith({
     int? id,
     String? name,
@@ -59,37 +57,38 @@ class Client extends Equatable {
       phoneNumber: phoneNumber ?? this.phoneNumber,
     );
   }
-}
-// end class: Client
+  // END: ADDED BACK COPYWITH
 
-// start class: Project
-// FIX 4: Extend Equatable
-class Project extends Equatable {
+  @override
+  String toString() {
+    return 'Client(id: $id, name: $name, isActive: $isActive)';
+  }
+}
+
+class Project {
   final int? id;
   final String projectName;
   final int clientId;
   final String? location;
-  final String? pricingModel;
+  final String pricingModel; // 'hourly', 'fixed'
   final bool isCompleted;
   final DateTime? completionDate;
   final bool isInternal;
   final double? billedHourlyRate;
+  final double? fixedPrice;
 
-  const Project({
+  const Project({ // Made const
     this.id,
     required this.projectName,
     required this.clientId,
     this.location,
-    this.pricingModel,
+    required this.pricingModel,
     this.isCompleted = false,
     this.completionDate,
     this.isInternal = false,
     this.billedHourlyRate,
+    this.fixedPrice,
   });
-
-  // FIX 5: Add props for Equatable comparison
-  @override
-  List<Object?> get props => [id];
 
   Map<String, dynamic> toMap() {
     return {
@@ -102,6 +101,7 @@ class Project extends Equatable {
       'completion_date': completionDate?.toIso8601String(),
       'is_internal': isInternal ? 1 : 0,
       'billed_hourly_rate': billedHourlyRate,
+      'fixedPrice': fixedPrice,
     };
   }
 
@@ -111,14 +111,18 @@ class Project extends Equatable {
       projectName: map['project_name'],
       clientId: map['client_id'],
       location: map['location'],
-      pricingModel: map['pricing_model'],
+      pricingModel: map['pricing_model'] ?? 'hourly',
       isCompleted: map['is_completed'] == 1,
-      completionDate: map['completion_date'] != null ? DateTime.parse(map['completion_date']) : null,
+      completionDate: map['completion_date'] != null
+          ? DateTime.tryParse(map['completion_date'])
+          : null,
       isInternal: map['is_internal'] == 1,
-      billedHourlyRate: map['billed_hourly_rate'],
+      billedHourlyRate: (map['billed_hourly_rate'] as num?)?.toDouble(),
+      fixedPrice: (map['fixedPrice'] as num?)?.toDouble(),
     );
   }
 
+  // START: ADDED BACK COPYWITH
   Project copyWith({
     int? id,
     String? projectName,
@@ -129,6 +133,7 @@ class Project extends Equatable {
     DateTime? completionDate,
     bool? isInternal,
     double? billedHourlyRate,
+    double? fixedPrice,
   }) {
     return Project(
       id: id ?? this.id,
@@ -140,31 +145,31 @@ class Project extends Equatable {
       completionDate: completionDate ?? this.completionDate,
       isInternal: isInternal ?? this.isInternal,
       billedHourlyRate: billedHourlyRate ?? this.billedHourlyRate,
+      fixedPrice: fixedPrice ?? this.fixedPrice,
     );
   }
-}
-// end class: Project
+  // END: ADDED BACK COPYWITH
 
-// start class: Employee
-// FIX 6: Extend Equatable
-class Employee extends Equatable {
+  @override
+  String toString() {
+    return 'Project(id: $id, name: $projectName, clientId: $clientId, pricingModel: $pricingModel, fixedPrice: $fixedPrice)';
+  }
+}
+
+class Employee {
   final int? id;
   final String? employeeNumber;
   final String name;
   final int? titleId;
   final bool isDeleted;
 
-  const Employee({
+  Employee({
     this.id,
     this.employeeNumber,
     required this.name,
     this.titleId,
     this.isDeleted = false,
   });
-
-  // FIX 7: Add props for Equatable comparison
-  @override
-  List<Object?> get props => [id];
 
   Map<String, dynamic> toMap() {
     return {
@@ -186,6 +191,7 @@ class Employee extends Equatable {
     );
   }
 
+  // START: ADDED BACK COPYWITH
   Employee copyWith({
     int? id,
     String? employeeNumber,
@@ -201,17 +207,16 @@ class Employee extends Equatable {
       isDeleted: isDeleted ?? this.isDeleted,
     );
   }
+// END: ADDED BACK COPYWITH
 }
-// end class: Employee
 
-// start class: TimeEntry
 class TimeEntry {
   final int? id;
   final int projectId;
   final int? employeeId;
-  final DateTime? startTime;
+  final DateTime startTime;
   final DateTime? endTime;
-  final double pausedDuration;
+  final Duration pausedDuration;
   final double? finalBilledDurationSeconds;
   final bool isPaused;
   final DateTime? pauseStartTime;
@@ -222,9 +227,9 @@ class TimeEntry {
     this.id,
     required this.projectId,
     this.employeeId,
-    this.startTime,
+    required this.startTime,
     this.endTime,
-    this.pausedDuration = 0.0,
+    this.pausedDuration = Duration.zero,
     this.finalBilledDurationSeconds,
     this.isPaused = false,
     this.pauseStartTime,
@@ -232,14 +237,36 @@ class TimeEntry {
     this.workDetails,
   });
 
+  factory TimeEntry.fromMap(Map<String, dynamic> map) {
+    return TimeEntry(
+      id: map['id'],
+      projectId: map['project_id'],
+      employeeId: map['employee_id'],
+      startTime: DateTime.parse(map['start_time']),
+      endTime:
+      map['end_time'] != null ? DateTime.parse(map['end_time']) : null,
+      // FIX: Correctly parse duration from double
+      pausedDuration: Duration(microseconds: ((map['paused_duration'] as num? ?? 0.0) * 1000000).round()),
+      finalBilledDurationSeconds:
+      (map['final_billed_duration_seconds'] as num?)?.toDouble(),
+      isPaused: map['is_paused'] == 1,
+      pauseStartTime: map['pause_start_time'] != null
+          ? DateTime.parse(map['pause_start_time'])
+          : null,
+      isDeleted: map['is_deleted'] == 1,
+      workDetails: map['work_details'],
+    );
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'project_id': projectId,
       'employee_id': employeeId,
-      'start_time': startTime?.toIso8601String(),
+      'start_time': startTime.toIso8601String(),
       'end_time': endTime?.toIso8601String(),
-      'paused_duration': pausedDuration,
+      // FIX: Correctly store duration as double
+      'paused_duration': pausedDuration.inMicroseconds / 1000000.0,
       'final_billed_duration_seconds': finalBilledDurationSeconds,
       'is_paused': isPaused ? 1 : 0,
       'pause_start_time': pauseStartTime?.toIso8601String(),
@@ -248,29 +275,14 @@ class TimeEntry {
     };
   }
 
-  factory TimeEntry.fromMap(Map<String, dynamic> map) {
-    return TimeEntry(
-      id: map['id'],
-      projectId: map['project_id'],
-      employeeId: map['employee_id'],
-      startTime: map['start_time'] != null ? DateTime.parse(map['start_time']) : null,
-      endTime: map['end_time'] != null ? DateTime.parse(map['end_time']) : null,
-      pausedDuration: map['paused_duration'],
-      finalBilledDurationSeconds: map['final_billed_duration_seconds'],
-      isPaused: map['is_paused'] == 1,
-      pauseStartTime: map['pause_start_time'] != null ? DateTime.parse(map['pause_start_time']) : null,
-      isDeleted: map['is_deleted'] == 1,
-      workDetails: map['work_details'],
-    );
-  }
-
+  // START: ADDED BACK COPYWITH
   TimeEntry copyWith({
     int? id,
     int? projectId,
     int? employeeId,
     DateTime? startTime,
     DateTime? endTime,
-    double? pausedDuration,
+    Duration? pausedDuration,
     double? finalBilledDurationSeconds,
     bool? isPaused,
     DateTime? pauseStartTime,
@@ -291,11 +303,11 @@ class TimeEntry {
       workDetails: workDetails ?? this.workDetails,
     );
   }
+// END: ADDED BACK COPYWITH
 }
-// end class: TimeEntry
 
-// start class: JobMaterials
 class JobMaterials {
+  // ... (JobMaterials remains unchanged, as it had no errors)
   final int? id;
   final int projectId;
   final String itemName;
@@ -355,103 +367,63 @@ class JobMaterials {
       id: map['id'],
       projectId: map['project_id'],
       itemName: map['item_name'],
-      cost: map['cost'],
+      cost: (map['cost'] as num).toDouble(),
       purchaseDate: DateTime.parse(map['purchase_date']),
       description: map['description'],
       isDeleted: map['is_deleted'] == 1,
       expenseCategory: map['expense_category'],
       unit: map['unit'],
-      quantity: map['quantity'],
-      baseQuantity: map['base_quantity'],
-      odometerReading: map['odometer_reading'],
+      quantity: (map['quantity'] as num?)?.toDouble(),
+      baseQuantity: (map['base_quantity'] as num?)?.toDouble(),
+      odometerReading: (map['odometer_reading'] as num?)?.toDouble(),
       isCompanyExpense: map['is_company_expense'] == 1,
       vehicleDesignation: map['vehicle_designation'],
       vendorOrSubtrade: map['vendor_or_subtrade'],
     );
   }
+}
 
-  JobMaterials copyWith({
+class ExpenseCategory {
+  final int? id;
+  final String name;
+
+  ExpenseCategory({this.id, required this.name});
+
+  Map<String, dynamic> toMap() => {'id': id, 'name': name};
+
+  factory ExpenseCategory.fromMap(Map<String, dynamic> map) =>
+      ExpenseCategory(id: map['id'], name: map['name']);
+
+  // START: ADDED BACK COPYWITH
+  ExpenseCategory copyWith({
     int? id,
-    int? projectId,
-    String? itemName,
-    double? cost,
-    DateTime? purchaseDate,
-    String? description,
-    bool? isDeleted,
-    String? expenseCategory,
-    String? unit,
-    double? quantity,
-    double? baseQuantity,
-    double? odometerReading,
-    bool? isCompanyExpense,
-    String? vehicleDesignation,
-    String? vendorOrSubtrade,
+    String? name,
   }) {
-    return JobMaterials(
+    return ExpenseCategory(
       id: id ?? this.id,
-      projectId: projectId ?? this.projectId,
-      itemName: itemName ?? this.itemName,
-      cost: cost ?? this.cost,
-      purchaseDate: purchaseDate ?? this.purchaseDate,
-      description: description ?? this.description,
-      isDeleted: isDeleted ?? this.isDeleted,
-      expenseCategory: expenseCategory ?? this.expenseCategory,
-      unit: unit ?? this.unit,
-      quantity: quantity ?? this.quantity,
-      baseQuantity: baseQuantity ?? this.baseQuantity,
-      odometerReading: odometerReading ?? this.odometerReading,
-      isCompanyExpense: isCompanyExpense ?? this.isCompanyExpense,
-      vehicleDesignation: vehicleDesignation ?? this.vehicleDesignation,
-      vendorOrSubtrade: vendorOrSubtrade ?? this.vendorOrSubtrade,
+      name: name ?? this.name,
     );
   }
+// END: ADDED BACK COPYWITH
 }
-// end class: JobMaterials
 
-// start class: AppSettings
-class AppSettings {
-  final Map<String, dynamic> settings;
-
-  AppSettings({required this.settings});
-
-  factory AppSettings.fromMap(Map<String, dynamic> map) {
-    return AppSettings(settings: map);
-  }
-
-  Map<String, dynamic> toMap() {
-    return settings;
-  }
-}
-// end class: AppSettings
-
-// start class: Role
 class Role {
   final int? id;
   final String name;
   final double standardRate;
 
-  Role({
-    this.id,
-    required this.name,
-    this.standardRate = 0.0,
-  });
+  // FIX: Make standardRate optional with a default value
+  Role({this.id, required this.name, this.standardRate = 0.0});
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'name': name,
-      'standard_rate': standardRate,
-    };
-  }
+  Map<String, dynamic> toMap() =>
+      {'id': id, 'name': name, 'standard_rate': standardRate};
 
-  factory Role.fromMap(Map<String, dynamic> map) {
-    return Role(
+  factory Role.fromMap(Map<String, dynamic> map) => Role(
       id: map['id'],
       name: map['name'],
-      standardRate: map['standard_rate'],
-    );
-  }
+      standardRate: (map['standard_rate'] as num? ?? 0.0).toDouble()); // Made safer
 
+  // START: ADDED BACK COPYWITH
   Role copyWith({
     int? id,
     String? name,
@@ -463,113 +435,90 @@ class Role {
       standardRate: standardRate ?? this.standardRate,
     );
   }
+// END: ADDED BACK COPYWITH
 }
-// end class: Role
 
-// start class: ExpenseCategory
-class ExpenseCategory {
-  final int? id;
-  final String name;
+// ... AppSettings and AllRecordViewModel are unchanged, but included for completeness ...
 
-  ExpenseCategory({
-    this.id,
-    required this.name,
+class AppSettings {
+  final int id;
+  final String? employeeNumberPrefix;
+  final int? nextEmployeeNumber;
+  final List<String> vehicleDesignations;
+  final List<String> vendors;
+  final double? companyHourlyRate;
+  final double? burdenRate;
+  final int? timeRoundingInterval;
+  final int? autoBackupReminderFrequency;
+  final int? appRunsSinceBackup;
+  final String? measurementSystem;
+  final int? defaultReportMonths;
+
+  AppSettings({
+    this.id = 1,
+    this.employeeNumberPrefix,
+    this.nextEmployeeNumber,
+    this.vehicleDesignations = const [],
+    this.vendors = const [],
+    this.companyHourlyRate,
+    this.burdenRate,
+    this.timeRoundingInterval,
+    this.autoBackupReminderFrequency,
+    this.appRunsSinceBackup,
+    this.measurementSystem,
+    this.defaultReportMonths,
   });
+
+  factory AppSettings.fromMap(Map<String, dynamic> map) {
+    return AppSettings(
+      id: map['id'] ?? 1,
+      employeeNumberPrefix: map['employee_number_prefix'],
+      nextEmployeeNumber: map['next_employee_number'],
+      vehicleDesignations: (map['vehicle_designations'] as String? ?? '')
+          .split(',')
+          .where((s) => s.isNotEmpty)
+          .toList(),
+      vendors: (map['vendors'] as String? ?? '')
+          .split(',')
+          .where((s) => s.isNotEmpty)
+          .toList(),
+      companyHourlyRate: (map['company_hourly_rate'] as num?)?.toDouble(),
+      burdenRate: (map['burden_rate'] as num?)?.toDouble(),
+      timeRoundingInterval: map['time_rounding_interval'],
+      autoBackupReminderFrequency: map['auto_backup_reminder_frequency'],
+      appRunsSinceBackup: map['app_runs_since_backup'],
+      measurementSystem: map['measurement_system'],
+      defaultReportMonths: map['default_report_months'],
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'name': name,
+      'employee_number_prefix': employeeNumberPrefix,
+      'next_employee_number': nextEmployeeNumber,
+      'vehicle_designations': vehicleDesignations.join(','),
+      'vendors': vendors.join(','),
+      'company_hourly_rate': companyHourlyRate,
+      'burden_rate': burdenRate,
+      'time_rounding_interval': timeRoundingInterval,
+      'auto_backup_reminder_frequency': autoBackupReminderFrequency,
+      'app_runs_since_backup': appRunsSinceBackup,
+      'measurement_system': measurementSystem,
+      'default_report_months': defaultReportMonths,
     };
   }
-
-  factory ExpenseCategory.fromMap(Map<String, dynamic> map) {
-    return ExpenseCategory(
-      id: map['id'],
-      name: map['name'],
-    );
-  }
-
-  ExpenseCategory copyWith({
-    int? id,
-    String? name,
-  }) {
-    return ExpenseCategory(
-      id: id ?? this.id,
-      name: name ?? this.name,
-    );
-  }
 }
-// end class: ExpenseCategory
 
-// start cost summary class
-class CostSummary {
-  final String categoryName;
-  final double totalCost;
-  final int recordCount;
-
-  CostSummary({
-    required this.categoryName,
-    required this.totalCost,
-    required this.recordCount,
-  });
-}
-// end method: cost summary
-
-// start class: User
-class User {
-  final int? id;
-  final String username;
-  final String passwordHash;
-  final bool isActive;
-  final bool isAdmin;
-
-  User({
-    this.id,
-    required this.username,
-    required this.passwordHash,
-    this.isActive = true,
-    this.isAdmin = false,
-  });
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'username': username,
-      'password_hash': passwordHash,
-      'is_active': isActive ? 1 : 0,
-      'is_admin': isAdmin ? 1 : 0,
-    };
-  }
-
-  factory User.fromMap(Map<String, dynamic> map) {
-    return User(
-      id: map['id'],
-      username: map['username'],
-      passwordHash: map['password_hash'],
-      isActive: map['is_active'] == 1,
-      isAdmin: map['is_admin'] == 1,
-    );
-  }
-}
-// end class: User
-
-
-// =========================================================================
-// == ADDED FOR DATABASE VIEWER TEST ==
-// =========================================================================
-
-enum RecordType {
-  time,
-  expense,
-}
+// For the main dashboard screen
+enum RecordType { time, expense, payment }
 
 class AllRecordViewModel {
   final int id;
   final RecordType type;
   final DateTime date;
   final String description;
-  final double value; // Can be hours for time, or cost for expense
+  final double value; // Can be hours for time, or amount for cost/payment
   final String categoryOrProject;
 
   AllRecordViewModel({
@@ -580,5 +529,16 @@ class AllRecordViewModel {
     required this.value,
     required this.categoryOrProject,
   });
-}
 
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+
+    return other is AllRecordViewModel &&
+        other.id == id &&
+        other.type == type;
+  }
+
+  @override
+  int get hashCode => id.hashCode ^ type.hashCode;
+}

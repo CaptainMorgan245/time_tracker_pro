@@ -5,19 +5,14 @@ import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/client_repository.dart';
 import 'package:time_tracker_pro/project_repository.dart';
 import 'package:time_tracker_pro/client_and_project_add_form.dart';
-// REPAIRED: Removed unused imports that were causing warnings.
-// The custom widgets AppInputFormCard and AppSettingListCard were not used in this file's build method.
 
-// start class: ClientAndProjectScreen
 class ClientAndProjectScreen extends StatefulWidget {
   const ClientAndProjectScreen({super.key});
 
   @override
   State<ClientAndProjectScreen> createState() => _ClientAndProjectScreenState();
 }
-// end class: ClientAndProjectScreen
 
-// start class: _ClientAndProjectScreenState
 class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
   final ClientRepository _clientRepo = ClientRepository();
   final ProjectRepository _projectRepo = ProjectRepository();
@@ -26,59 +21,48 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
   List<Project> _projects = [];
   bool _isLoading = true;
 
-  // start method: initState
   @override
   void initState() {
     super.initState();
     _loadData();
   }
-  // end method: initState
 
-  // start method: _loadData
   Future<void> _loadData() async {
+    if (!mounted) return;
     setState(() => _isLoading = true);
-    final clients = await _clientRepo.getClients();
-    final projects = await _projectRepo.getProjects();
-    if (mounted) {
-      setState(() {
-        _clients = clients;
-        _projects = projects;
-        _isLoading = false;
-      });
+    try {
+      final clients = await _clientRepo.getClients();
+      final projects = await _projectRepo.getProjects();
+      if (mounted) {
+        setState(() {
+          _clients = clients;
+          _projects = projects;
+          _isLoading = false;
+        });
+      }
+    } catch(e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error loading data: $e")));
+        setState(() => _isLoading = false);
+      }
     }
   }
-  // end method: _loadData
 
-  // start method: _updateClient
   Future<void> _updateClient(Client client) async {
     await _clientRepo.updateClient(client);
     _loadData();
   }
-  // end method: _updateClient
 
-  // start method: _updateProject
   Future<void> _updateProject(Project project) async {
     await _projectRepo.updateProject(project);
     _loadData();
   }
-  // end method: _updateProject
 
-  // ==========================================================
-  //  NEW METHODS TO SUPPORT PROJECT ACTIONS
-  // ==========================================================
   Future<void> _deleteProject(int id) async {
     await _projectRepo.deleteProject(id);
     _loadData();
   }
 
-  // FIXED: Removed the unused `_completeProject` method. It was never called.
-  // The logic in the edit dialog now correctly uses `_updateProject` to handle completion.
-
-  // ==========================================================
-  //  END OF NEW METHODS
-  // ==========================================================
-
-  // start method: _getClientName
   String _getClientName(int clientId) {
     try {
       return _clients.firstWhere((c) => c.id == clientId).name;
@@ -86,9 +70,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
       return 'Unknown';
     }
   }
-  // end method: _getClientName
 
-  // start method: _showEditClientDialog
   Future<void> _showEditClientDialog(Client client) async {
     final nameController = TextEditingController(text: client.name);
     final contactPersonController = TextEditingController(text: client.contactPerson);
@@ -102,25 +84,13 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(labelText: 'Client Name'),
-              ),
-              TextField(
-                controller: contactPersonController,
-                decoration: const InputDecoration(labelText: 'Contact Person'),
-              ),
-              TextField(
-                controller: phoneNumberController,
-                decoration: const InputDecoration(labelText: 'Phone Number'),
-              ),
+              TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Client Name')),
+              TextField(controller: contactPersonController, decoration: const InputDecoration(labelText: 'Contact Person')),
+              TextField(controller: phoneNumberController, decoration: const InputDecoration(labelText: 'Phone Number')),
             ],
           ),
           actions: [
-            TextButton(
-              child: const Text('Cancel'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
+            TextButton(child: const Text('Cancel'), onPressed: () => Navigator.of(context).pop()),
             TextButton(
               child: Text(client.isActive ? 'Deactivate' : 'Activate', style: TextStyle(color: client.isActive ? Colors.red : Colors.green)),
               onPressed: () {
@@ -148,21 +118,26 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
       },
     );
   }
-  // end method: _showEditClientDialog
 
-  // start method: _showEditProjectDialog (MODIFIED)
+  // FIXED: Handles all three pricing models and aligns to the single fixedPrice DB field.
   Future<void> _showEditProjectDialog(Project project) async {
     final projectNameController = TextEditingController(text: project.projectName);
-    final locationController = TextEditingController(text: project.location);
     final billedHourlyRateController = TextEditingController(text: project.billedHourlyRate?.toString());
 
+    // Use a single controller for both 'fixed' and 'project_based' prices.
+    final fixedPriceController = TextEditingController(text: project.fixedPrice?.toString());
+
+    // FIX 1: Normalize the initial value from the database to prevent RSOD.
     String? selectedPricingModel = project.pricingModel;
+    if (selectedPricingModel == 'fixed price') {
+      selectedPricingModel = 'fixed';
+    }
+
     int? selectedClientId = project.clientId;
 
     await showDialog(
       context: context,
       builder: (context) {
-        // We need a stateful builder to handle the async check for the action button
         return StatefulBuilder(
             builder: (BuildContext context, StateSetter setState) {
               return AlertDialog(
@@ -177,44 +152,55 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                       ),
                       DropdownButtonFormField<int>(
                         decoration: const InputDecoration(labelText: 'Client'),
-                        // FIXED: Replaced deprecated 'value' with 'initialValue'.
-                        initialValue: selectedClientId,
-                        items: _clients.map((client) {
+                        value: selectedClientId,
+                        items: _clients.where((c) => c.isActive).map((client) {
                           return DropdownMenuItem<int>(
                             value: client.id,
                             child: Text(client.name),
                           );
                         }).toList(),
                         onChanged: (int? newValue) {
-                          setState(() { // Use setState from the StatefulBuilder
+                          setState(() {
                             selectedClientId = newValue;
                           });
                         },
                       ),
-                      TextField(
-                        controller: locationController,
-                        decoration: const InputDecoration(labelText: 'Location'),
-                      ),
+
+                      // FIX 2: Added 'Project Based' option.
                       DropdownButtonFormField<String>(
                         decoration: const InputDecoration(labelText: 'Pricing Model'),
-                        // FIXED: Replaced deprecated 'value' with 'initialValue'.
-                        initialValue: selectedPricingModel,
+                        value: selectedPricingModel,
                         items: const [
                           DropdownMenuItem(value: 'hourly', child: Text('Hourly')),
-                          DropdownMenuItem(value: 'fixed price', child: Text('Fixed Price')),
-                          DropdownMenuItem(value: 'project based', child: Text('Project Based')),
+                          DropdownMenuItem(value: 'fixed', child: Text('Fixed Price')),
+                          DropdownMenuItem(value: 'project_based', child: Text('Project Based')),
                         ],
                         onChanged: (String? newValue) {
-                          setState(() { // Use setState from the StatefulBuilder
+                          setState(() {
                             selectedPricingModel = newValue;
                           });
                         },
                       ),
-                      TextField(
-                        controller: billedHourlyRateController,
-                        decoration: const InputDecoration(labelText: 'Billed Hourly Rate'),
-                        keyboardType: TextInputType.number,
-                      ),
+
+                      if (selectedPricingModel == 'hourly')
+                        TextField(
+                          controller: billedHourlyRateController,
+                          decoration: const InputDecoration(labelText: 'Billed Hourly Rate'),
+                          keyboardType: TextInputType.number,
+                        )
+                      // FIX 3: Use fixedPriceController for both 'fixed' and 'project_based'
+                      else
+                        SizedBox(
+                          child: TextField(
+                            controller: fixedPriceController,
+                            decoration: InputDecoration(
+                                labelText: selectedPricingModel == 'fixed'
+                                    ? 'Fixed Project Price'
+                                    : 'Project Based Price' // Dynamic label
+                            ),
+                            keyboardType: TextInputType.number,
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -223,45 +209,34 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                     child: const Text('Cancel'),
                     onPressed: () => Navigator.of(context).pop(),
                   ),
-                  // ==========================================================
-                  //  LOGIC FOR ACTION BUTTON (Complete / Delete / Re-open)
-                  // ==========================================================
                   FutureBuilder<bool>(
                     future: _projectRepo.hasAssociatedRecords(project.id!),
                     builder: (context, snapshot) {
-                      // While checking, show a disabled button
                       if (snapshot.connectionState == ConnectionState.waiting) {
                         return const TextButton(onPressed: null, child: Text('...'));
                       }
-
                       final bool hasRecords = snapshot.data ?? false;
 
-                      // If project is already completed, show Re-open
                       if (project.isCompleted) {
                         return TextButton(
                           child: const Text('Re-open', style: TextStyle(color: Colors.green)),
                           onPressed: () {
-                            // The method toggles the isCompleted flag
-                            final toggledProject = project.copyWith(isCompleted: !project.isCompleted);
+                            final toggledProject = project.copyWith(isCompleted: false);
                             _updateProject(toggledProject);
                             Navigator.of(context).pop();
                           },
                         );
                       }
-
-                      // If it has records, show Complete
                       if (hasRecords) {
                         return TextButton(
                           child: const Text('Complete', style: TextStyle(color: Colors.blue)),
                           onPressed: () {
-                            final toggledProject = project.copyWith(isCompleted: !project.isCompleted);
+                            final toggledProject = project.copyWith(isCompleted: true);
                             _updateProject(toggledProject);
                             Navigator.of(context).pop();
                           },
                         );
-                      }
-                      // Otherwise, show Delete
-                      else {
+                      } else {
                         return TextButton(
                           child: const Text('Delete', style: TextStyle(color: Colors.red)),
                           onPressed: () {
@@ -272,20 +247,32 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                       }
                     },
                   ),
-                  // ==========================================================
-                  //  END OF ACTION BUTTON LOGIC
-                  // ==========================================================
                   ElevatedButton(
                     child: const Text('Save'),
                     onPressed: () {
                       if (projectNameController.text.isNotEmpty && selectedClientId != null) {
+
+                        // FIX 4: Update the project saving logic to align with a single fixedPrice DB field.
+                        double? hourlyRate = selectedPricingModel == 'hourly'
+                            ? double.tryParse(billedHourlyRateController.text)
+                            : null;
+
+                        // Map both fixed and project_based models to the fixedPrice field.
+                        double? newFixedPrice = (selectedPricingModel == 'fixed' || selectedPricingModel == 'project_based')
+                            ? double.tryParse(fixedPriceController.text)
+                            : null;
+
                         final updatedProject = project.copyWith(
                           projectName: projectNameController.text,
                           clientId: selectedClientId!,
-                          location: locationController.text.isNotEmpty ? locationController.text : null,
                           pricingModel: selectedPricingModel,
-                          billedHourlyRate: double.tryParse(billedHourlyRateController.text),
+                          billedHourlyRate: hourlyRate,
+                          fixedPrice: newFixedPrice,
+                          // If 'projectBasedPrice' exists in the model, set it to null
+                          // to explicitly only use fixedPrice, respecting the DB schema.
+                          // projectBasedPrice: null,
                         );
+
                         _updateProject(updatedProject);
                         Navigator.of(context).pop();
                       }
@@ -298,62 +285,53 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
       },
     );
   }
-  // end method: _showEditProjectDialog
 
-  // start method: _buildClientListTile
-  /// Helper widget to build a consistent ListTile for the Client list.
   Widget _buildClientListTile(Client client, ThemeData theme) {
     return Card(
       child: ListTile(
-        title: Text(
-          client.name,
-          style: theme.textTheme.titleMedium, // Adjusted for consistency
-        ),
-        subtitle: Text(
-          'Contact: ${client.contactPerson ?? 'N/A'} | Phone: ${client.phoneNumber ?? 'N/A'}',
-          style: theme.textTheme.bodyMedium, // Adjusted for consistency
-        ),
-        trailing: IconButton(
-          icon: const Icon(Icons.edit, color: Colors.blue), // Standardized icon color
-          onPressed: () => _showEditClientDialog(client),
-        ),
+        title: Text(client.name, style: theme.textTheme.titleMedium),
+        subtitle: Text('Contact: ${client.contactPerson ?? 'N/A'} | Phone: ${client.phoneNumber ?? 'N/A'}', style: theme.textTheme.bodyMedium),
+        trailing: IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () => _showEditClientDialog(client)),
         onTap: () => _showEditClientDialog(client),
       ),
     );
   }
-  // end method: _buildClientListTile
 
-  // start method: _buildProjectListTile
-  /// Helper widget to build a consistent ListTile for the Project list.
   Widget _buildProjectListTile(Project project, ThemeData theme) {
+    String priceOrRate;
+    if (project.pricingModel == 'hourly') {
+      priceOrRate = '\$${project.billedHourlyRate?.toStringAsFixed(2) ?? '0.00'}/hr';
+    } else {
+      // Use fixedPrice for both fixed and project based models
+      final price = project.fixedPrice;
+      final modelLabel = project.pricingModel == 'fixed' ? 'Fixed' : 'Project Based';
+      priceOrRate = '\$${price?.toStringAsFixed(2) ?? '0.00'} $modelLabel';
+    }
+
+    // FIX 5: Removed the strikethrough logic entirely.
+    final tileColor = project.isCompleted ? Colors.grey.shade300 : null;
+
     return Card(
+      color: tileColor,
       child: ListTile(
-        title: Text(
-          project.projectName,
-          style: theme.textTheme.titleMedium, // Adjusted for consistency
-        ),
-        subtitle: Text(
-          'Client: ${_getClientName(project.clientId)} | Pricing: ${project.pricingModel} | Rate: \$${project.billedHourlyRate?.toStringAsFixed(2) ?? 'N/A'}',
-          style: theme.textTheme.bodyMedium, // Adjusted for consistency
-        ),
+        title: Text(project.projectName, style: theme.textTheme.titleMedium),
+        subtitle: Text('Client: ${_getClientName(project.clientId)} | $priceOrRate', style: theme.textTheme.bodyMedium),
         trailing: IconButton(
-          icon: const Icon(Icons.edit, color: Colors.blue), // Standardized icon color
-          onPressed: () => _showEditProjectDialog(project),
-        ),
+            icon: const Icon(Icons.edit, color: Colors.blue),
+            onPressed: () => _showEditProjectDialog(project)),
         onTap: () => _showEditProjectDialog(project),
       ),
     );
   }
-  // end method: _buildProjectListTile
 
-  // start method: build
   @override
   Widget build(BuildContext context) {
-    // MODIFIED: Now we can show/hide completed projects as well if needed. For now, let's keep it simple.
     final activeClients = _clients.where((c) => c.isActive).toList();
     final activeProjects = _projects.where((p) => !p.isCompleted).toList();
+    final completedProjects = _projects.where((p) => p.isCompleted).toList();
     final theme = Theme.of(context);
 
+    // FIX 6: Re-implemented the main widget tree to enforce the static form/scrolling list requirement.
     return Scaffold(
       appBar: AppBar(
         title: const Text('Clients & Projects'),
@@ -362,118 +340,94 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
           ? const Center(child: CircularProgressIndicator())
           : LayoutBuilder(
         builder: (context, constraints) {
-          // start logic: wide screen layout
-          if (constraints.maxWidth > 800) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                children: [
-                  // ClientAndProjectAddForm is a separate component and remains untouched here
-                  ClientAndProjectAddForm(
-                    clients: _clients.where((c) => c.isActive).toList(),
+          if (constraints.maxWidth > 800) { // WIDE LAYOUT
+            return Column( // Use Column to enable static top content and expandable scrolling content
+              children: [
+                // 1. STATIC FORM - Top section, always visible
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: ClientAndProjectAddForm(
+                    clients: activeClients,
                     onDataAdded: _loadData,
                   ),
-                  const SizedBox(height: 32),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                ),
+
+                // 2. SCROLLING LISTS - Expanded to fill the remaining space
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          flex: 5,
+                          child: ListView( // Scrolling List
+                            children: [
+                              const Text('Current Clients', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                              ...activeClients.map((client) => _buildClientListTile(client, theme)).toList(),
+                              const SizedBox(height: 32),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          flex: 5,
+                          child: ListView( // Scrolling List
+                            children: [
+                              const Text('Current Projects', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                              ...activeProjects.map((project) => _buildProjectListTile(project, theme)).toList(),
+                              if (completedProjects.isNotEmpty)...[
+                                const SizedBox(height: 32),
+                                const Text('Completed Projects', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                ...completedProjects.map((project) => _buildProjectListTile(project, theme)).toList(),
+                              ]
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            );
+          } else { // NARROW LAYOUT
+            return Column( // Use Column to enable static top content and expandable scrolling content
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // 1. STATIC FORM - Top section, always visible
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: ClientAndProjectAddForm(
+                    clients: activeClients,
+                    onDataAdded: _loadData,
+                  ),
+                ),
+
+                // 2. SCROLLING LISTS - Expanded to fill the remaining space
+                Expanded(
+                  child: ListView( // Single Scrolling List
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
                     children: [
-                      Expanded(
-                        flex: 5,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Current Clients',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold), // Consistent heading size
-                            ),
-                            ListView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: activeClients.length,
-                              itemBuilder: (context, index) {
-                                return _buildClientListTile(activeClients[index], theme);
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        flex: 5,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Current Projects',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold), // Consistent heading size
-                            ),
-                            ListView.builder(
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              itemCount: activeProjects.length,
-                              itemBuilder: (context, index) {
-                                return _buildProjectListTile(activeProjects[index], theme);
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
+                      const Divider(height: 1, thickness: 1),
+                      const SizedBox(height: 16),
+                      const Text('Current Clients', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      ...activeClients.map((client) => _buildClientListTile(client, theme)).toList(),
+                      const SizedBox(height: 32),
+                      const Text('Current Projects', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      ...activeProjects.map((project) => _buildProjectListTile(project, theme)).toList(),
+                      if (completedProjects.isNotEmpty)...[
+                        const SizedBox(height: 32),
+                        const Text('Completed Projects', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        ...completedProjects.map((project) => _buildProjectListTile(project, theme)).toList(),
+                      ]
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             );
           }
-          // end logic: wide screen layout
-
-          // start logic: narrow screen layout
-          else {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  ClientAndProjectAddForm(
-                    clients: _clients.where((c) => c.isActive).toList(),
-                    onDataAdded: _loadData,
-                  ),
-                  const SizedBox(height: 16),
-                  const Divider(height: 1, thickness: 1),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Current Clients',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold), // Consistent heading size
-                  ),
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: activeClients.length,
-                    itemBuilder: (context, index) {
-                      return _buildClientListTile(activeClients[index], theme);
-                    },
-                  ),
-                  const SizedBox(height: 32),
-                  const Text(
-                    'Current Projects',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold), // Consistent heading size
-                  ),
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: activeProjects.length,
-                    itemBuilder: (context, index) {
-                      return _buildProjectListTile(activeProjects[index], theme);
-                    },
-                  ),
-                ],
-              ),
-            );
-          }
-          // end logic: narrow screen layout
         },
       ),
     );
   }
-// end method: build
 }
-// end class: _ClientAndProjectScreenState

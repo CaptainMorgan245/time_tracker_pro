@@ -16,7 +16,7 @@ import 'package:time_tracker_pro/analytics_screen.dart';
 import 'package:time_tracker_pro/cost_entry_screen.dart';
 import 'package:time_tracker_pro/app_bottom_nav_bar.dart';
 import 'package:time_tracker_pro/database_helper.dart';
-import 'package:time_tracker_pro/data_management_screen.dart';// <-- ADD THIS LINE// START REUSABLE DRAWER WIDGET
+import 'package:time_tracker_pro/data_management_screen.dart';
 
 
 // START REUSABLE DRAWER WIDGET
@@ -51,7 +51,6 @@ class AppDrawer extends StatelessWidget {
               );
             },
           ),
-          // START: ADDED TILE
           ListTile(
             leading: const Icon(Icons.storage_outlined),
             title: const Text('Data Management'),
@@ -64,7 +63,6 @@ class AppDrawer extends StatelessWidget {
               );
             },
           ),
-          // END: ADDED TILE
           ListTile(
             leading: const Icon(Icons.person_pin_circle),
             title: const Text('Clients/Projects'),
@@ -159,35 +157,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _reloadData() {
-    // debugPrint("Dashboard received notification to reload data."); // REMOVED
     _loadData();
     _loadActiveTimers();
   }
 
   Future<void> _loadData() async {
     try {
-      // These fetches are correct.
       final projects = await _projectRepo.getProjects();
       final employees = await _employeeRepo.getEmployees();
       final allRecentActivities = await dbHelper.getAllRecordsV2();
 
       if (!mounted) return;
 
-      // 1. As you said, filter the list to ONLY include time records for the dashboard.
       final recentTimeActivities = allRecentActivities
           .where((record) => record.type == app_models.RecordType.time)
           .toList();
 
-      // 2. Sort the projects dropdown list to show newest first.
       final sortedProjects = projects.where((p) => !p.isCompleted).toList();
-      sortedProjects.sort((a, b) => b.id!.compareTo(a.id!)); // Sort by ID descending
+      sortedProjects.sort((a, b) => b.id!.compareTo(a.id!));
 
-      // 3. Update the notifiers and state with the correct, prepared data.
       _projectsNotifier.value = sortedProjects;
       _employeesNotifier.value = employees.where((e) => !e.isDeleted).toList();
 
       setState(() {
-        // Use the new, filtered, and correctly sorted list.
         _recentActivities = recentTimeActivities;
         _allProjectsForLookup = projects;
         _allEmployeesForLookup = employees;
@@ -211,7 +203,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final filteredEntries = activeEntries.where((entry) {
         final project = projects.firstWhere(
               (p) => p.id == entry.projectId,
-          orElse: () => const app_models.Project(projectName: 'Unknown', clientId: 0, isCompleted: true),
+          // START FIX: Provide required 'pricingModel' parameter
+          orElse: () => const app_models.Project(projectName: 'Unknown', clientId: 0, isCompleted: true, pricingModel: 'unknown'),
+          // END FIX
         );
         return !entry.isDeleted && !project.isCompleted;
       }).toList();
@@ -225,11 +219,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       for (var entry in filteredEntries) {
         if (!_activeTimers.containsKey(entry.id)) {
           final now = DateTime.now();
-          // This is where the visual timer gets its initial value.
-          // Because the startTime in the DB was wrong, this was also wrong.
-          // Now that we're saving the correct startTime, this will work.
-          final elapsed = now.difference(entry.startTime!);
-          final initialDuration = elapsed - Duration(seconds: entry.pausedDuration.toInt());
+          final elapsed = now.difference(entry.startTime);
+          // START FIX: Use .inSeconds instead of .toInt()
+          final initialDuration = elapsed - Duration(seconds: entry.pausedDuration.inSeconds);
+          // END FIX
           _currentDurations[entry.id!] = initialDuration;
           _startTimerUpdate(entry);
         }
@@ -265,9 +258,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildDashboardContent() {
-    final activeTimerIds = _activeEntries.map((e) => e.id).toSet();// SIMPLIFIED LOGIC:
-    // `_recentActivities` now only contains time entries, so we just need
-    // to filter out the ones that are currently active.
+    final activeTimerIds = _activeEntries.map((e) => e.id).toSet();
     final filteredRecentActivities = _recentActivities.where((record) {
       return !activeTimerIds.contains(record.id);
     }).toList();
@@ -281,13 +272,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
             projectsNotifier: _projectsNotifier,
             employeesNotifier: _employeesNotifier,
             isLiveTimerForm: true,
-            // FIX 1: Pass the startTime from the form to the _startTimer function
             onSubmit: (project, employee, workDetails, startTime, stopTime) {
               _startTimer(
                 project: project,
                 employee: employee,
                 workDetails: workDetails,
-                startTime: startTime, // Pass the value through
+                startTime: startTime,
               );
             },
             onUpdate: (id, project, employee, workDetails, startTime, stopTime) {
@@ -379,11 +369,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 : NumberFormat.currency(locale: 'en_US', symbol: '\$').format(record.value),
                             style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
                           ),
-                          // START --- MODIFIED ONTAP LOGIC
                           onTap: () async {
                             if (isTime) {
-                              // Restore original intent: Prefill the form for a NEW timer
-                              // by finding the corresponding project and employee objects.
                               app_models.Project? projectToPrefill;
                               app_models.Employee? employeeToPrefill;
                               final timeEntry = await _timeEntryRepo.getTimeEntryById(record.id);
@@ -400,12 +387,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                             (e) => e.id == timeEntry.employeeId);
                                   } catch (e) {/* Employee not found, remains null */}
                                 }
-                                // Call the new, specific function in the form's state.
                                 _timerFormKey.currentState?.prefillForNewTimer(projectToPrefill, employeeToPrefill);
                               }
                             }
                           },
-                          // END --- MODIFIED ONTAP LOGIC
                         ),
                       );
                     },
@@ -446,22 +431,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _startTimerUpdate(app_models.TimeEntry entry) {
     _activeTimers[entry.id!] = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!entry.isPaused) {
-        final elapsed = DateTime.now().difference(entry.startTime!);
+        final elapsed = DateTime.now().difference(entry.startTime);
         if(mounted){
           setState(() {
-            _currentDurations[entry.id!] = elapsed - Duration(seconds: entry.pausedDuration.toInt());
+            // START FIX: Use .inSeconds instead of .toInt()
+            _currentDurations[entry.id!] = elapsed - Duration(seconds: entry.pausedDuration.inSeconds);
+            // END FIX
           });
         }
       }
     });
   }
 
-  // FIX 2: Update the _startTimer function to accept and use the startTime
   Future<void> _startTimer({
     app_models.Project? project,
     app_models.Employee? employee,
     String? workDetails,
-    DateTime? startTime, // Add the parameter here
+    DateTime? startTime,
   }) async {
     if (project == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -473,10 +459,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final newEntry = app_models.TimeEntry(
       projectId: project.id!,
       employeeId: employee?.id,
-      // Use the provided startTime, or fallback to DateTime.now()
       startTime: startTime ?? DateTime.now(),
       workDetails: workDetails,
-      pausedDuration: 0.0,
+      // START FIX: Use Duration.zero instead of 0.0
+      pausedDuration: Duration.zero,
+      // END FIX
     );
 
     try {
@@ -532,12 +519,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         const SnackBar(content: Text('Live timer updated.')),
       );
     } catch (e) {
-      // If we can't find the entry to update, it's safer to just start a new one.
       _startTimer(
         project: project,
         employee: employee,
         workDetails: workDetails,
-        startTime: startTime, // Pass it through here too
+        startTime: startTime,
       );
       _timerFormKey.currentState?.resetForm();
     }
@@ -546,7 +532,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _stopTimer(int entryId) async {
     try {
       final entry = _activeEntries.firstWhere((e) => e.id == entryId);
-      final duration = DateTime.now().difference(entry.startTime!) - Duration(seconds: entry.pausedDuration.toInt());
+      // START FIX: Use .inSeconds instead of .toInt()
+      final duration = DateTime.now().difference(entry.startTime) - Duration(seconds: entry.pausedDuration.inSeconds);
+      // END FIX
 
       final stoppedEntry = entry.copyWith(
         endTime: DateTime.now(),
@@ -595,18 +583,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _resumeTimer(int entryId) async {
     try {
       final entry = _activeEntries.firstWhere((e) => e.id == entryId);
-      if (!entry.isPaused) return;
+      if (!entry.isPaused || entry.pauseStartTime == null) return;
 
       final now = DateTime.now();
-      final pauseDuration = now.difference(entry.pauseStartTime!).inSeconds.toDouble();
+      // This is correct, pauseDuration is a Duration object.
+      final pauseDuration = now.difference(entry.pauseStartTime!);
 
       final resumedEntry = entry.copyWith(
         isPaused: false,
+        // START FIX: Correctly add two Durations together.
         pausedDuration: entry.pausedDuration + pauseDuration,
-        pauseStartTime: null,
+        // END FIX
+        pauseStartTime: null, // Clear the pause start time
       );
 
-      // FIX: Corrected typo from _timeEntryeo to _timeEntryRepo
       await _timeEntryRepo.updateTimeEntry(resumedEntry);
 
       if (!mounted) return;
@@ -626,16 +616,4 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final seconds = twoDigits(duration.inSeconds.remainder(60));
     return '$hours:$minutes:$seconds';
   }
-
-// REMOVED -- This method is no longer used in this file.
-// void _populateForm(app_models.TimeEntry entry) {
-//   try {
-//     _timerFormKey.currentState?.populateForm(entry);
-//   } catch (e) {
-//     if (!mounted) return;
-//     ScaffoldMessenger.of(context).showSnackBar(
-//       const SnackBar(content: Text('Cannot populate form with a completed or deleted record.')),
-//     );
-//   }
-// }
 }
