@@ -79,7 +79,7 @@ class JobMaterialsRepository {
   // end method: getAllJobMaterials
 
   // start method: getCostSummaryByCategory
-  /*  <- Start of commented-out block
+
   Future<List<CostSummary>> getCostSummaryByCategory() async {
     final db = await _databaseHelper.database;
 
@@ -103,7 +103,7 @@ class JobMaterialsRepository {
       );
     });
   }
-  */ // <- End of commented-out block. A multi-line comment uses /* to begin and */ to end. [2, 5]
+  // <- End of commented-out block. A multi-line comment uses /* to begin and */ to end. [2, 5]
   // end method: getCostSummaryByCategory
 
   // start method: deleteJobMaterial

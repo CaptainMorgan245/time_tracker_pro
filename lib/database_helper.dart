@@ -2,15 +2,15 @@
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io'; // <-- NEW: Import for platform detection and file operations
+import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart'; // <-- NEW: Import for finding Documents directory
+import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:time_tracker_pro/models.dart';
 //import 'package:time_tracker_pro/models/project_summary.dart';
 
 // ============================================================================
-// |                  FINAL, STABLE V2 DATABASE HELPER                      |
+// |                  FINAL, STABLE V3 DATABASE HELPER                      |
 // ============================================================================
 
 class DatabaseHelperV2 {
@@ -20,9 +20,9 @@ class DatabaseHelperV2 {
   static Database? _database;
   static Completer<Database>? _dbCompleter;
   static const String _dbName = 'time_tracker_pro.db';
-  // START MODIFICATION 1: Bump version from 1 to 2
-  static const int _dbVersion = 2;
-  // END MODIFICATION 1
+
+  // MODIFICATION 1: Bump version to 3
+  static const int _dbVersion = 3;
 
   final ValueNotifier<int> databaseNotifier = ValueNotifier(0);
 
@@ -79,7 +79,6 @@ class DatabaseHelperV2 {
 
   Future<Database> _initDatabase() async {
     debugPrint("[DB_V2] Initializing database...");
-    // MODIFIED: Use the new function to get the correct path
     final dbPath = await _getDatabasePath();
     debugPrint("[DB_V2] Database path: $dbPath");
 
@@ -87,15 +86,22 @@ class DatabaseHelperV2 {
       dbPath,
       version: _dbVersion,
       onCreate: _onCreate,
-      // START MODIFICATION 2: Add upgrade logic
       onUpgrade: (db, oldVersion, newVersion) async {
         debugPrint('[DB_V2] Upgrading database from version $oldVersion to $newVersion...');
+
+        // This is your existing migration for version 2 (fixedPrice ADD)
         if (oldVersion < 2) {
           await db.execute("ALTER TABLE projects ADD COLUMN fixedPrice REAL");
-          debugPrint('[DB_V2] Added fixedPrice column to projects table.');
+          debugPrint('[DB_V2] V2 Migration: Added fixedPrice column to projects table.');
+        }
+
+        // MODIFICATION 2: Migration logic for version 3 (fixedPrice RENAME)
+        // This renames the inconsistent 'fixedPrice' to the correct 'project_price'
+        if (oldVersion < 3) {
+          await db.execute("ALTER TABLE projects RENAME COLUMN fixedPrice TO project_price");
+          debugPrint('[DB_V2] V3 Migration: Renamed column fixedPrice to project_price in projects table.');
         }
       },
-      // END MODIFICATION 2
       onDowngrade: onDatabaseDowngradeDelete,
     );
   }
@@ -118,9 +124,10 @@ class DatabaseHelperV2 {
             id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, is_active INTEGER NOT NULL DEFAULT 1, contact_person TEXT, phone_number TEXT
           )
         ''');
+      // NOTE: Added the new 'project_price' column to the fresh creation schema
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS projects (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, project_name TEXT NOT NULL, client_id INTEGER NOT NULL, location TEXT, pricing_model TEXT DEFAULT 'hourly', is_completed INTEGER NOT NULL DEFAULT 0, completion_date TEXT, is_internal INTEGER NOT NULL DEFAULT 0, billed_hourly_rate REAL, FOREIGN KEY (client_id) REFERENCES clients(id), UNIQUE(project_name, client_id)
+            id INTEGER PRIMARY KEY AUTOINCREMENT, project_name TEXT NOT NULL, client_id INTEGER NOT NULL, location TEXT, pricing_model TEXT DEFAULT 'hourly', is_completed INTEGER NOT NULL DEFAULT 0, completion_date TEXT, is_internal INTEGER NOT NULL DEFAULT 0, billed_hourly_rate REAL, project_price REAL, FOREIGN KEY (client_id) REFERENCES clients(id), UNIQUE(project_name, client_id)
           )
         ''');
       await txn.execute('''
@@ -340,4 +347,4 @@ class DatabaseHelperV2 {
     debugPrint('[DB_V2] ===== ALL DATA DELETED =====');
   }
 // END: ADDED MISSING FUNCTION
-}
+} // <--- THE CRITICAL MISSING BRACE IS NOW HERE

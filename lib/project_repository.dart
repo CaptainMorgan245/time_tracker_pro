@@ -3,115 +3,152 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/models.dart';
+import 'dart:async';
+import 'package:time_tracker_pro/dropdown_repository.dart';
 
 class ProjectRepository {
-  final _databaseHelper = DatabaseHelperV2.instance;
+  final dbHelper = DatabaseHelperV2.instance;
+  final DropdownRepository dropdownRepo = DropdownRepository();
 
-  // HELPER FUNCTION: To get the company's default hourly rate from settings.
-  Future<double> _getCompanyRate(Database db) async {
-    final List<Map<String, dynamic>> settings = await db.query('settings', limit: 1);
-    if (settings.isNotEmpty) {
-      // Safely cast the number and provide a fallback of 0.0.
-      return (settings.first['company_hourly_rate'] as num?)?.toDouble() ?? 0.0;
-    }
-    return 0.0;
-  }
+  // =========================================================================
+  // ANALYTICS METHODS
+  // =========================================================================
 
-  Future<int> insertProject(Project project) async {
-    final db = await _databaseHelper.database;
-    Map<String, dynamic> projectMap = project.toMap();
+  Future<ProjectSummaryViewModel> _createSummaryViewModel(int projectId) async {
+    final db = await dbHelper.database;
+    final List<Map<String, dynamic>> projectMaps = await db.query(
+        'projects', where: 'id = ?', whereArgs: [projectId]);
 
-    // YOUR LOGIC: If the project is hourly and no valid rate is provided,
-    // fetch the company's default rate and insert it into the table.
-    if (projectMap['pricing_model'] == 'hourly' && ((projectMap['billed_hourly_rate'] as num?) ?? 0.0) <= 0.0) {
-      final companyRate = await _getCompanyRate(db);
-      projectMap['billed_hourly_rate'] = companyRate;
+    if (projectMaps.isEmpty) {
+      throw Exception("Project not found for ID: $projectId");
     }
 
-    final id = await db.insert('projects', projectMap, conflictAlgorithm: ConflictAlgorithm.replace);
-    _databaseHelper.notifyDatabaseChanged();
-    return id;
-  }
+    final projectMap = projectMaps.first;
+    final summaryDetails = await dropdownRepo.getProjectSummaryDetails(projectId);
 
-  Future<int> updateProject(Project project) async {
-    final db = await _databaseHelper.database;
-    Map<String, dynamic> projectMap = project.toMap();
+    // --- Data Extraction and Financial Calculations (Final Logic) ---
 
-    // YOUR LOGIC: Apply the same rule when updating a project.
-    if (projectMap['pricing_model'] == 'hourly' && ((projectMap['billed_hourly_rate'] as num?) ?? 0.0) <= 0.0) {
-      final companyRate = await _getCompanyRate(db);
-      projectMap['billed_hourly_rate'] = companyRate;
+    final String projectName = projectMap['project_name'] as String;
+    final String pricingModel = projectMap['pricing_model'] as String? ?? 'hourly';
+
+    final String? clientName = summaryDetails['client_name'] as String?;
+    final double totalHours = (summaryDetails['total_hours'] as num?)?.toDouble() ?? 0.0;
+    final double totalExpenses = (summaryDetails['total_expenses'] as num?)?.toDouble() ?? 0.0;
+
+    // Rate/Price Logic
+    final double billedHourlyRate = (projectMap['billed_hourly_rate'] as num?)?.toDouble() ?? 0.0;
+    final double fixedPrice = (projectMap['project_price'] as num?)?.toDouble() ?? 0.0;
+
+    // Billed Rate for the card (either hourly or fixed)
+    final double billedRate = (pricingModel == 'hourly') ? billedHourlyRate : fixedPrice;
+
+    final double totalLabourCost;
+    final double totalBilledValue;
+
+    if (pricingModel == 'fixed' || pricingModel == 'project_based') {
+      // For Fixed Price: Total Billed Value is the Fixed Price.
+      // Provisional Labour cost is set to 0.0 (safest proxy).
+      totalBilledValue = fixedPrice;
+      totalLabourCost = 0.0;
+    } else {
+      // For Hourly: Total Billed Value is Hours * Billed Hourly Rate.
+      // Provisional Labour Cost is set to Hours * Billed Hourly Rate (Safest proxy until internal rates are calculated).
+      totalBilledValue = totalHours * billedHourlyRate;
+      totalLabourCost = totalHours * billedHourlyRate;
     }
 
-    final result = await db.update(
-      'projects',
-      projectMap,
-      where: 'id = ?',
-      whereArgs: [project.id],
+    // Provisional P/L: Billed Value - Labour Cost Proxy - Expenses
+    final profitLoss = totalBilledValue - totalLabourCost - totalExpenses;
+    // -----------------------------------------------------------------------
+
+    return ProjectSummaryViewModel(
+      projectId: projectId,
+      projectName: projectName,
+      clientName: clientName,
+      pricingModel: pricingModel,
+      billedRate: billedRate,
+      totalHours: totalHours,
+      totalExpenses: totalExpenses,
+      totalLabourCost: totalLabourCost,
+      totalBilledValue: totalBilledValue,
+      profitLoss: profitLoss,
     );
-    _databaseHelper.notifyDatabaseChanged();
-    return result;
   }
 
-  // --- NO CHANGES TO THE METHODS BELOW ---
+  // Implements getProjectSummary(int projectId)
+  Future<ProjectSummaryViewModel?> getProjectSummary(int projectId) async {
+    try {
+      return await _createSummaryViewModel(projectId);
+    } catch (e) {
+      return null;
+    }
+  }
 
+  // Implements getProjectListReport({required bool activeOnly})
+  Future<List<ProjectSummaryViewModel>> getProjectListReport({required bool activeOnly}) async {
+    final db = await dbHelper.database;
+
+    final List<Map<String, dynamic>> projectMaps = await db.query(
+      'projects',
+      columns: ['id'], // Only need the IDs
+      where: 'is_completed = ?',
+      whereArgs: [activeOnly ? 0 : 1],
+    );
+
+    final futures = projectMaps.map((map) {
+      final projectId = map['id'] as int;
+      return _createSummaryViewModel(projectId);
+    }).toList();
+
+    final results = await Future.wait(futures);
+    return results.whereType<ProjectSummaryViewModel>().toList();
+  }
+
+  // =========================================================================
+  // CRUD & UTILITY METHODS (Restored functionality)
+  // =========================================================================
+
+  // Implements: getProjects()
   Future<List<Project>> getProjects() async {
-    final db = await _databaseHelper.database;
+    final db = await dbHelper.database;
     final List<Map<String, dynamic>> maps = await db.query('projects');
-    return List.generate(maps.length, (i) {
-      return Project.fromMap(maps[i]);
-    });
+    return List.generate(maps.length, (i) => Project.fromMap(maps[i]));
   }
 
-  Future<Project?> getProjectById(int id) async {
-    final db = await _databaseHelper.database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'projects',
-      where: 'id = ?',
-      whereArgs: [id],
+  // Implements: insertProject(newProject)
+  Future<int> insertProject(Project project) async {
+    final db = await dbHelper.database;
+    return await db.insert('projects', project.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  // Implements: updateProject(project)
+  Future<int> updateProject(Project project) async {
+    final db = await dbHelper.database;
+    return await db.update(
+      'projects', project.toMap(), where: 'id = ?', whereArgs: [project.id],
     );
-    if (maps.isNotEmpty) {
-      return Project.fromMap(maps.first);
-    }
-    return null;
   }
 
+  // Implements: deleteProject(id)
   Future<int> deleteProject(int id) async {
-    final db = await _databaseHelper.database;
-    // Your original file had 'time_records' and 'job_materials', but the schema uses 'time_entries' and 'materials'.
-    // I will use the correct table names from the schema to avoid errors.
-    await db.delete('time_entries', where: 'project_id = ?', whereArgs: [id]);
-    await db.delete('materials', where: 'project_id = ?', whereArgs: [id]);
-    final result = await db.delete(
-      'projects',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-    _databaseHelper.notifyDatabaseChanged();
-    return result;
+    final db = await dbHelper.database;
+    return await db.delete('projects', where: 'id = ?', whereArgs: [id]);
   }
 
+  // Implements: hasAssociatedRecords(id)
   Future<bool> hasAssociatedRecords(int projectId) async {
-    final db = await _databaseHelper.database;
-    // Using correct table names from schema
-    final timeRecordsCount = Sqflite.firstIntValue(await db.rawQuery(
-        'SELECT COUNT(*) FROM time_entries WHERE project_id = ?', [projectId]));
-    final costRecordsCount = Sqflite.firstIntValue(await db.rawQuery(
-        'SELECT COUNT(*) FROM materials WHERE project_id = ?', [projectId]));
+    final db = await dbHelper.database;
 
-    return (timeRecordsCount ?? 0) > 0 || (costRecordsCount ?? 0) > 0;
-  }
-
-  Future<int> markAsCompleted(int id) async {
-    Database db = await _databaseHelper.database;
-    final result = await db.update(
-      'projects',
-      // Correcting the key to match the database schema ('is_completed')
-      {'is_completed': 1}, // 1 for true in SQLite
-      where: 'id = ?',
-      whereArgs: [id],
+    final List<Map<String, dynamic>> timeMaps = await db.query(
+      'time_entries', where: 'project_id = ?', whereArgs: [projectId], limit: 1,
     );
-    _databaseHelper.notifyDatabaseChanged();
-    return result;
+    if (timeMaps.isNotEmpty) return true;
+
+    final List<Map<String, dynamic>> materialMaps = await db.query(
+      'materials', where: 'project_id = ?', whereArgs: [projectId], limit: 1,
+    );
+    if (materialMaps.isNotEmpty) return true;
+
+    return false;
   }
 }

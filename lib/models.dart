@@ -41,7 +41,6 @@ class Client {
     );
   }
 
-  // START: ADDED BACK COPYWITH
   Client copyWith({
     int? id,
     String? name,
@@ -57,7 +56,6 @@ class Client {
       phoneNumber: phoneNumber ?? this.phoneNumber,
     );
   }
-  // END: ADDED BACK COPYWITH
 
   @override
   String toString() {
@@ -77,7 +75,7 @@ class Project {
   final double? billedHourlyRate;
   final double? fixedPrice;
 
-  const Project({ // Made const
+  const Project({
     this.id,
     required this.projectName,
     required this.clientId,
@@ -101,7 +99,7 @@ class Project {
       'completion_date': completionDate?.toIso8601String(),
       'is_internal': isInternal ? 1 : 0,
       'billed_hourly_rate': billedHourlyRate,
-      'fixedPrice': fixedPrice,
+      'project_price': fixedPrice, // DB column is 'project_price'
     };
   }
 
@@ -118,11 +116,10 @@ class Project {
           : null,
       isInternal: map['is_internal'] == 1,
       billedHourlyRate: (map['billed_hourly_rate'] as num?)?.toDouble(),
-      fixedPrice: (map['fixedPrice'] as num?)?.toDouble(),
+      fixedPrice: (map['project_price'] as num?)?.toDouble(), // DB column is 'project_price'
     );
   }
 
-  // START: ADDED BACK COPYWITH
   Project copyWith({
     int? id,
     String? projectName,
@@ -148,7 +145,6 @@ class Project {
       fixedPrice: fixedPrice ?? this.fixedPrice,
     );
   }
-  // END: ADDED BACK COPYWITH
 
   @override
   String toString() {
@@ -191,7 +187,6 @@ class Employee {
     );
   }
 
-  // START: ADDED BACK COPYWITH
   Employee copyWith({
     int? id,
     String? employeeNumber,
@@ -207,7 +202,6 @@ class Employee {
       isDeleted: isDeleted ?? this.isDeleted,
     );
   }
-// END: ADDED BACK COPYWITH
 }
 
 class TimeEntry {
@@ -275,7 +269,6 @@ class TimeEntry {
     };
   }
 
-  // START: ADDED BACK COPYWITH
   TimeEntry copyWith({
     int? id,
     int? projectId,
@@ -303,11 +296,9 @@ class TimeEntry {
       workDetails: workDetails ?? this.workDetails,
     );
   }
-// END: ADDED BACK COPYWITH
 }
 
 class JobMaterials {
-  // ... (JobMaterials remains unchanged, as it had no errors)
   final int? id;
   final int projectId;
   final String itemName;
@@ -394,7 +385,6 @@ class ExpenseCategory {
   factory ExpenseCategory.fromMap(Map<String, dynamic> map) =>
       ExpenseCategory(id: map['id'], name: map['name']);
 
-  // START: ADDED BACK COPYWITH
   ExpenseCategory copyWith({
     int? id,
     String? name,
@@ -404,7 +394,6 @@ class ExpenseCategory {
       name: name ?? this.name,
     );
   }
-// END: ADDED BACK COPYWITH
 }
 
 class Role {
@@ -412,7 +401,6 @@ class Role {
   final String name;
   final double standardRate;
 
-  // FIX: Make standardRate optional with a default value
   Role({this.id, required this.name, this.standardRate = 0.0});
 
   Map<String, dynamic> toMap() =>
@@ -421,9 +409,8 @@ class Role {
   factory Role.fromMap(Map<String, dynamic> map) => Role(
       id: map['id'],
       name: map['name'],
-      standardRate: (map['standard_rate'] as num? ?? 0.0).toDouble()); // Made safer
+      standardRate: (map['standard_rate'] as num? ?? 0.0).toDouble());
 
-  // START: ADDED BACK COPYWITH
   Role copyWith({
     int? id,
     String? name,
@@ -435,10 +422,7 @@ class Role {
       standardRate: standardRate ?? this.standardRate,
     );
   }
-// END: ADDED BACK COPYWITH
 }
-
-// ... AppSettings and AllRecordViewModel are unchanged, but included for completeness ...
 
 class AppSettings {
   final int id;
@@ -541,4 +525,78 @@ class AllRecordViewModel {
 
   @override
   int get hashCode => id.hashCode ^ type.hashCode;
+}
+
+class CostSummary {
+  final String categoryName;
+  final double totalCost;
+  final int recordCount;
+
+  CostSummary({
+    required this.categoryName,
+    required this.totalCost,
+    required this.recordCount,
+  });
+
+  CostSummary copyWith({
+    String? categoryName,
+    double? totalCost,
+    int? recordCount,
+  }) {
+    return CostSummary(
+      categoryName: categoryName ?? this.categoryName,
+      totalCost: totalCost ?? this.totalCost,
+      recordCount: recordCount ?? this.recordCount,
+    );
+  }
+
+  @override
+  String toString() {
+    return 'CostSummary(category: $categoryName, cost: $totalCost, count: $recordCount)';
+  }
+}
+
+// ============================================================================
+// | PROJECT SUMMARY VIEW MODEL FOR ANALYTICS CARD & REPORT TABLE             |
+// ============================================================================
+// The required view model for analytics reports
+class ProjectSummaryViewModel {
+  final int projectId;
+  final String projectName;
+  final String pricingModel;
+  final double billedRate;
+  final double totalHours;
+  final double totalExpenses;
+  final double totalLabourCost;
+  final double totalBilledValue;
+  final String? clientName;
+  final double profitLoss;
+
+  const ProjectSummaryViewModel({
+    required this.projectId,
+    required this.projectName,
+    required this.pricingModel,
+    required this.billedRate,
+    required this.totalHours,
+    required this.totalExpenses,
+    required this.totalLabourCost,
+    required this.totalBilledValue,
+    required this.clientName,
+    required this.profitLoss,
+  });
+
+  @override
+  String toString() {
+    return 'ProjectSummary(name: $projectName, Hours: ${totalHours.toStringAsFixed(2)}, Expenses: ${totalExpenses.toStringAsFixed(2)}, P/L: ${profitLoss.toStringAsFixed(2)})';
+  }
+}
+
+// ============================================================================
+// | DROPDOWN ITEM (MODEL CONSOLIDATION FIX)                                  |
+// ============================================================================
+// This must be defined here and REMOVED from dropdown_repository.dart
+class DropdownItem {
+  final int id;
+  final String name;
+  const DropdownItem({required this.id, required this.name});
 }
