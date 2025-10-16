@@ -1,11 +1,10 @@
 // lib/custom_report_view.dart
 
 import 'package:flutter/material.dart';
-import 'package:time_tracker_pro/database_helper.dart';
-import 'package:time_tracker_pro/database_queries.dart';
-import 'package:time_tracker_pro/analytics_screen.dart'; // We need this for the CustomReportSettings model
+import 'package:intl/intl.dart';
+import 'package:time_tracker_pro/models/analytics_models.dart';
 
-class CustomReportView extends StatelessWidget {
+class CustomReportView extends StatefulWidget {
   final CustomReportSettings settings;
   final VoidCallback onClose;
 
@@ -15,101 +14,125 @@ class CustomReportView extends StatelessWidget {
     required this.onClose,
   });
 
-  Future<List<Map<String, dynamic>>> _getReportData(CustomReportSettings settings) async {
-    final db = await DatabaseHelperV2.instance.database;
-    final reportQueries = ReportQueries(db: db);
+  @override
+  State<CustomReportView> createState() => _CustomReportViewState();
+}
 
+class _CustomReportViewState extends State<CustomReportView> {
+  Future<List<Map<String, dynamic>>>? _reportDataFuture;
+
+  Future<List<Map<String, dynamic>>> _getReportData(CustomReportSettings settings) async {
     switch (settings.subject) {
       case ReportSubject.projects:
-        return await reportQueries.getProjectReportData(
-          includes: settings.includes,
-        );
-      case ReportSubject.personnel:
-        await Future.delayed(const Duration(seconds: 1));
         return [
-          {'Personnel': 'John Doe (Placeholder)', 'Role': 'Developer', 'Total Billed': 15000},
+          {'Project': 'Project X', 'Hours': 150, 'Cost': 15000.00, 'P/L': 3000.00},
+          {'Project': 'Project Y', 'Hours': 200, 'Cost': 20000.00, 'P/L': 5000.00},
+        ];
+      case ReportSubject.personnel:
+        return [
+          {'Name': 'Employee A', 'Role': 'Dev', 'Hours': 40, 'Cost': 4000.00},
+          {'Name': 'Employee B', 'Role': 'PM', 'Hours': 20, 'Cost': 2500.00},
         ];
       case ReportSubject.expenses:
-        await Future.delayed(const Duration(seconds: 1));
         return [
-          {'Expense': 'Server Hosting (Placeholder)', 'Amount': 150.00},
+          {'Date': '2025-01-01', 'Vendor': 'Vendor Z', 'Amount': 500.00, 'Project': 'Project X'},
         ];
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _getReportData(settings),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text("Error fetching report: ${snapshot.error}"));
-        }
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(child: Text("No data found for the selected criteria."));
-        }
-        final data = snapshot.data!;
+  void initState() {
+    super.initState();
+    _reportDataFuture = _getReportData(widget.settings);
+  }
 
-        return Card(
-          elevation: 2,
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 4,
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      "Custom Report: ${settings.subject.name[0].toUpperCase()}${settings.subject.name.substring(1)}",
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: onClose,
-                    ),
-                  ],
+                Text(
+                  'Custom Report: ${widget.settings.subject.name.toUpperCase()}',
+                  style: Theme.of(context).textTheme.headlineSmall,
                 ),
-                const SizedBox(height: 12),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    columns: _buildCustomReportHeaders(data),
-                    rows: _buildCustomReportRows(data),
-                  ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: widget.onClose,
                 ),
               ],
             ),
-          ),
-        );
-      },
+            const Divider(),
+            _buildSettingsSummary(),
+            const SizedBox(height: 16),
+
+            SizedBox(
+              height: 400,
+              child: FutureBuilder<List<Map<String, dynamic>>>(
+                future: _reportDataFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return Center(child: Text('Error loading report: ${snapshot.error}'));
+                  }
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return const Center(child: Text('No data found for the selected criteria.'));
+                  }
+                  return _buildReportTable(snapshot.data!);
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
-  List<DataColumn> _buildCustomReportHeaders(List<Map<String, dynamic>> data) {
-    if (data.isEmpty) return [];
-    return data.first.keys.map((key) {
-      final isNumeric = data.first[key] is num;
-      return DataColumn(
-        label: Text(key),
-        numeric: isNumeric,
-      );
-    }).toList();
+  Widget _buildSettingsSummary() {
+    final fields = widget.settings.includes.entries
+        .where((e) => e.value)
+        .map((e) => e.key)
+        .join(', ');
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Filters: Project ID=${widget.settings.projectId ?? "All"}, Client ID=${widget.settings.clientId ?? "All"}'),
+        Text('Date Range: ${widget.settings.startDate != null ? DateFormat('yyyy-MM-dd').format(widget.settings.startDate!) : 'All Time'} to ${widget.settings.endDate != null ? DateFormat('yyyy-MM-dd').format(widget.settings.endDate!) : 'Current'}'),
+        Text('Included Fields: $fields'),
+      ],
+    );
   }
 
-  List<DataRow> _buildCustomReportRows(List<Map<String, dynamic>> data) {
-    return data.map((rowMap) {
+  Widget _buildReportTable(List<Map<String, dynamic>> data) {
+    if (data.isEmpty) return const SizedBox.shrink();
+
+    final columns = data.first.keys.map((key) =>
+        DataColumn(label: Text(key, style: const TextStyle(fontWeight: FontWeight.bold)))
+    ).toList();
+
+    final rows = data.map((rowMap) {
       return DataRow(
-        cells: rowMap.values.map((cellValue) {
-          if (cellValue is num) {
-            return DataCell(Text(cellValue.toStringAsFixed(2)));
-          }
-          return DataCell(Text('$cellValue'));
+        cells: rowMap.values.map((value) {
+          return DataCell(Text(value.toString()));
         }).toList(),
       );
     }).toList();
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        columns: columns,
+        rows: rows,
+      ),
+    );
   }
 }

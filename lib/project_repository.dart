@@ -4,11 +4,14 @@ import 'package:sqflite/sqflite.dart';
 import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:time_tracker_pro/dropdown_repository.dart';
+import 'package:time_tracker_pro/services/settings_service.dart';
 
 class ProjectRepository {
   final dbHelper = DatabaseHelperV2.instance;
   final DropdownRepository dropdownRepo = DropdownRepository();
+  final SettingsService settingsService = SettingsService.instance;
 
   // =========================================================================
   // ANALYTICS METHODS
@@ -16,48 +19,55 @@ class ProjectRepository {
 
   Future<ProjectSummaryViewModel> _createSummaryViewModel(int projectId) async {
     final db = await dbHelper.database;
+
+    // 1. Fetch core project details
     final List<Map<String, dynamic>> projectMaps = await db.query(
         'projects', where: 'id = ?', whereArgs: [projectId]);
 
     if (projectMaps.isEmpty) {
+      debugPrint('[ProjectRepo Error] Core project data (ID $projectId) not found in projects table.');
       throw Exception("Project not found for ID: $projectId");
     }
 
     final projectMap = projectMaps.first;
+
+    // 2. Fetch aggregated summary details (time, expenses, client name)
     final summaryDetails = await dropdownRepo.getProjectSummaryDetails(projectId);
 
-    // --- Data Extraction and Financial Calculations (Final Logic) ---
+    if (summaryDetails.isEmpty || !summaryDetails.containsKey('client_name')) {
+      debugPrint('[ProjectRepo Error] Summary data failed or missing keys for ID $projectId. Returning empty result.');
+      throw Exception("Summary aggregation failed due to missing keys or empty data.");
+    }
+
+    // 3. Fetch Burden Rate (This is the critical line that failed silently)
+    // Now correctly calls the stable getBurdenRate method from SettingsService.
+    final double companyBurdenRate = await settingsService.getBurdenRate();
+
+    // --- Data Extraction and Financial Calculations ---
 
     final String projectName = projectMap['project_name'] as String;
     final String pricingModel = projectMap['pricing_model'] as String? ?? 'hourly';
 
     final String? clientName = summaryDetails['client_name'] as String?;
-    final double totalHours = (summaryDetails['total_hours'] as num?)?.toDouble() ?? 0.0;
-    final double totalExpenses = (summaryDetails['total_expenses'] as num?)?.toDouble() ?? 0.0;
+    final double totalHours = (summaryDetails['total_hours'] as num? ?? 0.0).toDouble();
+    final double totalExpenses = (summaryDetails['total_expenses'] as num? ?? 0.0).toDouble();
 
-    // Rate/Price Logic
-    final double billedHourlyRate = (projectMap['billed_hourly_rate'] as num?)?.toDouble() ?? 0.0;
-    final double fixedPrice = (projectMap['project_price'] as num?)?.toDouble() ?? 0.0;
+    final double billedHourlyRate = (projectMap['billed_hourly_rate'] as num? ?? 0.0).toDouble();
+    final double fixedPrice = (projectMap['project_price'] as num? ?? 0.0).toDouble();
 
-    // Billed Rate for the card (either hourly or fixed)
     final double billedRate = (pricingModel == 'hourly') ? billedHourlyRate : fixedPrice;
 
     final double totalLabourCost;
     final double totalBilledValue;
 
     if (pricingModel == 'fixed' || pricingModel == 'project_based') {
-      // For Fixed Price: Total Billed Value is the Fixed Price.
-      // Provisional Labour cost is set to 0.0 (safest proxy).
+      totalLabourCost = totalHours * companyBurdenRate;
       totalBilledValue = fixedPrice;
-      totalLabourCost = 0.0;
     } else {
-      // For Hourly: Total Billed Value is Hours * Billed Hourly Rate.
-      // Provisional Labour Cost is set to Hours * Billed Hourly Rate (Safest proxy until internal rates are calculated).
-      totalBilledValue = totalHours * billedHourlyRate;
       totalLabourCost = totalHours * billedHourlyRate;
+      totalBilledValue = totalHours * billedHourlyRate;
     }
 
-    // Provisional P/L: Billed Value - Labour Cost Proxy - Expenses
     final profitLoss = totalBilledValue - totalLabourCost - totalExpenses;
     // -----------------------------------------------------------------------
 
@@ -80,6 +90,8 @@ class ProjectRepository {
     try {
       return await _createSummaryViewModel(projectId);
     } catch (e) {
+      // The error is now trapped and logged correctly.
+      debugPrint('*** DEBUG (R-2) DATABASE FAIL: getProjectSummary failed for ID $projectId: $e ***');
       return null;
     }
   }
@@ -90,14 +102,21 @@ class ProjectRepository {
 
     final List<Map<String, dynamic>> projectMaps = await db.query(
       'projects',
-      columns: ['id'], // Only need the IDs
+      columns: ['id'],
       where: 'is_completed = ?',
       whereArgs: [activeOnly ? 0 : 1],
     );
 
     final futures = projectMaps.map((map) {
       final projectId = map['id'] as int;
-      return _createSummaryViewModel(projectId);
+      return () async {
+        try {
+          return await _createSummaryViewModel(projectId);
+        } catch (e) {
+          debugPrint('[ProjectRepo Warning] Skipping project ID $projectId for list due to error: $e');
+          return null;
+        }
+      }();
     }).toList();
 
     final results = await Future.wait(futures);
@@ -105,23 +124,20 @@ class ProjectRepository {
   }
 
   // =========================================================================
-  // CRUD & UTILITY METHODS (Restored functionality)
+  // CRUD & UTILITY METHODS
   // =========================================================================
 
-  // Implements: getProjects()
   Future<List<Project>> getProjects() async {
     final db = await dbHelper.database;
     final List<Map<String, dynamic>> maps = await db.query('projects');
     return List.generate(maps.length, (i) => Project.fromMap(maps[i]));
   }
 
-  // Implements: insertProject(newProject)
   Future<int> insertProject(Project project) async {
     final db = await dbHelper.database;
     return await db.insert('projects', project.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
-  // Implements: updateProject(project)
   Future<int> updateProject(Project project) async {
     final db = await dbHelper.database;
     return await db.update(
@@ -129,13 +145,11 @@ class ProjectRepository {
     );
   }
 
-  // Implements: deleteProject(id)
   Future<int> deleteProject(int id) async {
     final db = await dbHelper.database;
     return await db.delete('projects', where: 'id = ?', whereArgs: [id]);
   }
 
-  // Implements: hasAssociatedRecords(id)
   Future<bool> hasAssociatedRecords(int projectId) async {
     final db = await dbHelper.database;
 
@@ -152,3 +166,4 @@ class ProjectRepository {
     return false;
   }
 }
+// lib/project_repository.dart

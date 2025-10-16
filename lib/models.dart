@@ -1,9 +1,7 @@
 // lib/models.dart
 
-import 'package:flutter/foundation.dart';
-
 // ============================================================================
-// |                         DATA MODELS (WITH COPYWITH)                      |
+// |                         DATA MODELS (WITH copyWith)                      |
 // ============================================================================
 
 class Client {
@@ -201,6 +199,29 @@ class Employee {
       titleId: titleId ?? this.titleId,
       isDeleted: isDeleted ?? this.isDeleted,
     );
+  }
+}
+
+class EmployeeSummaryViewModel {
+  final String employeeName;
+  final String employeeNumber;
+  final String roleTitle;
+  final int projectsCount;
+  final double totalHours;
+  final double totalBilledValue;
+
+  EmployeeSummaryViewModel({
+    required this.employeeName,
+    required this.employeeNumber,
+    required this.roleTitle,
+    required this.projectsCount,
+    required this.totalHours,
+    required this.totalBilledValue,
+  });
+
+  @override
+  String toString() {
+    return 'EmployeeSummaryViewModel(employeeName: $employeeName, employeeNumber: $employeeNumber, roleTitle: $roleTitle, projectsCount: $projectsCount, totalHours: ${totalHours.toStringAsFixed(2)}, totalBilledValue: ${totalBilledValue.toStringAsFixed(2)})';
   }
 }
 

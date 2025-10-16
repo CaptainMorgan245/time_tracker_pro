@@ -79,6 +79,38 @@ class EmployeeRepository {
     return newEmployeeId;
   }
 
+  Future<List<EmployeeSummaryViewModel>> fetchEmployeeSummaries() async {
+    final db = await _databaseHelper.database;
+    // Correcting the SQL query to fit your schema
+    List<Map<String, dynamic>> summaries = await db.rawQuery('''
+    SELECT 
+      e.name AS employeeName, 
+      e.employee_number AS employeeNumber, 
+      r.name AS roleTitle,
+      COUNT(DISTINCT t.project_id) AS projectsCount,
+      SUM(t.final_billed_duration_seconds / 3600.0) AS totalHours,
+      SUM((t.final_billed_duration_seconds / 3600.0) * 
+        (CASE p.pricing_model
+          WHEN 'hourly' THEN p.billed_hourly_rate
+          ELSE 0 END)
+      ) AS totalBilledValue
+    FROM employees e
+    JOIN time_entries t ON e.id = t.employee_id
+    JOIN projects p ON t.project_id = p.id
+    JOIN roles r ON e.title_id = r.id
+    WHERE e.is_deleted = 0
+    GROUP BY e.id;
+  ''');
+
+    return summaries.map((map) => EmployeeSummaryViewModel(
+      employeeName: map['employeeName'],
+      employeeNumber: map['employeeNumber'],
+      roleTitle: map['roleTitle'],
+      projectsCount: map['projectsCount'],
+      totalHours: map['totalHours']?.toDouble() ?? 0.0,
+      totalBilledValue: map['totalBilledValue']?.toDouble() ?? 0.0,
+    )).toList();
+  }
 
   Future<List<Employee>> getEmployees() async {
     final db = await _databaseHelper.database;
