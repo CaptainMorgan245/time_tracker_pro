@@ -5,17 +5,12 @@ import 'package:time_tracker_pro/custom_report_view.dart';
 import 'package:time_tracker_pro/dropdown_repository.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/project_repository.dart';
-import 'package:time_tracker_pro/employee_repository.dart';  // Include employee repository
+import 'package:time_tracker_pro/employee_repository.dart';
 import 'package:time_tracker_pro/widgets/project_summary_card.dart';
 import 'package:time_tracker_pro/widgets/project_list_report.dart';
 import 'package:time_tracker_pro/dialogs/select_data_dialog.dart';
 import 'package:time_tracker_pro/models/analytics_models.dart';
 import 'package:time_tracker_pro/widgets/personnel_list_report.dart';
-import 'package:csv/csv.dart';
-import 'package:share_plus/share_plus.dart';
-import 'dart:io';
-import 'package:path_provider/path_provider.dart';
-import 'package:intl/intl.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
@@ -24,21 +19,19 @@ class AnalyticsScreen extends StatefulWidget {
 }
 
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
-  // State variables
   AnalyticsView _currentView = AnalyticsView.none;
   ReportType _selectedReportType = ReportType.activeProjects;
   int? _selectedProjectId;
   final _dropdownRepo = DropdownRepository();
   final _projectRepo = ProjectRepository();
-  final _employeeRepo = EmployeeRepository();  // Employee repository instance
+  final _employeeRepo = EmployeeRepository();
   List<DropdownItem> _projectsForDropdown = [];
   bool _isLoadingProjects = true;
   CustomReportSettings? _customReportSettings;
 
-  // Futures for asynchronous data loading
   Future<ProjectSummaryViewModel?>? _singleProjectCardFuture;
   Future<List<ProjectSummaryViewModel>>? _projectListTableFuture;
-  Future<List<EmployeeSummaryViewModel>>? _employeeSummaryFuture;  // For employee summaries
+  Future<List<EmployeeSummaryViewModel>>? _employeeSummaryFuture;
 
   @override
   void initState() {
@@ -97,131 +90,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     });
   }
 
+  void _showCompanyExpenses() {
+    setState(() {
+      _currentView = AnalyticsView.companyExpenses;
+      // TODO: Load company expenses data
+    });
+  }
+
   void _generateSingleSummaryCard(int projectId) {
     setState(() {
       _currentView = AnalyticsView.singleProjectCard;
       _singleProjectCardFuture = _projectRepo.getProjectSummary(projectId);
     });
   }
-  Future<void> _handleExport() async {
-    switch (_currentView) {
-      case AnalyticsView.projectListTable:
-        await _exportProjectReport();
-        break;
-      case AnalyticsView.personnelSummary:
-        await _exportPersonnelReport();
-        break;
-      case AnalyticsView.customReport:
-        await _exportCustomReport();
-        break;
-      case AnalyticsView.singleProjectCard:
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please view the full Project Summary table to export')),
-        );
-        break;
-      default:
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No report selected to export')),
-        );
-    }
-  }
 
-  Future<void> _exportProjectReport() async {
-    final data = await _projectListTableFuture;
-    if (data == null || data.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No data to export')),
-        );
-      }
-      return;
-    }
-
-    try {
-      List<List<dynamic>> csvData = [
-        ['Project', 'Client', 'Pricing Model', 'Hours', 'Labour Cost', 'Expenses', 'Total Cost', 'Billed Value', 'Profit/Loss'],
-        ...data.map((d) => [
-          d.projectName,
-          d.clientName ?? 'N/A',
-          d.pricingModel,
-          d.totalHours.toStringAsFixed(2),
-          d.totalLabourCost.toStringAsFixed(2),
-          d.totalExpenses.toStringAsFixed(2),
-          (d.totalLabourCost + d.totalExpenses).toStringAsFixed(2),
-          d.totalBilledValue.toStringAsFixed(2),
-          d.profitLoss.toStringAsFixed(2),
-        ]),
-      ];
-
-      String csv = const ListToCsvConverter().convert(csvData);
-      final directory = await getTemporaryDirectory();
-      final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-      final path = '${directory.path}/project_summary_$timestamp.csv';
-      final file = File(path);
-      await file.writeAsString(csv);
-
-      await Share.shareXFiles([XFile(path)], subject: 'Project Summary Report');
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Report exported successfully')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Export failed: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _exportPersonnelReport() async {
-    final data = await _employeeSummaryFuture;
-    if (data == null || data.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No data to export')),
-        );
-      }
-      return;
-    }
-
-    try {
-      List<List<dynamic>> csvData = [
-        ['Employee', 'Emp #', 'Role', 'Projects', 'Total Hours', 'Billed Value'],
-        ...data.map((d) => [
-          d.employeeName,
-          d.employeeNumber,
-          d.roleTitle,
-          d.projectsCount,
-          d.totalHours.toStringAsFixed(2),
-          d.totalBilledValue.toStringAsFixed(2),
-        ]),
-      ];
-
-      String csv = const ListToCsvConverter().convert(csvData);
-      final directory = await getTemporaryDirectory();
-      final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-      final path = '${directory.path}/personnel_summary_$timestamp.csv';
-      final file = File(path);
-      await file.writeAsString(csv);
-
-      await Share.shareXFiles([XFile(path)], subject: 'Personnel Summary Report');
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Report exported successfully')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Export failed: $e')),
-        );
-      }
-    }
-  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -240,14 +122,6 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         ),
       ),
     );
-  }
-// ADD NEW METHOD BELOW THIS LINE ↓
-  Future<void> _exportCustomReport() async {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Custom report export coming soon - currently shows mock data')),
-      );
-    }
   }
 
   Widget _buildDynamicContent() {
@@ -311,6 +185,14 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         return CustomReportView(
           settings: _customReportSettings!,
           onClose: () => setState(() => _currentView = AnalyticsView.none),
+        );
+
+      case AnalyticsView.companyExpenses:
+        return const Card(
+          child: Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Center(child: Text('Company Expenses Report - Coming Soon')),
+          ),
         );
 
       case AnalyticsView.none:
@@ -423,10 +305,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         const SizedBox(width: 12),
         Expanded(
           child: ElevatedButton.icon(
-            icon: const Icon(Icons.ios_share),
-            label: const Text('Export Details'),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 12)),
-            onPressed: _handleExport, // Placeholder for future export functionality
+            icon: const Icon(Icons.account_balance_wallet),
+            label: const Text('Company Expenses'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 12)),
+            onPressed: _showCompanyExpenses,
           ),
         ),
       ],

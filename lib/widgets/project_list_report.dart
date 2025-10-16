@@ -75,10 +75,25 @@ class ProjectListReport extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Project Financial Summary',
-              style: Theme.of(context).textTheme.headlineSmall,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Project Financial Summary',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => _exportToCSV(context),
+                  icon: const Icon(Icons.download),
+                  label: const Text('Export CSV'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
             ),
+            const Divider(),
             const Divider(),
 
             SizedBox(

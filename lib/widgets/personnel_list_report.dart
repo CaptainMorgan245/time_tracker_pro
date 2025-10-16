@@ -2,6 +2,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:csv/csv.dart';
+import 'package:share_plus/share_plus.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
 import 'package:time_tracker_pro/models.dart';
 
 final _currencyFormat = NumberFormat.currency(locale: 'en_US', symbol: '\$');
@@ -9,6 +13,43 @@ final _currencyFormat = NumberFormat.currency(locale: 'en_US', symbol: '\$');
 class PersonnelListReport extends StatelessWidget {
   final List<EmployeeSummaryViewModel> reportData;
   const PersonnelListReport({super.key, required this.reportData});
+
+  Future<void> _exportToCSV(BuildContext context) async {
+    try {
+      List<List<dynamic>> csvData = [
+        ['Employee', 'Emp #', 'Role', 'Projects', 'Total Hours', 'Billed Value'],
+        ...reportData.map((d) => [
+          d.employeeName,
+          d.employeeNumber,
+          d.roleTitle,
+          d.projectsCount,
+          d.totalHours.toStringAsFixed(2),
+          d.totalBilledValue.toStringAsFixed(2),
+        ]),
+      ];
+
+      String csv = const ListToCsvConverter().convert(csvData);
+      final directory = await getTemporaryDirectory();
+      final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
+      final path = '${directory.path}/personnel_summary_$timestamp.csv';
+      final file = File(path);
+      await file.writeAsString(csv);
+
+      await Share.shareXFiles([XFile(path)], subject: 'Personnel Summary Report');
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Report exported successfully')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Export failed: $e')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,9 +61,23 @@ class PersonnelListReport extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'Personnel Summary Report',
-              style: Theme.of(context).textTheme.headlineSmall,
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Personnel Summary Report',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => _exportToCSV(context),
+                  icon: const Icon(Icons.download),
+                  label: const Text('Export CSV'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
             ),
             const Divider(),
             SizedBox(

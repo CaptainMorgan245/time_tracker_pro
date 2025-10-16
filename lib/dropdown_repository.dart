@@ -36,6 +36,18 @@ class DropdownRepository {
     });
   }
 
+  Future<List<DropdownItem>> getEmployees() async {
+    final db = await dbHelper.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'employees',
+      where: 'is_deleted = 0',
+      orderBy: 'name',
+    );
+    return List.generate(maps.length, (i) {
+      return DropdownItem(id: maps[i]['id'], name: maps[i]['name']);
+    });
+  }
+
   Future<List<DropdownItem>> getProjectsByStatus({bool active = true}) async {
     final db = await dbHelper.database;
     final List<Map<String, dynamic>> maps = await db.query(

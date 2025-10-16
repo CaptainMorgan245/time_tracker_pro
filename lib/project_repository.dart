@@ -7,6 +7,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:time_tracker_pro/dropdown_repository.dart';
 import 'package:time_tracker_pro/services/settings_service.dart';
+import 'package:time_tracker_pro/models/analytics_models.dart';
 
 class ProjectRepository {
   final dbHelper = DatabaseHelperV2.instance;
@@ -121,6 +122,73 @@ class ProjectRepository {
 
     final results = await Future.wait(futures);
     return results.whereType<ProjectSummaryViewModel>().toList();
+  }
+
+  // Custom report query based on user filters
+  Future<List<Map<String, dynamic>>> getCustomProjectReport(CustomReportSettings settings) async {
+    final db = await dbHelper.database;
+
+    // Build WHERE clause based on filters
+    List<String> whereConditions = [];
+    List<dynamic> whereArgs = [];
+
+    // Filter by client if specified
+    if (settings.clientId != null) {
+      whereConditions.add('p.client_id = ?');
+      whereArgs.add(settings.clientId);
+    }
+
+    // Filter by project if specified
+    if (settings.projectId != null) {
+      whereConditions.add('p.id = ?');
+      whereArgs.add(settings.projectId);
+    }
+
+    // Build date range filter for time entries
+    String dateFilter = '';
+    if (settings.startDate != null || settings.endDate != null) {
+      if (settings.startDate != null) {
+        dateFilter += ' AND te.start_time >= \'${settings.startDate!.toIso8601String()}\'';
+      }
+      if (settings.endDate != null) {
+        dateFilter += ' AND te.start_time <= \'${settings.endDate!.toIso8601String()}\'';
+      }
+    }
+
+    String whereClause = whereConditions.isEmpty ? '1=1' : whereConditions.join(' AND ');
+
+    // Build SELECT clause based on included fields
+    List<String> selectFields = ['p.project_name AS project'];
+
+    if (settings.includes['Client Details'] == true) {
+      selectFields.add('c.name AS client');
+    }
+    if (settings.includes['Total Hours'] == true) {
+      selectFields.add('IFNULL(SUM(te.final_billed_duration_seconds / 3600.0), 0.0) AS total_hours');
+    }
+    if (settings.includes['Billed Rate'] == true) {
+      selectFields.add('p.billed_hourly_rate AS hourly_rate');
+      selectFields.add('p.project_price AS project_price');
+      selectFields.add('p.pricing_model');
+    }
+    if (settings.includes['Expense Totals'] == true) {
+      selectFields.add('IFNULL((SELECT SUM(cost) FROM materials m WHERE m.project_id = p.id AND m.is_deleted = 0), 0.0) AS total_expenses');
+    }
+
+    final query = '''
+    SELECT ${selectFields.join(', ')}
+    FROM projects p
+    LEFT JOIN clients c ON p.client_id = c.id
+    LEFT JOIN time_entries te ON p.id = te.project_id $dateFilter
+    WHERE $whereClause
+    GROUP BY p.id
+    ORDER BY p.project_name
+  ''';
+
+    debugPrint('[CustomReport Query] $query');
+    debugPrint('[CustomReport Args] $whereArgs');
+
+    return await db.rawQuery(query, whereArgs);
   }
 
   // =========================================================================

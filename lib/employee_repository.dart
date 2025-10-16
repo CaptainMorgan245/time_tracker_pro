@@ -3,8 +3,8 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/models.dart';
-//import 'package:time_tracker_pro/settings_service.dart';
-//import 'package:time_tracker_pro/settings_model.dart';
+import 'package:time_tracker_pro/models/analytics_models.dart';
+import 'package:flutter/foundation.dart'; // for debugPrint
 
 class EmployeeRepository {
   // Use the V2 instance to get access to the notifier.
@@ -131,6 +131,65 @@ class EmployeeRepository {
       return Employee.fromMap(maps.first);
     }
     return null;
+  }
+
+  // Custom personnel report based on user filters
+  Future<List<Map<String, dynamic>>> getCustomPersonnelReport(CustomReportSettings settings) async {
+    final db = await _databaseHelper.database;
+
+    // Build WHERE clause for employee filter
+    List<String> whereConditions = ['e.is_deleted = 0'];
+    List<dynamic> whereArgs = [];
+
+    if (settings.employeeId != null) {
+      whereConditions.add('e.id = ?');
+      whereArgs.add(settings.employeeId);
+    }
+
+    String whereClause = whereConditions.join(' AND ');
+
+    // Build date range filter for time entries
+    String dateFilter = '';
+    if (settings.startDate != null || settings.endDate != null) {
+      if (settings.startDate != null) {
+        dateFilter += ' AND te.start_time >= \'${settings.startDate!.toIso8601String()}\'';
+      }
+      if (settings.endDate != null) {
+        dateFilter += ' AND te.start_time <= \'${settings.endDate!.toIso8601String()}\'';
+      }
+    }
+
+    // Build SELECT clause based on included fields
+    List<String> selectFields = ['e.name AS employee'];
+
+    if (settings.includes['Role & Status'] == true) {
+      selectFields.add('r.name AS role');
+    }
+    if (settings.includes['Projects Assigned'] == true) {
+      selectFields.add('COUNT(DISTINCT te.project_id) AS projects_count');
+    }
+    if (settings.includes['Total Hours Logged'] == true) {
+      selectFields.add('SUM(te.final_billed_duration_seconds / 3600.0) AS total_hours');
+    }
+    if (settings.includes['Total Billed Value'] == true) {
+      selectFields.add('SUM((te.final_billed_duration_seconds / 3600.0) * (CASE p.pricing_model WHEN \'hourly\' THEN p.billed_hourly_rate ELSE 0 END)) AS billed_value');
+    }
+
+    final query = '''
+    SELECT ${selectFields.join(', ')}
+    FROM employees e
+    LEFT JOIN roles r ON e.title_id = r.id
+    LEFT JOIN time_entries te ON e.id = te.employee_id $dateFilter
+    LEFT JOIN projects p ON te.project_id = p.id
+    WHERE $whereClause
+    GROUP BY e.id
+    ORDER BY e.name
+  ''';
+
+    debugPrint('[CustomPersonnelReport Query] $query');
+    debugPrint('[CustomPersonnelReport Args] $whereArgs');
+
+    return await db.rawQuery(query, whereArgs);
   }
 
   Future<int> updateEmployee(Employee employee) async {

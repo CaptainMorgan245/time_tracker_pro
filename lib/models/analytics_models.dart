@@ -1,6 +1,6 @@
 // lib/models/analytics_models.dart
 
-enum AnalyticsView { none, singleProjectCard, projectListTable, personnelSummary, customReport }
+enum AnalyticsView { none, singleProjectCard, projectListTable, personnelSummary, customReport, companyExpenses }
 enum ReportType { activeProjects, completedProjects }
 enum ReportSubject { projects, personnel, expenses }
 
@@ -9,6 +9,7 @@ class CustomReportSettings {
   final Map<String, bool> includes;
   final int? projectId;
   final int? clientId;
+  final int? employeeId;
   final DateTime? startDate;
   final DateTime? endDate;
 
@@ -17,6 +18,7 @@ class CustomReportSettings {
     required this.includes,
     this.projectId,
     this.clientId,
+    this.employeeId,
     this.startDate,
     this.endDate,
   });

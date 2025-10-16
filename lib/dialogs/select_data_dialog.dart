@@ -3,8 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:time_tracker_pro/dropdown_repository.dart';
-import 'package:time_tracker_pro/models.dart'; // Import DropdownItem
-import 'package:time_tracker_pro/models/analytics_models.dart'; // Import Enums & Settings
+import 'package:time_tracker_pro/models.dart';
+import 'package:time_tracker_pro/models/analytics_models.dart';
 
 class SelectDataDialog extends StatefulWidget {
   const SelectDataDialog({super.key});
@@ -13,39 +13,60 @@ class SelectDataDialog extends StatefulWidget {
 }
 
 class _SelectDataDialogState extends State<SelectDataDialog> {
-  // State for Dialog
   ReportSubject _subject = ReportSubject.projects;
   final _repo = DropdownRepository();
 
   // State for filters
   List<DropdownItem> _clients = [];
   List<DropdownItem> _projects = [];
+  List<DropdownItem> _employees = [];
   int? _selectedClientId;
   int? _selectedProjectId;
+  int? _selectedEmployeeId;
   DateTime? _startDate;
   DateTime? _endDate;
   bool _isLoading = true;
 
   // Checkbox states
-  final Map<String, bool> _projectIncludes = { 'Client Details': true, 'Total Hours': true, 'Billed Rate': true, 'Expense Totals': false, };
-  final Map<String, bool> _personnelIncludes = {'Role & Status': true, 'Projects Assigned': true, 'Total Hours Logged': false, 'Total Billed Value': false,};
-  final Map<String, bool> _expenseIncludes = {'Project Name': true, 'Client Name': true, 'Date Purchased': true, 'Vendor': true,};
+  final Map<String, bool> _projectIncludes = {
+    'Client Details': true,
+    'Total Hours': true,
+    'Billed Rate': true,
+    'Expense Totals': false,
+  };
+  final Map<String, bool> _personnelIncludes = {
+    'Role & Status': true,
+    'Projects Assigned': true,
+    'Total Hours Logged': false,
+    'Total Billed Value': false,
+  };
+  final Map<String, bool> _expenseIncludes = {
+    'Project Name': true,
+    'Client Name': true,
+    'Date Purchased': true,
+    'Vendor': true,
+  };
 
   @override
   void initState() {
     super.initState();
+    // Set default dates
     _endDate = DateTime.now();
     _startDate = DateTime.now().subtract(const Duration(days: 90));
     _loadDropdownData();
   }
 
   Future<void> _loadDropdownData({int? clientId}) async {
-    setState(() { _isLoading = true; });
+    setState(() {
+      _isLoading = true;
+    });
     final clients = await _repo.getClients();
     final projects = await _repo.getProjects(clientId: clientId);
+    final employees = await _repo.getEmployees();
     setState(() {
       _clients = clients;
       _projects = projects;
+      _employees = employees;
       _isLoading = false;
     });
   }
@@ -56,6 +77,18 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
       _selectedProjectId = null;
       _loadDropdownData(clientId: newClientId);
     });
+  }
+
+  void _onSubjectChanged(ReportSubject? newSubject) {
+    if (newSubject != null) {
+      setState(() {
+        _subject = newSubject;
+        // Reset filters when subject changes
+        _selectedClientId = null;
+        _selectedProjectId = null;
+        _selectedEmployeeId = null;
+      });
+    }
   }
 
   @override
@@ -71,7 +104,8 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("Choose a primary subject:", style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text("Choose a primary subject:",
+                  style: TextStyle(fontWeight: FontWeight.bold)),
               const Divider(),
               _buildPrimarySubjectGrid(),
               const SizedBox(height: 24),
@@ -83,14 +117,22 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel')),
         ElevatedButton(
           onPressed: () {
             Map<String, bool> includes;
             switch (_subject) {
-              case ReportSubject.projects: includes = _projectIncludes; break;
-              case ReportSubject.personnel: includes = _personnelIncludes; break;
-              case ReportSubject.expenses: includes = _expenseIncludes; break;
+              case ReportSubject.projects:
+                includes = _projectIncludes;
+                break;
+              case ReportSubject.personnel:
+                includes = _personnelIncludes;
+                break;
+              case ReportSubject.expenses:
+                includes = _expenseIncludes;
+                break;
             }
             Navigator.of(context).pop(
               CustomReportSettings(
@@ -98,6 +140,7 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
                 includes: includes,
                 clientId: _selectedClientId,
                 projectId: _selectedProjectId,
+                employeeId: _selectedEmployeeId,
                 startDate: _startDate,
                 endDate: _endDate,
               ),
@@ -110,50 +153,43 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
   }
 
   Widget _buildPrimarySubjectGrid() {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        childAspectRatio: 2.5,
-        crossAxisSpacing: 8,
-        mainAxisSpacing: 8,
-      ),
-      itemCount: ReportSubject.values.length,
-      itemBuilder: (context, index) {
-        final subject = ReportSubject.values[index];
-        final isSelected = _subject == subject;
-        return InkWell(
-          onTap: () => setState(() => _subject = subject),
-          child: Container(
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: isSelected ? Theme.of(context).primaryColor : Colors.grey[200],
-              border: Border.all(color: isSelected ? Theme.of(context).primaryColorDark : Colors.grey[400]!),
-              borderRadius: BorderRadius.circular(8),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: ReportSubject.values.map((subject) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Radio<ReportSubject>(
+              value: subject,
+              groupValue: _subject,
+              onChanged: _onSubjectChanged,
             ),
-            child: Text(
-              subject.name[0].toUpperCase() + subject.name.substring(1),
-              style: TextStyle(color: isSelected ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
-            ),
-          ),
+            Text(subject.name[0].toUpperCase() + subject.name.substring(1)),
+          ],
         );
-      },
+      }).toList(),
     );
   }
 
   Widget _buildSecondaryOptions() {
     Map<String, bool> currentIncludes;
     switch (_subject) {
-      case ReportSubject.projects: currentIncludes = _projectIncludes; break;
-      case ReportSubject.personnel: currentIncludes = _personnelIncludes; break;
-      case ReportSubject.expenses: currentIncludes = _expenseIncludes; break;
+      case ReportSubject.projects:
+        currentIncludes = _projectIncludes;
+        break;
+      case ReportSubject.personnel:
+        currentIncludes = _personnelIncludes;
+        break;
+      case ReportSubject.expenses:
+        currentIncludes = _expenseIncludes;
+        break;
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text("Include these details:", style: TextStyle(fontWeight: FontWeight.bold)),
+        const Text("Include these details:",
+            style: TextStyle(fontWeight: FontWeight.bold)),
         const Divider(),
         GridView.builder(
           shrinkWrap: true,
@@ -169,7 +205,8 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
             return CheckboxListTile(
               title: Text(key),
               value: currentIncludes[key],
-              onChanged: (bool? value) => setState(() => currentIncludes[key] = value!),
+              onChanged: (bool? value) =>
+                  setState(() => currentIncludes[key] = value!),
               controlAffinity: ListTileControlAffinity.leading,
               contentPadding: EdgeInsets.zero,
               dense: true,
@@ -186,13 +223,22 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
       children: [
         const Text("Filter by:", style: TextStyle(fontWeight: FontWeight.bold)),
         const Divider(),
-        Row(
-          children: [
-            Expanded(child: _buildClientDropdown()),
-            const SizedBox(width: 16),
-            Expanded(child: _buildProjectDropdown()),
-          ],
-        ),
+
+        // Show different dropdowns based on subject
+        if (_subject == ReportSubject.projects) ...[
+          Row(
+            children: [
+              Expanded(child: _buildClientDropdown()),
+              const SizedBox(width: 16),
+              Expanded(child: _buildProjectDropdown()),
+            ],
+          ),
+        ] else if (_subject == ReportSubject.personnel) ...[
+          _buildEmployeeDropdown(),
+        ] else if (_subject == ReportSubject.expenses) ...[
+          _buildProjectDropdown(),
+        ],
+
         const SizedBox(height: 16),
         Row(
           children: [
@@ -207,11 +253,13 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
 
   Widget _buildClientDropdown() {
     return DropdownButtonFormField<int>(
-      decoration: const InputDecoration(labelText: 'Client', border: OutlineInputBorder()),
+      decoration: const InputDecoration(
+          labelText: 'Client', border: OutlineInputBorder()),
       value: _selectedClientId,
       items: [
         const DropdownMenuItem<int>(value: null, child: Text('All Clients')),
-        ..._clients.map((c) => DropdownMenuItem<int>(value: c.id, child: Text(c.name))),
+        ..._clients.map(
+                (c) => DropdownMenuItem<int>(value: c.id, child: Text(c.name))),
       ],
       onChanged: _onClientChanged,
     );
@@ -219,13 +267,29 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
 
   Widget _buildProjectDropdown() {
     return DropdownButtonFormField<int>(
-      decoration: const InputDecoration(labelText: 'Project', border: OutlineInputBorder()),
+      decoration: const InputDecoration(
+          labelText: 'Project', border: OutlineInputBorder()),
       value: _selectedProjectId,
       items: [
         const DropdownMenuItem<int>(value: null, child: Text('All Projects')),
-        ..._projects.map((p) => DropdownMenuItem<int>(value: p.id, child: Text(p.name))),
+        ..._projects.map(
+                (p) => DropdownMenuItem<int>(value: p.id, child: Text(p.name))),
       ],
       onChanged: (int? newValue) => setState(() => _selectedProjectId = newValue),
+    );
+  }
+
+  Widget _buildEmployeeDropdown() {
+    return DropdownButtonFormField<int>(
+      decoration: const InputDecoration(
+          labelText: 'Employee', border: OutlineInputBorder()),
+      value: _selectedEmployeeId,
+      items: [
+        const DropdownMenuItem<int>(value: null, child: Text('All Employees')),
+        ..._employees.map(
+                (e) => DropdownMenuItem<int>(value: e.id, child: Text(e.name))),
+      ],
+      onChanged: (int? newValue) => setState(() => _selectedEmployeeId = newValue),
     );
   }
 
@@ -262,5 +326,3 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
     );
   }
 }
-
-// lib/dialogs/select_data_dialog.dart
