@@ -11,6 +11,12 @@ import 'package:time_tracker_pro/widgets/project_list_report.dart';
 import 'package:time_tracker_pro/dialogs/select_data_dialog.dart';
 import 'package:time_tracker_pro/models/analytics_models.dart';
 import 'package:time_tracker_pro/widgets/personnel_list_report.dart';
+import 'package:time_tracker_pro/job_materials_repository.dart';
+import 'package:time_tracker_pro/widgets/company_expenses_report.dart';
+import 'package:time_tracker_pro/database_helper.dart';
+import 'dart:convert';
+import 'package:file_picker/file_picker.dart';
+import 'dart:io';
 
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
@@ -25,6 +31,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   final _dropdownRepo = DropdownRepository();
   final _projectRepo = ProjectRepository();
   final _employeeRepo = EmployeeRepository();
+  final _materialsRepo = JobMaterialsRepository();
   List<DropdownItem> _projectsForDropdown = [];
   bool _isLoadingProjects = true;
   CustomReportSettings? _customReportSettings;
@@ -32,6 +39,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Future<ProjectSummaryViewModel?>? _singleProjectCardFuture;
   Future<List<ProjectSummaryViewModel>>? _projectListTableFuture;
   Future<List<EmployeeSummaryViewModel>>? _employeeSummaryFuture;
+  Future<List<Map<String, dynamic>>>? _companyExpensesFuture;
 
   @override
   void initState() {
@@ -47,7 +55,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       _currentView = AnalyticsView.none;
     });
     final bool fetchActive = _selectedReportType == ReportType.activeProjects;
-    final projects = await _dropdownRepo.getProjectsByStatus(active: fetchActive);
+    final projects = await _dropdownRepo.getProjectsByStatus(
+        active: fetchActive);
     setState(() {
       _projectsForDropdown = projects;
       _isLoadingProjects = false;
@@ -93,8 +102,148 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   void _showCompanyExpenses() {
     setState(() {
       _currentView = AnalyticsView.companyExpenses;
-      // TODO: Load company expenses data
+      _companyExpensesFuture = _materialsRepo.getCompanyExpenses();
     });
+  }
+
+  Future<void> _importTimeEntries() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['txt', 'json'],
+      );
+
+      if (result == null) return;
+
+      final file = File(result.files.single.path!);
+      final jsonString = await file.readAsString();
+      final jsonData = jsonDecode(jsonString);
+
+      final employeeNumber = jsonData['employee_id'] as String;  // e.g., "EMP-101"
+      final entries = jsonData['entries'] as List;
+
+      int imported = 0;
+      int skipped = 0;
+      List<String> errors = [];
+
+      final db = await DatabaseHelperV2.instance.database;
+
+      // Look up employee ID from employee_number
+      final employeeResult = await db.query(
+        'employees',
+        columns: ['id'],
+        where: 'employee_number = ? AND is_deleted = 0',
+        whereArgs: [employeeNumber],
+      );
+
+      if (employeeResult.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Employee $employeeNumber not found in database')),
+          );
+        }
+        return;
+      }
+
+      final employeeId = employeeResult.first['id'] as int;
+
+      for (final entryData in entries) {
+        final clientName = entryData['client'] as String;
+        final projectName = entryData['project'] as String;
+        final startTime = entryData['start_time'] as String;
+        final endTime = entryData['end_time'] as String;
+        final durationSeconds = entryData['duration_seconds'] as int;
+
+        // Look up project_id from project name and client name
+        final projectResult = await db.rawQuery('''
+        SELECT p.id FROM projects p
+        JOIN clients c ON p.client_id = c.id
+        WHERE p.project_name = ? AND c.name = ?
+      ''', [projectName, clientName]);
+
+        if (projectResult.isEmpty) {
+          errors.add('$clientName - $projectName: Not found in database');
+          continue;
+        }
+
+        final projectId = projectResult.first['id'] as int;
+
+        // Check for duplicate
+        final existing = await db.query(
+          'time_entries',
+          where: 'employee_id = ? AND project_id = ? AND start_time = ? AND end_time = ?',
+          whereArgs: [employeeId, projectId, startTime, endTime],
+          limit: 1,
+        );
+
+        if (existing.isNotEmpty) {
+          skipped++;
+          continue;
+        }
+
+        // Insert entry
+        try {
+          await db.insert('time_entries', {
+            'employee_id': employeeId,
+            'project_id': projectId,
+            'start_time': startTime,
+            'end_time': endTime,
+            'final_billed_duration_seconds': durationSeconds,
+            'paused_duration': 0.0,
+            'is_paused': 0,
+            'is_deleted': 0,
+          });
+          imported++;
+        } catch (e) {
+          errors.add('$clientName - $projectName: Database error - $e');
+        }
+      }
+
+      // Show summary
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Import Summary'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Employee: $employeeNumber', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  Text('✓ Successfully imported: $imported entries'),
+                  Text('⊘ Skipped (duplicates): $skipped entries'),
+                  if (errors.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    const Text('Errors:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                    const SizedBox(height: 4),
+                    ...errors.take(10).map((e) => Padding(
+                      padding: const EdgeInsets.only(left: 8, bottom: 4),
+                      child: Text('• $e', style: const TextStyle(fontSize: 12)),
+                    )),
+                    if (errors.length > 10)
+                      Text('... and ${errors.length - 10} more errors'),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Import failed: $e')),
+        );
+      }
+    }
   }
 
   void _generateSingleSummaryCard(int projectId) {
@@ -134,7 +283,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               return const Center(child: CircularProgressIndicator());
             }
             if (snapshot.hasError) {
-              return Center(child: Text('Error loading summary: ${snapshot.error}'));
+              return Center(
+                  child: Text('Error loading summary: ${snapshot.error}'));
             }
             if (!snapshot.hasData || snapshot.data == null) {
               return const Center(child: Text('Project details not found.'));
@@ -152,10 +302,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               return const Center(child: CircularProgressIndicator());
             }
             if (snapshot.hasError) {
-              return Center(child: Text('Error loading report: ${snapshot.error}'));
+              return Center(
+                  child: Text('Error loading report: ${snapshot.error}'));
             }
             if (!snapshot.hasData || snapshot.data!.isEmpty) {
-              return const Center(child: Text('No projects found for this report type.'));
+              return const Center(
+                  child: Text('No projects found for this report type.'));
             }
             return ProjectListReport(reportData: snapshot.data!);
           },
@@ -169,7 +321,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               return const Center(child: CircularProgressIndicator());
             }
             if (snapshot.hasError) {
-              return Center(child: Text('Error loading personnel summary: ${snapshot.error}'));
+              return Center(child: Text(
+                  'Error loading personnel summary: ${snapshot.error}'));
             }
             if (!snapshot.hasData || snapshot.data!.isEmpty) {
               return const Center(child: Text('No employee data found.'));
@@ -188,15 +341,24 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         );
 
       case AnalyticsView.companyExpenses:
-        return const Card(
-          child: Padding(
-            padding: EdgeInsets.all(24.0),
-            child: Center(child: Text('Company Expenses Report - Coming Soon')),
-          ),
+        return FutureBuilder<List<Map<String, dynamic>>>(
+          future: _companyExpensesFuture,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snapshot.hasError) {
+              return Center(
+                  child: Text('Error loading expenses: ${snapshot.error}'));
+            }
+            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              return const Center(child: Text('No company expenses found.'));
+            }
+            return CompanyExpensesReport(reportData: snapshot.data!);
+          },
         );
 
       case AnalyticsView.none:
-      default:
         return const Center(child: Text('Select an option to view data.'));
     }
   }
@@ -218,11 +380,15 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         Expanded(
           flex: 2,
           child: DropdownButtonFormField<ReportType>(
-            decoration: const InputDecoration(labelText: 'Report Type', border: OutlineInputBorder(), filled: true),
+            decoration: const InputDecoration(labelText: 'Report Type',
+                border: OutlineInputBorder(),
+                filled: true),
             value: _selectedReportType,
             items: const [
-              DropdownMenuItem(value: ReportType.activeProjects, child: Text('Active Projects')),
-              DropdownMenuItem(value: ReportType.completedProjects, child: Text('Completed Projects')),
+              DropdownMenuItem(value: ReportType.activeProjects,
+                  child: Text('Active Projects')),
+              DropdownMenuItem(value: ReportType.completedProjects,
+                  child: Text('Completed Projects')),
             ],
             onChanged: (ReportType? newValue) {
               if (newValue == null || newValue == _selectedReportType) return;
@@ -241,12 +407,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             decoration: InputDecoration(
               labelText: _isLoadingProjects
                   ? 'Loading...'
-                  : (_selectedReportType == ReportType.activeProjects ? 'Select Active Project' : 'Select Completed Project'),
+                  : (_selectedReportType == ReportType.activeProjects
+                  ? 'Select Active Project'
+                  : 'Select Completed Project'),
               border: const OutlineInputBorder(),
               filled: true,
             ),
             items: _isLoadingProjects
-                ? [const DropdownMenuItem(enabled: false, child: Center(child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 3))))]
+                ? [
+              const DropdownMenuItem(enabled: false,
+                  child: Center(child: SizedBox(height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 3))))
+            ]
                 : _projectsForDropdown.map((item) {
               return DropdownMenuItem<int>(
                 value: item.id,
@@ -280,7 +453,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           child: ElevatedButton.icon(
             icon: const Icon(Icons.table_view_outlined),
             label: const Text('Project Summary'),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 12)),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12)),
             onPressed: _showProjectListReport,
           ),
         ),
@@ -289,7 +464,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           child: ElevatedButton.icon(
             icon: const Icon(Icons.people_outline),
             label: const Text('Personnel Summary'),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.lightGreen, foregroundColor: Colors.black87, padding: const EdgeInsets.symmetric(vertical: 12)),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.lightGreen,
+                foregroundColor: Colors.black87,
+                padding: const EdgeInsets.symmetric(vertical: 12)),
             onPressed: _showPersonnelSummaryReport,
           ),
         ),
@@ -298,7 +475,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           child: ElevatedButton.icon(
             icon: const Icon(Icons.checklist_rtl_outlined),
             label: const Text('Select Data'),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 12)),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12)),
             onPressed: _showSelectDataDialog,
           ),
         ),
@@ -307,8 +486,21 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           child: ElevatedButton.icon(
             icon: const Icon(Icons.account_balance_wallet),
             label: const Text('Company Expenses'),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 12)),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12)),
             onPressed: _showCompanyExpenses,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.upload_file),
+            label: const Text('Import Time'),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.purple,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12)),
+            onPressed: _importTimeEntries,
           ),
         ),
       ],

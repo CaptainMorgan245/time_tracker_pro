@@ -40,12 +40,6 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
     'Total Hours Logged': false,
     'Total Billed Value': false,
   };
-  final Map<String, bool> _expenseIncludes = {
-    'Project Name': true,
-    'Client Name': true,
-    'Date Purchased': true,
-    'Vendor': true,
-  };
 
   @override
   void initState() {
@@ -130,9 +124,6 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
               case ReportSubject.personnel:
                 includes = _personnelIncludes;
                 break;
-              case ReportSubject.expenses:
-                includes = _expenseIncludes;
-                break;
             }
             Navigator.of(context).pop(
               CustomReportSettings(
@@ -180,10 +171,7 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
       case ReportSubject.personnel:
         currentIncludes = _personnelIncludes;
         break;
-      case ReportSubject.expenses:
-        currentIncludes = _expenseIncludes;
-        break;
-    }
+          }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -235,8 +223,6 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
           ),
         ] else if (_subject == ReportSubject.personnel) ...[
           _buildEmployeeDropdown(),
-        ] else if (_subject == ReportSubject.expenses) ...[
-          _buildProjectDropdown(),
         ],
 
         const SizedBox(height: 16),

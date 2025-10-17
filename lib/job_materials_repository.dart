@@ -3,6 +3,7 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/models.dart';
+import 'package:flutter/foundation.dart';
 
 class JobMaterialsRepository {
   final _databaseHelper = DatabaseHelperV2.instance;
@@ -103,8 +104,53 @@ class JobMaterialsRepository {
       );
     });
   }
-  // <- End of commented-out block. A multi-line comment uses /* to begin and */ to end. [2, 5]
   // end method: getCostSummaryByCategory
+
+  // Fetch company overhead expenses with optional date filtering
+  Future<List<Map<String, dynamic>>> getCompanyExpenses({
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    final db = await _databaseHelper.database;
+
+    List<String> whereConditions = ['is_company_expense = 1', 'is_deleted = 0'];
+    List<dynamic> whereArgs = [];
+
+    if (startDate != null) {
+      whereConditions.add('purchase_date >= ?');
+      whereArgs.add(startDate.toIso8601String());
+    }
+
+    if (endDate != null) {
+      whereConditions.add('purchase_date <= ?');
+      whereArgs.add(endDate.toIso8601String());
+    }
+
+    String whereClause = whereConditions.join(' AND ');
+
+    final List<Map<String, dynamic>> maps = await db.query(
+      _tableName,
+      where: whereClause,
+      whereArgs: whereArgs.isEmpty ? null : whereArgs,
+      orderBy: 'purchase_date DESC',
+    );
+
+    // Return formatted data for display
+    debugPrint('[CompanyExpenses] Found ${maps.length} company expenses');
+    return maps.map((map) {
+      return {
+        'Date': map['purchase_date'],
+        'Item': map['item_name'],
+        'Category': map['expense_category'] ?? 'Uncategorized',
+        'Vendor': map['vendor_or_subtrade'] ?? 'N/A',
+        'Cost': (map['cost'] as num).toDouble(),
+        'Description': map['description'] ?? '',
+      };
+    }).toList();
+  }
+
+  // end method: getCompanyExpenses
+
 
   // start method: deleteJobMaterial
   Future<int> deleteJobMaterial(int id) async {

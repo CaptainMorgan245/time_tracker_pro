@@ -25,8 +25,56 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
   Future<void> _exportData() async {
     if (!_isMobilePlatform) return;
     if (_isExporting) return;
-    setState(() => _isExporting = true);
 
+    // Ask for optional custom name
+    String? customName;
+    await showDialog(
+      context: context,
+      builder: (context) {
+        final controller = TextEditingController();
+        return AlertDialog(
+          title: const Text('Backup Name'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Enter a custom name (optional):'),
+              const SizedBox(height: 8),
+              TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  hintText: 'e.g., Before_Tax_Season',
+                  border: OutlineInputBorder(),
+                ),
+                textCapitalization: TextCapitalization.words,
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Leave blank for auto-generated name',
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                customName = controller.text.trim();
+                Navigator.pop(context);
+              },
+              child: const Text('Export'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (customName == null && !mounted) return;
+
+    setState(() => _isExporting = true);
     final messenger = ScaffoldMessenger.of(context);
 
     try {
@@ -44,10 +92,17 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
       }
 
       final timestamp = DateFormat('yyyy-MM-dd_HH-mm-ss').format(DateTime.now());
-      final fileName = 'time_tracker_pro_backup_$timestamp.json';
 
-      // --- CHANGE: Save to Documents folder instead ---
-      const exportPath = '/storage/emulated/0/Documents';
+      final String fileName;
+      if (customName != null && customName!.isNotEmpty) {
+        final dateOnly = DateFormat('yyyy-MM-dd').format(DateTime.now());
+        final sanitizedName = customName!.replaceAll(RegExp(r'[^\w\s-]'), '_');
+        fileName = 'backup_${sanitizedName}_$dateOnly.json';
+      } else {
+        fileName = 'backup_$timestamp.json';
+      }
+
+      const exportPath = '/storage/emulated/0/Download';
       final exportDir = Directory(exportPath);
 
       if (!await exportDir.exists()) {
@@ -61,8 +116,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
       messenger.showSnackBar(
         SnackBar(
           duration: const Duration(seconds: 8),
-          // --- CHANGE: Update success message ---
-          content: Text('✅ Backup saved to Documents/$fileName'),
+          content: Text('✅ Backup saved to Download/$fileName'),
           backgroundColor: Colors.green,
         ),
       );
@@ -85,13 +139,9 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
     final messenger = ScaffoldMessenger.of(context);
 
     try {
-      // --- CHANGE: Ensure import starts in Documents ---
-      const importPath = '/storage/emulated/0/Documents';
-
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['json'],
-        initialDirectory: importPath, // Explicitly point to Documents
       );
 
       if (result == null) {
@@ -160,7 +210,6 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
   }
 
   Future<void> _clearAllData() async {
-    // This function does not need changes
     if (!_isMobilePlatform) return;
     if (_isClearing) return;
 
@@ -225,8 +274,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
           children: [
             _buildSectionHeader(context, 'Database Backup & Restore'),
             const SizedBox(height: 8),
-            // --- CHANGE: Update info card text ---
-            _buildInfoCard('Use the options below to save a backup (Export) or restore from a backup file (Import). Backups are saved in your device\'s "Documents" folder.'),
+            _buildInfoCard('Use the options below to save a backup (Export) or restore from a backup file (Import). Backups are saved in the Download folder.'),
             const SizedBox(height: 24),
             _buildActionButton(
               context: context,
@@ -260,7 +308,6 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
   }
 
   Widget _buildSectionHeader(BuildContext context, String title) {
-    // This widget does not need changes
     return Text(
       title.toUpperCase(),
       style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -272,13 +319,12 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
   }
 
   Widget _buildInfoCard(String text) {
-    // This widget does not need changes
     return Card(
       elevation: 0,
-      color: Colors.blueGrey.withAlpha(26), // FIX: Replaced withOpacity(0.1)
+      color: Colors.blueGrey.withAlpha(26),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: Colors.blueGrey.withAlpha(51)), // FIX: Replaced withOpacity(0.2)
+        side: BorderSide(color: Colors.blueGrey.withAlpha(51)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
@@ -294,7 +340,6 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
     required VoidCallback? onPressed,
     Color? color,
   }) {
-    // This widget does not need changes
     final theme = Theme.of(context);
     final buttonColor = color ?? theme.colorScheme.primary;
     final onButtonColor = theme.colorScheme.onPrimary;

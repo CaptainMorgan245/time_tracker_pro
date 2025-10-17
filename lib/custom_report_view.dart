@@ -37,11 +37,7 @@ class _CustomReportViewState extends State<CustomReportView> {
         return await _projectRepo.getCustomProjectReport(settings);
       case ReportSubject.personnel:
         return await _employeeRepo.getCustomPersonnelReport(settings);
-      case ReportSubject.expenses:
-        return [
-          {'Date': '2025-01-01', 'Vendor': 'Vendor Z', 'Amount': 500.00, 'Project': 'Project X'},
-        ];
-    }
+          }
   }
 
   Future<void> _exportToCSV(BuildContext context) async {

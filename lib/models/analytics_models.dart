@@ -2,7 +2,7 @@
 
 enum AnalyticsView { none, singleProjectCard, projectListTable, personnelSummary, customReport, companyExpenses }
 enum ReportType { activeProjects, completedProjects }
-enum ReportSubject { projects, personnel, expenses }
+enum ReportSubject { projects, personnel }
 
 class CustomReportSettings {
   final ReportSubject subject;
