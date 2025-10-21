@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/employee_repository.dart';
-import 'package:time_tracker_pro/input_formatters.dart';
+
 
 // start class: AddEmployeeForm
 class AddEmployeeForm extends StatefulWidget {
@@ -92,7 +92,7 @@ class _AddEmployeeFormState extends State<AddEmployeeForm> {
                 Expanded(
                   child: TextField(
                     controller: _nameController,
-                    inputFormatters: [CapitalizeEachWordInputFormatter()],
+                    textCapitalization: TextCapitalization.words,
                     decoration: const InputDecoration(labelText: 'Employee Name'),
                   ),
                 ),

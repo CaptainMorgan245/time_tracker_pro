@@ -3,8 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/employee_repository.dart';
-import 'package:time_tracker_pro/input_formatters.dart';
-import 'package:flutter/services.dart';
 
 // start class: EmployeeListScreen
 class EmployeeListScreen extends StatefulWidget {
@@ -100,7 +98,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
             children: [
               TextField(
                 controller: nameController,
-                inputFormatters: [CapitalizeEachWordInputFormatter()],
+                textCapitalization: TextCapitalization.words,
                 decoration: const InputDecoration(labelText: 'Employee Name'),
               ),
               if (!isNew)

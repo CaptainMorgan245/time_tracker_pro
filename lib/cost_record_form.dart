@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:time_tracker_pro/models.dart';
-import 'package:time_tracker_pro/input_formatters.dart';
+
 
 class CostRecordForm extends StatefulWidget {
   final ValueNotifier<List<Project>> availableProjectsNotifier;
@@ -198,7 +198,7 @@ class CostRecordFormState extends State<CostRecordForm> {
               Expanded(
                 child: TextFormField(
                   controller: _itemNameController,
-                  inputFormatters: [CapitalizeEachWordInputFormatter()],
+                  textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(labelText: 'Item Name (Optional)'),
                 ),
               ),

@@ -6,7 +6,6 @@ import 'package:time_tracker_pro/role_repository.dart';
 import 'package:time_tracker_pro/employee_repository.dart';
 import 'package:time_tracker_pro/employee_add_form.dart';
 import 'package:time_tracker_pro/employee_list_screen.dart';
-import 'package:time_tracker_pro/input_formatters.dart';
 import 'package:time_tracker_pro/widgets/app_setting_list_card.dart';
 
 // start class: PersonnelScreen
@@ -125,7 +124,7 @@ class _PersonnelScreenState extends State<PersonnelScreen> {
             children: [
               TextField(
                 controller: nameController,
-                inputFormatters: [CapitalizeEachWordInputFormatter()],
+                textCapitalization: TextCapitalization.words,
                 decoration: const InputDecoration(labelText: 'Role Name'),
               ),
               TextField(
@@ -222,7 +221,7 @@ class _PersonnelScreenState extends State<PersonnelScreen> {
                                 Expanded(
                                   child: TextFormField(
                                     controller: _roleNameController,
-                                    inputFormatters: [CapitalizeEachWordInputFormatter()],
+                                    textCapitalization: TextCapitalization.words,
                                     decoration: const InputDecoration(labelText: 'Role Name'),
                                   ),
                                 ),

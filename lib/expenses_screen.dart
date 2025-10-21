@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/settings_service.dart';
-import 'package:time_tracker_pro/input_formatters.dart';
 import 'package:time_tracker_pro/widgets/app_setting_list_card.dart';
 
 class ExpensesScreen extends StatefulWidget {
@@ -121,9 +120,9 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
             children: [
               TextField(
                 controller: controller,
-                inputFormatters: applyCapitalization
-                    ? [CapitalizeEachWordInputFormatter()]
-                    : [],
+                textCapitalization: applyCapitalization
+                    ? TextCapitalization.words
+                    : TextCapitalization.none,
                 decoration: InputDecoration(labelText: label),
               ),
               const SizedBox(height: 8),

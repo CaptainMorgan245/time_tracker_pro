@@ -6,6 +6,9 @@ import 'package:time_tracker_pro/settings_service.dart';
 import 'package:time_tracker_pro/expenses_screen.dart';
 import 'package:time_tracker_pro/personnel_screen.dart';
 import 'package:time_tracker_pro/burden_rate_settings_screen.dart';
+import 'package:time_tracker_pro/help_support_screen.dart';
+
+
 
 // start class: SettingsScreen
 class SettingsScreen extends StatefulWidget {
@@ -367,7 +370,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
 
           const PersonnelScreen(),
           const ExpensesScreen(),
-          const Center(child: Text('Email settings coming soon...')),
+          const HelpSupportScreen(),
 
           // **** CHANGE IS HERE ****
           // We now pass the controllers from this screen to the BurdenRateSettingsScreen

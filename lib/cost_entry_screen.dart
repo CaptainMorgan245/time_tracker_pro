@@ -26,10 +26,13 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   bool _isLoading = true;
   bool _isFormCollapsed = false; // Manages the state for the whole screen
 
-  final ValueNotifier<List<Project>> _filteredProjectsNotifier = ValueNotifier([]);
-  final ValueNotifier<List<String>> _expenseCategoriesNotifier = ValueNotifier([]);
+  final ValueNotifier<List<Project>> _filteredProjectsNotifier = ValueNotifier(
+      []);
+  final ValueNotifier<List<String>> _expenseCategoriesNotifier = ValueNotifier(
+      []);
   final ValueNotifier<List<String>> _vendorsNotifier = ValueNotifier([]);
-  final ValueNotifier<List<String>> _vehicleDesignationsNotifier = ValueNotifier([]);
+  final ValueNotifier<
+      List<String>> _vehicleDesignationsNotifier = ValueNotifier([]);
   final ValueNotifier<bool> _isCompanyExpenseNotifier = ValueNotifier(false);
 
   List<Project> _allProjects = [];
@@ -85,12 +88,17 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
 
       _expenseCategoriesNotifier.value = categories.map((c) => c.name).toList();
       _vendorsNotifier.value = List<String>.from(settings.vendors);
-      _vehicleDesignationsNotifier.value = List<String>.from(settings.vehicleDesignations);
+      _vehicleDesignationsNotifier.value =
+      List<String>.from(settings.vehicleDesignations);
 
       final internalProjectExists = _allProjects.any((p) => p.id == 0);
       if (!internalProjectExists) {
         // START FINAL FIX: Add the required 'pricingModel' parameter
-        _allProjects.insert(0, Project(id: 0, projectName: 'Internal Company Project', clientId: 0, isInternal: true, pricingModel: 'hourly'));
+        _allProjects.insert(0, Project(id: 0,
+            projectName: 'Internal Company Project',
+            clientId: 0,
+            isInternal: true,
+            pricingModel: 'hourly'));
         // END FINAL FIX
       }
 
@@ -100,7 +108,8 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
       setState(() => _isLoading = false);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to load dependency data: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to load dependency data: $e')));
         setState(() => _isLoading = false);
       }
     }
@@ -110,7 +119,8 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     if (showCompleted) {
       _filteredProjectsNotifier.value = _allProjects;
     } else {
-      _filteredProjectsNotifier.value = _allProjects.where((p) => !p.isCompleted || p.isInternal).toList();
+      _filteredProjectsNotifier.value =
+          _allProjects.where((p) => !p.isCompleted || p.isInternal).toList();
     }
   }
 
@@ -123,7 +133,9 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     });
     // Animate list to the top if it's scrolled down
     if (_scrollController.hasClients && _scrollController.offset > 0) {
-      _scrollController.animateTo(0, duration: const Duration(milliseconds: 400), curve: Curves.easeOut);
+      _scrollController.animateTo(
+          0, duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOut);
     }
   }
 
@@ -137,7 +149,8 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     }
   }
 
-  Future<void> _handleCostSubmission(JobMaterials expense, bool isEditing) async {
+  Future<void> _handleCostSubmission(JobMaterials expense,
+      bool isEditing) async {
     try {
       if (isEditing) {
         await DatabaseHelperV2.instance.updateMaterialV2(expense);
@@ -146,31 +159,40 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
       }
       if (mounted) {
         _handleClearOrCancel();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Expense ${isEditing ? 'updated' : 'added'} successfully.'), duration: const Duration(seconds: 2),),);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
+            'Expense ${isEditing ? 'updated' : 'added'} successfully.'),
+          duration: const Duration(seconds: 2),),);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error submitting expense: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error submitting expense: $e')));
       }
     }
   }
 
   Future<void> _deleteExpense(int id) async {
     try {
-      await DatabaseHelperV2.instance.deleteRecordV2(id: id, fromTable: 'materials');
+      await DatabaseHelperV2.instance.deleteRecordV2(
+          id: id, fromTable: 'materials');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Expense deleted successfully.'), duration: Duration(seconds: 2),),);
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Expense deleted successfully.'),
+          duration: Duration(seconds: 2),),);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error deleting expense: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error deleting expense: $e')));
       }
     }
   }
 
   String _getProjectNameById(int projectId) {
     try {
-      return _allProjects.firstWhere((p) => p.id == projectId).projectName;
+      return _allProjects
+          .firstWhere((p) => p.id == projectId)
+          .projectName;
     } catch (_) {
       return 'Unknown Project';
     }
@@ -179,82 +201,90 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: true,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SafeArea(
         top: true,
         bottom: false,
-        child: Column( // Using a simple Column layout
-          children: [
-            Card(
-              elevation: 2.0,
-              margin: const EdgeInsets.all(8),
-              child: CostRecordForm(
-                key: _formStateKey,
-                availableProjectsNotifier: _filteredProjectsNotifier,
-                expenseCategoriesNotifier: _expenseCategoriesNotifier,
-                vendorsNotifier: _vendorsNotifier,
-                vehicleDesignationsNotifier: _vehicleDesignationsNotifier,
-                onAddExpense: _handleCostSubmission,
-                onProjectFilterToggle: _applyProjectFilter,
-                onClearForm: _handleClearOrCancel,
-                isEditing: _isEditing,
-                onCompanyExpenseToggle: (isCompanyExpense) {
-                  _isCompanyExpenseNotifier.value = isCompanyExpense;
-                },
-                isCollapsed: _isFormCollapsed,
-                onCollapseToggle: () {
-                  setState(() {
-                    _isFormCollapsed = !_isFormCollapsed;
-                  });
-                },
-              ),
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top,
             ),
-            const Divider(height: 1),
-            Expanded( // The list takes up the remaining space
-              child: ValueListenableBuilder<int>(
-                valueListenable: dbNotifier,
-                builder: (context, _, __) => FutureBuilder<List<JobMaterials>>(
-                  future: DatabaseHelperV2.instance.getRecentMaterialsV2(),
-                  builder: (context, snapshot) {
-                    if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (snapshot.hasError) {
-                      return Center(child: Text('Error: ${snapshot.error}'));
-                    }
-                    final recentExpenses = snapshot.data ?? [];
-                    if (recentExpenses.isEmpty) {
-                      return const Center(child: Text("No recent expenses found."));
-                    }
-                    return ListView.builder(
-                      controller: _scrollController, // Attach controller here
-                      padding: const EdgeInsets.fromLTRB(8.0, 0, 8.0, 80.0),
-                      itemCount: recentExpenses.length,
-                      itemBuilder: (context, index) {
-                        final expense = recentExpenses[index];
-                        final projectName = _getProjectNameById(expense.projectId);
-                        return Card(
-                          margin: const EdgeInsets.symmetric(vertical: 4),
-                          child: ListTile(
-                            title: Text('${expense.itemName} (\$${expense.cost.toStringAsFixed(2)})'),
-                            subtitle: Text('Project: $projectName | Category: ${expense.expenseCategory ?? 'N/A'}'),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(icon: const Icon(Icons.edit, color: Colors.blueGrey), onPressed: () => _populateFormFromExpense(expense)),
-                                IconButton(icon: const Icon(Icons.delete_forever, color: Colors.red), onPressed: () => _deleteExpense(expense.id!)),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
+            child: Column(
+              children: [
+                Card(
+                  elevation: 2.0,
+                  margin: const EdgeInsets.all(8),
+                  child: CostRecordForm(
+                    key: _formStateKey,
+                    availableProjectsNotifier: _filteredProjectsNotifier,
+                    expenseCategoriesNotifier: _expenseCategoriesNotifier,
+                    vendorsNotifier: _vendorsNotifier,
+                    vehicleDesignationsNotifier: _vehicleDesignationsNotifier,
+                    onAddExpense: _handleCostSubmission,
+                    onProjectFilterToggle: _applyProjectFilter,
+                    onClearForm: _handleClearOrCancel,
+                    isEditing: _isEditing,
+                    onCompanyExpenseToggle: (isCompanyExpense) {
+                      _isCompanyExpenseNotifier.value = isCompanyExpense;
+                    },
+                    isCollapsed: _isFormCollapsed,
+                    onCollapseToggle: () {
+                      setState(() {
+                        _isFormCollapsed = !_isFormCollapsed;
+                      });
+                    },
+                  ),
                 ),
-              ),
+                const Divider(height: 1),
+                ValueListenableBuilder<int>(
+                  valueListenable: dbNotifier,
+                  builder: (context, _, __) => FutureBuilder<List<JobMaterials>>(
+                    future: DatabaseHelperV2.instance.getRecentMaterialsV2(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                        return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
+                      }
+                      if (snapshot.hasError) {
+                        return SizedBox(height: 200, child: Center(child: Text('Error: ${snapshot.error}')));
+                      }
+                      final recentExpenses = snapshot.data ?? [];
+                      if (recentExpenses.isEmpty) {
+                        return const SizedBox(height: 200, child: Center(child: Text("No recent expenses found.")));
+                      }
+                      return ListView.builder(
+                        controller: _scrollController,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        padding: const EdgeInsets.fromLTRB(8.0, 0, 8.0, 80.0),
+                        itemCount: recentExpenses.length,
+                        itemBuilder: (context, index) {
+                          final expense = recentExpenses[index];
+                          final projectName = _getProjectNameById(expense.projectId);
+                          return Card(
+                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            child: ListTile(
+                              title: Text('${expense.itemName} (\$${expense.cost.toStringAsFixed(2)})'),
+                              subtitle: Text('Project: $projectName | Category: ${expense.expenseCategory ?? 'N/A'}'),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(icon: const Icon(Icons.edit, color: Colors.blueGrey), onPressed: () => _populateFormFromExpense(expense)),
+                                  IconButton(icon: const Icon(Icons.delete_forever, color: Colors.red), onPressed: () => _deleteExpense(expense.id!)),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

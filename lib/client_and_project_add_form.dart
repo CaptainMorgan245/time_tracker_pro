@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/client_repository.dart';
 import 'package:time_tracker_pro/project_repository.dart';
-import 'package:time_tracker_pro/input_formatters.dart';
 import 'package:flutter/services.dart';
 
 class ClientAndProjectAddForm extends StatefulWidget {
@@ -143,7 +142,6 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
   Widget build(BuildContext context) {
     final activeClients = widget.clients;
     const itemWidth = 250.0;
-    final capitalizationFormatter = CapitalizeEachWordInputFormatter();
     final phoneNumberFormatter = FilteringTextInputFormatter.allow(RegExp(r'[\d\.\-]'));
 
     // Get the current theme to style the clear button
@@ -185,7 +183,7 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
                     child: TextField(
                       controller: _clientNameController,
                       decoration: const InputDecoration(labelText: 'New Client Name'),
-                      inputFormatters: [capitalizationFormatter],
+                      textCapitalization: TextCapitalization.words,
                     ),
                   ),
                   SizedBox(
@@ -193,7 +191,7 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
                     child: TextField(
                       controller: _contactPersonController,
                       decoration: const InputDecoration(labelText: 'Contact Person'),
-                      inputFormatters: [capitalizationFormatter],
+                      textCapitalization: TextCapitalization.words,
                     ),
                   ),
                   SizedBox(
@@ -230,7 +228,7 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
                   child: TextField(
                     controller: _projectNameController,
                     decoration: const InputDecoration(labelText: 'Project Name'),
-                    inputFormatters: [capitalizationFormatter],
+                    textCapitalization: TextCapitalization.words,
                   ),
                 ),
                 SizedBox(
@@ -254,7 +252,7 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
                   child: TextField(
                     controller: _locationController,
                     decoration: const InputDecoration(labelText: 'Location'),
-                    inputFormatters: [capitalizationFormatter],
+                    textCapitalization: TextCapitalization.words,
                   ),
                 ),
                 if (_selectedPricingModel == 'hourly')

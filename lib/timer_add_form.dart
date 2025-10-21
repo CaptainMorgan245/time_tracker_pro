@@ -3,7 +3,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-import 'package:time_tracker_pro/input_formatters.dart';
 import 'package:time_tracker_pro/models.dart';
 
 class TimerAddForm extends StatefulWidget {
@@ -359,7 +358,7 @@ class TimerAddFormState extends State<TimerAddForm> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _workDetailsController,
-              inputFormatters: [CapitalizeFirstWordInputFormatter()],
+              textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
                 hintText: "Enter details about work performed...",
                 border: inputBorder,
