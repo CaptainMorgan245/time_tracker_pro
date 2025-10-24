@@ -28,7 +28,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
   Future<void> _launchEmail(String subject) async {
     final Uri emailUri = Uri(
       scheme: 'mailto',
-      path: 'support@timetrackerapp.com', // Replace with your email
+      path: 'info@dyconn.ca', // Replace with your email
       query: 'subject=$subject',
     );
 
@@ -87,7 +87,7 @@ class _HelpSupportScreenState extends State<HelpSupportScreen> {
           ListTile(
             leading: const Icon(Icons.email),
             title: const Text('Contact Support'),
-            subtitle: const Text('support@timetrackerapp.com'),
+            subtitle: const Text('info@dyconn.ca'),
             onTap: () => _launchEmail('Support Request'),
           ),
 

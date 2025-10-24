@@ -14,9 +14,11 @@ import 'package:time_tracker_pro/widgets/personnel_list_report.dart';
 import 'package:time_tracker_pro/job_materials_repository.dart';
 import 'package:time_tracker_pro/widgets/company_expenses_report.dart';
 import 'package:time_tracker_pro/database_helper.dart';
+import 'package:time_tracker_pro/import_errors_report.dart';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
+import 'package:time_tracker_pro/import_errors_notifier.dart';
 
 class AnalyticsScreen extends StatefulWidget {
   const AnalyticsScreen({super.key});
@@ -44,8 +46,22 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   @override
   void initState() {
     super.initState();
+    ImportErrorsNotifier.instance.addListener(() {
+      setState(() {}); // Rebuild when errors change
+    });
     _loadProjects();
   }
+
+  void _onErrorsChanged() {
+    setState(() {});
+  }
+
+  @override
+  void dispose() {
+    ImportErrorsNotifier.instance.removeListener(_onErrorsChanged);
+    super.dispose();
+  }
+
 
   Future<void> _loadProjects() async {
     setState(() {
@@ -163,6 +179,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
         if (projectResult.isEmpty) {
           errors.add('$clientName - $projectName: Not found in database');
+          ImportErrorsNotifier.instance.addError(
+            employeeNumber,
+            'Client: $clientName | Project: $projectName | Start: $startTime',
+            'Project not found in database',
+          );
           continue;
         }
 
@@ -196,6 +217,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
           imported++;
         } catch (e) {
           errors.add('$clientName - $projectName: Database error - $e');
+          ImportErrorsNotifier.instance.addError(
+            employeeNumber,
+            'Client: $clientName | Project: $projectName | Start: $startTime',
+            'Database error: $e',
+          );
         }
       }
 
@@ -216,21 +242,26 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   Text('⊘ Skipped (duplicates): $skipped entries'),
                   if (errors.isNotEmpty) ...[
                     const SizedBox(height: 16),
-                    const Text('Errors:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
-                    const SizedBox(height: 4),
-                    ...errors.take(10).map((e) => Padding(
-                      padding: const EdgeInsets.only(left: 8, bottom: 4),
-                      child: Text('• $e', style: const TextStyle(fontSize: 12)),
-                    )),
-                    if (errors.length > 10)
-                      Text('... and ${errors.length - 10} more errors'),
+                    const Text('✗ Errors:', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                    Text('${ errors.length} entries failed to import', style: const TextStyle(fontSize: 12)),
+                    const SizedBox(height: 8),
+                    const Text('View details in Analytics > Import Errors',
+                        style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Colors.blue)),
                   ],
                 ],
               ),
             ),
             actions: [
               ElevatedButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () {
+                  Navigator.pop(context);
+                  // Auto-switch to import errors view if errors exist
+                  if (ImportErrorsNotifier.instance.errorCount > 0) {
+                    setState(() {
+                      _currentView = AnalyticsView.importErrors;
+                    });
+                  }
+                },
                 child: const Text('OK'),
               ),
             ],
@@ -357,6 +388,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             return CompanyExpensesReport(reportData: snapshot.data!);
           },
         );
+
+      case AnalyticsView.importErrors:
+        final errors = ImportErrorsNotifier.instance.value;
+        if (errors.isEmpty) {
+          return const Center(child: Text('No import errors.'));
+        }
+        return ImportErrorsReport(errors: errors);
 
       case AnalyticsView.none:
         return const Center(child: Text('Select an option to view data.'));

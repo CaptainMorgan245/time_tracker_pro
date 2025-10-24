@@ -204,6 +204,44 @@ class DatabaseHelperV2 {
     return List.generate(maps.length, (i) => JobMaterials.fromMap(maps[i]));
   }
 
+  Future<List<dynamic>> getProjectRecordsV2(bool showCompleted, List<Project> allProjects) async {
+    final db = await database;
+
+    // Get project IDs based on filter
+    final projectIds = showCompleted
+        ? allProjects.where((p) => p.isCompleted).map((p) => p.id).toList()
+        : allProjects.where((p) => !p.isCompleted || p.isInternal).map((p) => p.id).toList();
+
+    if (projectIds.isEmpty) return [];
+
+    final placeholders = projectIds.map((_) => '?').join(',');
+
+    // Get time entries for these projects
+    final timeEntriesQuery = await db.query(
+      'time_entries',
+      where: 'project_id IN ($placeholders) AND is_deleted = 0',
+      whereArgs: projectIds,
+      orderBy: 'start_time DESC',
+      limit: 50,
+    );
+
+    // Get materials/expenses for these projects
+    final materialsQuery = await db.query(
+      'materials',
+      where: 'project_id IN ($placeholders) AND is_deleted = 0',
+      whereArgs: projectIds,
+      orderBy: 'purchase_date DESC',
+      limit: 50,
+    );
+
+    // Convert to model objects
+    final timeEntries = timeEntriesQuery.map((m) => TimeEntry.fromMap(m)).toList();
+    final materials = materialsQuery.map((m) => JobMaterials.fromMap(m)).toList();
+
+    // Combine and return both types
+    return [...timeEntries, ...materials];
+  }
+
   Future<void> addMaterialV2(JobMaterials expense) async {
     final db = await database;
     await db.insert('materials', expense.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);

@@ -130,6 +130,12 @@ class CostRecordFormState extends State<CostRecordForm> {
     });
   }
 
+  void setSelectedProject(Project project) {
+    setState(() {
+      selectedProject = project;
+    });
+  }
+
   void _submitForm() {
     SystemChannels.textInput.invokeMethod('TextInput.hide');
     if (_formKey.currentState!.validate()) {

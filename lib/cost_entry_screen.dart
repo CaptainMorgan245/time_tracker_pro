@@ -1,6 +1,6 @@
 // lib/cost_entry_screen.dart
 import 'package:flutter/material.dart';
-import 'package:time_tracker_pro/database_helper.dart'; // Using V2!
+import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/cost_record_form.dart';
 import 'package:time_tracker_pro/project_repository.dart';
 import 'package:time_tracker_pro/settings_service.dart';
@@ -24,15 +24,13 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
 
   bool _isEditing = false;
   bool _isLoading = true;
-  bool _isFormCollapsed = false; // Manages the state for the whole screen
+  bool _isFormCollapsed = false;
+  bool _showCompletedProjects = false;
 
-  final ValueNotifier<List<Project>> _filteredProjectsNotifier = ValueNotifier(
-      []);
-  final ValueNotifier<List<String>> _expenseCategoriesNotifier = ValueNotifier(
-      []);
+  final ValueNotifier<List<Project>> _filteredProjectsNotifier = ValueNotifier([]);
+  final ValueNotifier<List<String>> _expenseCategoriesNotifier = ValueNotifier([]);
   final ValueNotifier<List<String>> _vendorsNotifier = ValueNotifier([]);
-  final ValueNotifier<
-      List<String>> _vehicleDesignationsNotifier = ValueNotifier([]);
+  final ValueNotifier<List<String>> _vehicleDesignationsNotifier = ValueNotifier([]);
   final ValueNotifier<bool> _isCompanyExpenseNotifier = ValueNotifier(false);
 
   List<Project> _allProjects = [];
@@ -47,7 +45,6 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
 
   void _handleScroll() {
     if (!_scrollController.hasClients) return;
-    // Collapse if user scrolls down past a certain point
     final shouldBeCollapsed = _scrollController.offset > 50.0;
     if (shouldBeCollapsed != _isFormCollapsed) {
       setState(() {
@@ -88,39 +85,43 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
 
       _expenseCategoriesNotifier.value = categories.map((c) => c.name).toList();
       _vendorsNotifier.value = List<String>.from(settings.vendors);
-      _vehicleDesignationsNotifier.value =
-      List<String>.from(settings.vehicleDesignations);
+      _vehicleDesignationsNotifier.value = List<String>.from(settings.vehicleDesignations);
 
       final internalProjectExists = _allProjects.any((p) => p.id == 0);
       if (!internalProjectExists) {
-        // START FINAL FIX: Add the required 'pricingModel' parameter
-        _allProjects.insert(0, Project(id: 0,
-            projectName: 'Internal Company Project',
-            clientId: 0,
-            isInternal: true,
-            pricingModel: 'hourly'));
-        // END FINAL FIX
+        _allProjects.insert(0, Project(
+          id: 0,
+          projectName: 'Internal Company Project',
+          clientId: 0,
+          isInternal: true,
+          pricingModel: 'hourly',
+        ));
       }
 
-      final formState = _formStateKey.currentState;
-      _applyProjectFilter(formState?.showCompletedProjects ?? false);
+      _applyProjectFilter(_showCompletedProjects);
 
       setState(() => _isLoading = false);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to load dependency data: $e')));
+          SnackBar(content: Text('Failed to load dependency data: $e')),
+        );
         setState(() => _isLoading = false);
       }
     }
   }
 
   void _applyProjectFilter(bool showCompleted) {
+    setState(() {
+      _showCompletedProjects = showCompleted;
+    });
+
+    _formStateKey.currentState?.resetForm();
+
     if (showCompleted) {
-      _filteredProjectsNotifier.value = _allProjects;
+      _filteredProjectsNotifier.value = _allProjects.where((p) => p.isCompleted).toList();
     } else {
-      _filteredProjectsNotifier.value =
-          _allProjects.where((p) => !p.isCompleted || p.isInternal).toList();
+      _filteredProjectsNotifier.value = _allProjects.where((p) => !p.isCompleted || p.isInternal).toList();
     }
   }
 
@@ -129,13 +130,14 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     _isCompanyExpenseNotifier.value = expense.isCompanyExpense;
     setState(() {
       _isEditing = true;
-      _isFormCollapsed = false; // Ensure form is expanded for editing
+      _isFormCollapsed = false;
     });
-    // Animate list to the top if it's scrolled down
     if (_scrollController.hasClients && _scrollController.offset > 0) {
       _scrollController.animateTo(
-          0, duration: const Duration(milliseconds: 400),
-          curve: Curves.easeOut);
+        0,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOut,
+      );
     }
   }
 
@@ -149,8 +151,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     }
   }
 
-  Future<void> _handleCostSubmission(JobMaterials expense,
-      bool isEditing) async {
+  Future<void> _handleCostSubmission(JobMaterials expense, bool isEditing) async {
     try {
       if (isEditing) {
         await DatabaseHelperV2.instance.updateMaterialV2(expense);
@@ -159,40 +160,45 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
       }
       if (mounted) {
         _handleClearOrCancel();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
-            'Expense ${isEditing ? 'updated' : 'added'} successfully.'),
-          duration: const Duration(seconds: 2),),);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Expense ${isEditing ? 'updated' : 'added'} successfully.'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error submitting expense: $e')));
+          SnackBar(content: Text('Error submitting expense: $e')),
+        );
       }
     }
   }
 
   Future<void> _deleteExpense(int id) async {
     try {
-      await DatabaseHelperV2.instance.deleteRecordV2(
-          id: id, fromTable: 'materials');
+      await DatabaseHelperV2.instance.deleteRecordV2(id: id, fromTable: 'materials');
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Expense deleted successfully.'),
-          duration: Duration(seconds: 2),),);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Expense deleted successfully.'),
+            duration: Duration(seconds: 2),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error deleting expense: $e')));
+          SnackBar(content: Text('Error deleting expense: $e')),
+        );
       }
     }
   }
 
   String _getProjectNameById(int projectId) {
     try {
-      return _allProjects
-          .firstWhere((p) => p.id == projectId)
-          .projectName;
+      return _allProjects.firstWhere((p) => p.id == projectId).projectName;
     } catch (_) {
       return 'Unknown Project';
     }
@@ -241,42 +247,101 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                 const Divider(height: 1),
                 ValueListenableBuilder<int>(
                   valueListenable: dbNotifier,
-                  builder: (context, _, __) => FutureBuilder<List<JobMaterials>>(
-                    future: DatabaseHelperV2.instance.getRecentMaterialsV2(),
+                  builder: (context, _, __) => FutureBuilder<List<dynamic>>(
+                    key: ValueKey(_showCompletedProjects),
+                    future: DatabaseHelperV2.instance.getProjectRecordsV2(
+                      _showCompletedProjects,
+                      _allProjects,
+                    ),
                     builder: (context, snapshot) {
                       if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-                        return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
+                        return const SizedBox(
+                          height: 200,
+                          child: Center(child: CircularProgressIndicator()),
+                        );
                       }
                       if (snapshot.hasError) {
-                        return SizedBox(height: 200, child: Center(child: Text('Error: ${snapshot.error}')));
+                        return SizedBox(
+                          height: 200,
+                          child: Center(child: Text('Error: ${snapshot.error}')),
+                        );
                       }
-                      final recentExpenses = snapshot.data ?? [];
-                      if (recentExpenses.isEmpty) {
-                        return const SizedBox(height: 200, child: Center(child: Text("No recent expenses found.")));
+                      final records = snapshot.data ?? [];
+                      if (records.isEmpty) {
+                        return const SizedBox(
+                          height: 200,
+                          child: Center(
+                            child: Text("No records found for selected projects."),
+                          ),
+                        );
                       }
                       return ListView.builder(
                         controller: _scrollController,
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         padding: const EdgeInsets.fromLTRB(8.0, 0, 8.0, 80.0),
-                        itemCount: recentExpenses.length,
+                        itemCount: records.length,
                         itemBuilder: (context, index) {
-                          final expense = recentExpenses[index];
-                          final projectName = _getProjectNameById(expense.projectId);
-                          return Card(
-                            margin: const EdgeInsets.symmetric(vertical: 4),
-                            child: ListTile(
-                              title: Text('${expense.itemName} (\$${expense.cost.toStringAsFixed(2)})'),
-                              subtitle: Text('Project: $projectName | Category: ${expense.expenseCategory ?? 'N/A'}'),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(icon: const Icon(Icons.edit, color: Colors.blueGrey), onPressed: () => _populateFormFromExpense(expense)),
-                                  IconButton(icon: const Icon(Icons.delete_forever, color: Colors.red), onPressed: () => _deleteExpense(expense.id!)),
-                                ],
+                          final record = records[index];
+
+                          if (record is TimeEntry) {
+                            final projectName = _getProjectNameById(record.projectId);
+                            return Card(
+                              margin: const EdgeInsets.symmetric(vertical: 4),
+                              color: Colors.blue.shade50,
+                              child: ListTile(
+                                leading: const Icon(Icons.access_time, color: Colors.blue),
+                                title: Text('TIME: $projectName'),
+                                subtitle: Text(
+                                  '${record.startTime.toString().split(' ')[0]} - ${_formatDuration((record.finalBilledDurationSeconds ?? 0).toInt())}',
+                                ),
+                                trailing: const Text(
+                                  'Tap to add expense',
+                                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                                ),
+                                onTap: () {
+                                  final project = _allProjects.firstWhere((p) => p.id == record.projectId);
+                                  _formStateKey.currentState?.resetForm();
+                                  _formStateKey.currentState?.setSelectedProject(project);
+                                  setState(() {
+                                    _isEditing = false;
+                                    _isFormCollapsed = false;
+                                  });
+                                  if (_scrollController.hasClients && _scrollController.offset > 0) {
+                                    _scrollController.animateTo(0, duration: const Duration(milliseconds: 400), curve: Curves.easeOut);
+                                  }
+                                },
                               ),
-                            ),
-                          );
+                            );
+                          } else if (record is JobMaterials) {
+                            final projectName = _getProjectNameById(record.projectId);
+                            return Card(
+                              margin: const EdgeInsets.symmetric(vertical: 4),
+                              child: ListTile(
+                                leading: const Icon(Icons.receipt, color: Colors.green),
+                                title: Text(
+                                  'EXPENSE: ${record.itemName} (\$${record.cost.toStringAsFixed(2)})',
+                                ),
+                                subtitle: Text(
+                                  'Project: $projectName | Category: ${record.expenseCategory ?? 'N/A'}',
+                                ),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.edit, color: Colors.blueGrey),
+                                      onPressed: () => _populateFormFromExpense(record),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_forever, color: Colors.red),
+                                      onPressed: () => _deleteExpense(record.id!),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }
+                          return const SizedBox.shrink();
                         },
                       );
                     },
@@ -288,5 +353,11 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
         ),
       ),
     );
+  }
+
+  String _formatDuration(int seconds) {
+    final hours = seconds ~/ 3600;
+    final minutes = (seconds % 3600) ~/ 60;
+    return '${hours}h ${minutes}m';
   }
 }

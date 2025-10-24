@@ -1,6 +1,6 @@
 // lib/models/analytics_models.dart
 
-enum AnalyticsView { none, singleProjectCard, projectListTable, personnelSummary, customReport, companyExpenses }
+enum AnalyticsView { none, singleProjectCard, projectListTable, personnelSummary, customReport, companyExpenses, importErrors }
 enum ReportType { activeProjects, completedProjects }
 enum ReportSubject { projects, personnel }
 
