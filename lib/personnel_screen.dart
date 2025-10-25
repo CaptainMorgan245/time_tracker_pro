@@ -127,6 +127,7 @@ class _PersonnelScreenState extends State<PersonnelScreen> {
                 textCapitalization: TextCapitalization.words,
                 decoration: const InputDecoration(labelText: 'Role Name'),
               ),
+              const SizedBox(height: 16),
               TextField(
                 controller: rateController,
                 decoration: const InputDecoration(labelText: 'Standard Rate/hr'),
@@ -165,7 +166,6 @@ class _PersonnelScreenState extends State<PersonnelScreen> {
       },
     );
   }
-  // end method: _showEditRoleDialog
 
   // start method: _buildRolesList
   Widget _buildRolesList() {

@@ -101,13 +101,14 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
                 textCapitalization: TextCapitalization.words,
                 decoration: const InputDecoration(labelText: 'Employee Name'),
               ),
+              const SizedBox(height: 16),
               if (!isNew)
                 TextField(
                   controller: TextEditingController(text: employeeNumber),
                   decoration: const InputDecoration(labelText: 'Employee Number'),
                   readOnly: true,
                 ),
-              const SizedBox(height: 16),
+              if (!isNew) const SizedBox(height: 16),
               DropdownButtonFormField<Role?>(
                 value: selectedRole,
                 decoration: const InputDecoration(labelText: 'Select Role'),
@@ -163,7 +164,6 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
       },
     );
   }
-  // end method: _showEditDialog
 
   // start method: _buildEmployeeList
   Widget _buildEmployeeList(List<Employee> list, Color color, {bool inactive = false}) {

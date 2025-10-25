@@ -84,9 +84,20 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: nameController, decoration: const InputDecoration(labelText: 'Client Name')),
-              TextField(controller: contactPersonController, decoration: const InputDecoration(labelText: 'Contact Person')),
-              TextField(controller: phoneNumberController, decoration: const InputDecoration(labelText: 'Phone Number')),
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: 'Client Name'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: contactPersonController,
+                decoration: const InputDecoration(labelText: 'Contact Person'),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: phoneNumberController,
+                decoration: const InputDecoration(labelText: 'Phone Number'),
+              ),
             ],
           ),
           actions: [
@@ -150,6 +161,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                         controller: projectNameController,
                         decoration: const InputDecoration(labelText: 'Project Name'),
                       ),
+                      const SizedBox(height: 16),
                       DropdownButtonFormField<int>(
                         decoration: const InputDecoration(labelText: 'Client'),
                         value: selectedClientId,
@@ -167,6 +179,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                       ),
 
                       // FIX 2: Added 'Project Based' option.
+                      const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
                         decoration: const InputDecoration(labelText: 'Pricing Model'),
                         value: selectedPricingModel,
@@ -182,6 +195,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                         },
                       ),
 
+                      const SizedBox(height: 16),
                       if (selectedPricingModel == 'hourly')
                         TextField(
                           controller: billedHourlyRateController,

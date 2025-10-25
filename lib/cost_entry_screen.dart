@@ -7,6 +7,161 @@ import 'package:time_tracker_pro/settings_service.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/settings_model.dart';
 
+// Separate sticky top row widget
+class CostRecordFormTopRow extends StatelessWidget {
+  final GlobalKey<CostRecordFormState> formStateKey;
+  final ValueNotifier<List<Project>> filteredProjectsNotifier;
+  final ValueNotifier<List<String>> expenseCategoriesNotifier;
+  final ValueNotifier<bool> isCompanyExpenseNotifier;
+  final bool showCompletedProjects;
+  final Function(bool showCompleted) onProjectFilterToggle;
+
+  const CostRecordFormTopRow({
+    super.key,
+    required this.formStateKey,
+    required this.filteredProjectsNotifier,
+    required this.expenseCategoriesNotifier,
+    required this.isCompanyExpenseNotifier,
+    required this.showCompletedProjects,
+    required this.onProjectFilterToggle,
+  });
+
+  Project? _getInternalProject() {
+    try {
+      return filteredProjectsNotifier.value.firstWhere((p) => p.id == 0);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 16.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Flexible(
+            flex: 4,
+            child: ValueListenableBuilder<List<Project>>(
+              valueListenable: filteredProjectsNotifier,
+              builder: (context, projects, _) {
+                final isProjectDropdownEnabled = !isCompanyExpenseNotifier.value;
+                final currentProjectSelection = isCompanyExpenseNotifier.value
+                    ? _getInternalProject()
+                    : formStateKey.currentState?.selectedProject;
+
+                return DropdownButtonFormField<Project>(
+                  decoration: InputDecoration(
+                    labelText: 'Select Project',
+                    suffixIcon: isProjectDropdownEnabled ? const Text('*') : null,
+                  ),
+                  isDense: true,
+                  value: currentProjectSelection,
+                  onChanged: isProjectDropdownEnabled
+                      ? (Project? newValue) {
+                    formStateKey.currentState?.setSelectedProject(newValue!);
+                  }
+                      : null,
+                  items: projects.map((project) {
+                    final displayName = project.isInternal
+                        ? 'Internal Company Project'
+                        : project.projectName;
+                    return DropdownMenuItem<Project>(
+                      value: project,
+                      child: Text(displayName, overflow: TextOverflow.ellipsis),
+                    );
+                  }).toList(),
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 16),
+          Flexible(
+            flex: 5,
+            child: ValueListenableBuilder<List<String>>(
+              valueListenable: expenseCategoriesNotifier,
+              builder: (context, categories, _) {
+                return DropdownButtonFormField<String>(
+                  decoration: const InputDecoration(labelText: 'Expense Category *'),
+                  value: formStateKey.currentState?.selectedExpenseCategory,
+                  items: categories.map((c) => DropdownMenuItem<String>(
+                      value: c,
+                      child: Text(c)
+                  )).toList(),
+                  onChanged: (String? newValue) {
+                    formStateKey.currentState?.setState(() {
+                      formStateKey.currentState!.selectedExpenseCategory = newValue;
+                      formStateKey.currentState!.isFuelCategory = newValue == 'Fuel';
+                    });
+                  },
+                );
+              },
+            ),
+          ),
+          const SizedBox(width: 16),
+          Flexible(
+            flex: 4,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ValueListenableBuilder<bool>(
+                        valueListenable: isCompanyExpenseNotifier,
+                        builder: (context, isCompanyExpense, _) {
+                          return Checkbox(
+                            value: isCompanyExpense,
+                            onChanged: (bool? newValue) {
+                              isCompanyExpenseNotifier.value = newValue ?? false;
+                              if (isCompanyExpenseNotifier.value) {
+                                formStateKey.currentState?.setSelectedProject(_getInternalProject()!);
+                              }
+                            },
+                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          );
+                        },
+                      ),
+                      const Text(
+                        'Company Expense',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Checkbox(
+                        value: showCompletedProjects,
+                        onChanged: (bool? newValue) {
+                          onProjectFilterToggle(newValue ?? false);
+                        },
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      const Text(
+                        'Show Completed',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class CostEntryScreen extends StatefulWidget {
   const CostEntryScreen({super.key});
 
@@ -130,8 +285,9 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     _isCompanyExpenseNotifier.value = expense.isCompanyExpense;
     setState(() {
       _isEditing = true;
-      _isFormCollapsed = false;
+      _isFormCollapsed = false; // Always expand form for editing
     });
+    // Scroll back to top to see the form
     if (_scrollController.hasClients && _scrollController.offset > 0) {
       _scrollController.animateTo(
         0,
@@ -139,6 +295,10 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
         curve: Curves.easeOut,
       );
     }
+    // Auto-focus to bring up keyboard
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _formStateKey.currentState?.focusFirstField();
+    });
   }
 
   void _handleClearOrCancel() {
@@ -213,146 +373,148 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
           : SafeArea(
         top: true,
         bottom: false,
-        child: SingleChildScrollView(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: MediaQuery.of(context).size.height - MediaQuery.of(context).padding.top,
-            ),
-            child: Column(
-              children: [
-                Card(
-                  elevation: 2.0,
-                  margin: const EdgeInsets.all(8),
-                  child: CostRecordForm(
-                    key: _formStateKey,
-                    availableProjectsNotifier: _filteredProjectsNotifier,
-                    expenseCategoriesNotifier: _expenseCategoriesNotifier,
-                    vendorsNotifier: _vendorsNotifier,
-                    vehicleDesignationsNotifier: _vehicleDesignationsNotifier,
-                    onAddExpense: _handleCostSubmission,
-                    onProjectFilterToggle: _applyProjectFilter,
-                    onClearForm: _handleClearOrCancel,
-                    isEditing: _isEditing,
-                    onCompanyExpenseToggle: (isCompanyExpense) {
-                      _isCompanyExpenseNotifier.value = isCompanyExpense;
-                    },
-                    isCollapsed: _isFormCollapsed,
-                    onCollapseToggle: () {
-                      setState(() {
-                        _isFormCollapsed = !_isFormCollapsed;
-                      });
-                    },
-                  ),
+        child: Column(
+          children: [
+            // STICKY TOP ROW - never scrolls away but looks integrated
+            Card(
+              elevation: 2.0,
+              margin: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(4),
                 ),
-                const Divider(height: 1),
-                ValueListenableBuilder<int>(
-                  valueListenable: dbNotifier,
-                  builder: (context, _, __) => FutureBuilder<List<dynamic>>(
-                    key: ValueKey(_showCompletedProjects),
-                    future: DatabaseHelperV2.instance.getProjectRecordsV2(
-                      _showCompletedProjects,
-                      _allProjects,
-                    ),
-                    builder: (context, snapshot) {
-                      if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-                        return const SizedBox(
-                          height: 200,
-                          child: Center(child: CircularProgressIndicator()),
-                        );
-                      }
-                      if (snapshot.hasError) {
-                        return SizedBox(
-                          height: 200,
-                          child: Center(child: Text('Error: ${snapshot.error}')),
-                        );
-                      }
-                      final records = snapshot.data ?? [];
-                      if (records.isEmpty) {
-                        return const SizedBox(
-                          height: 200,
-                          child: Center(
-                            child: Text("No records found for selected projects."),
-                          ),
-                        );
-                      }
-                      return ListView.builder(
-                        controller: _scrollController,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(8.0, 0, 8.0, 80.0),
-                        itemCount: records.length,
-                        itemBuilder: (context, index) {
-                          final record = records[index];
+              ),
+              child: CostRecordFormTopRow(
+                formStateKey: _formStateKey,
+                filteredProjectsNotifier: _filteredProjectsNotifier,
+                expenseCategoriesNotifier: _expenseCategoriesNotifier,
+                isCompanyExpenseNotifier: _isCompanyExpenseNotifier,
+                showCompletedProjects: _showCompletedProjects,
+                onProjectFilterToggle: _applyProjectFilter,
+              ),
+            ),
 
-                          if (record is TimeEntry) {
-                            final projectName = _getProjectNameById(record.projectId);
-                            return Card(
-                              margin: const EdgeInsets.symmetric(vertical: 4),
-                              color: Colors.blue.shade50,
-                              child: ListTile(
-                                leading: const Icon(Icons.access_time, color: Colors.blue),
-                                title: Text('TIME: $projectName'),
-                                subtitle: Text(
-                                  '${record.startTime.toString().split(' ')[0]} - ${_formatDuration((record.finalBilledDurationSeconds ?? 0).toInt())}',
-                                ),
-                                trailing: const Text(
-                                  'Tap to add expense',
-                                  style: TextStyle(fontSize: 12, color: Colors.grey),
-                                ),
-                                onTap: () {
-                                  final project = _allProjects.firstWhere((p) => p.id == record.projectId);
-                                  _formStateKey.currentState?.resetForm();
-                                  _formStateKey.currentState?.setSelectedProject(project);
-                                  setState(() {
-                                    _isEditing = false;
-                                    _isFormCollapsed = false;
-                                  });
-                                  if (_scrollController.hasClients && _scrollController.offset > 0) {
-                                    _scrollController.animateTo(0, duration: const Duration(milliseconds: 400), curve: Curves.easeOut);
-                                  }
-                                },
-                              ),
-                            );
-                          } else if (record is JobMaterials) {
-                            final projectName = _getProjectNameById(record.projectId);
-                            return Card(
-                              margin: const EdgeInsets.symmetric(vertical: 4),
-                              child: ListTile(
-                                leading: const Icon(Icons.receipt, color: Colors.green),
-                                title: Text(
-                                  'EXPENSE: ${record.itemName} (\$${record.cost.toStringAsFixed(2)})',
-                                ),
-                                subtitle: Text(
-                                  'Project: $projectName | Category: ${record.expenseCategory ?? 'N/A'}',
-                                ),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.edit, color: Colors.blueGrey),
-                                      onPressed: () => _populateFormFromExpense(record),
-                                    ),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_forever, color: Colors.red),
-                                      onPressed: () => _deleteExpense(record.id!),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }
-                          return const SizedBox.shrink();
-                        },
-                      );
-                    },
+            // COLLAPSIBLE FORM BODY - integrates visually with top row
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 300),
+              height: _isFormCollapsed ? 0 : null,
+              child: _isFormCollapsed
+                  ? const SizedBox.shrink()
+                  : Card(
+                elevation: 2.0,
+                margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.only(
+                    bottomLeft: Radius.circular(4),
+                    bottomRight: Radius.circular(4),
                   ),
                 ),
-              ],
+                child: CostRecordForm(
+                  key: _formStateKey,
+                  availableProjectsNotifier: _filteredProjectsNotifier,
+                  expenseCategoriesNotifier: _expenseCategoriesNotifier,
+                  vendorsNotifier: _vendorsNotifier,
+                  vehicleDesignationsNotifier: _vehicleDesignationsNotifier,
+                  onAddExpense: _handleCostSubmission,
+                  onProjectFilterToggle: _applyProjectFilter,
+                  onClearForm: _handleClearOrCancel,
+                  isEditing: _isEditing,
+                  onCompanyExpenseToggle: _isCompanyExpenseNotifier,
+                  isCollapsed: false, // Always show body when visible
+                  onCollapseToggle: () {}, // Not used
+                ),
+              ),
             ),
-          ),
+
+            const Divider(height: 1),
+
+            // SCROLLABLE EXPENSE LIST
+            Expanded(
+              child: ValueListenableBuilder<int>(
+                valueListenable: dbNotifier,
+                builder: (context, _, __) => FutureBuilder<List<dynamic>>(
+                  key: ValueKey(_showCompletedProjects),
+                  future: DatabaseHelperV2.instance.getProjectRecordsV2(
+                    _showCompletedProjects,
+                    _allProjects,
+                  ),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+                      return const SizedBox(
+                        height: 200,
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
+                    if (snapshot.hasError) {
+                      return SizedBox(
+                        height: 200,
+                        child: Center(child: Text('Error: ${snapshot.error}')),
+                      );
+                    }
+                    final records = snapshot.data ?? [];
+                    if (records.isEmpty) {
+                      return const SizedBox(
+                        height: 200,
+                        child: Center(
+                          child: Text("No records found for selected projects."),
+                        ),
+                      );
+                    }
+                    return ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.fromLTRB(8.0, 0, 8.0, 80.0),
+                      itemCount: records.length,
+                      itemBuilder: (context, index) {
+                        final record = records[index];
+
+                        if (record is JobMaterials) {
+                          final projectName = _getProjectNameById(record.projectId);
+                          return Card(
+                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            child: ListTile(
+                              leading: const Icon(Icons.receipt, color: Colors.green),
+                              title: Text(
+                                'EXPENSE: ${record.itemName} (\$${record.cost.toStringAsFixed(2)})',
+                              ),
+                              subtitle: Text(
+                                'Project: $projectName | Category: ${record.expenseCategory ?? 'N/A'}',
+                              ),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit, color: Colors.blueGrey),
+                                    onPressed: () => _populateFormFromExpense(record),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_forever, color: Colors.red),
+                                    onPressed: () => _deleteExpense(record.id!),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
+  }
+
+  Project? _getInternalProject() {
+    try {
+      return _allProjects.firstWhere((p) => p.id == 0);
+    } catch (_) {
+      return null;
+    }
   }
 
   String _formatDuration(int seconds) {

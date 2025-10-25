@@ -10,7 +10,7 @@ import 'package:time_tracker_pro/client_and_project_screen.dart';
 import 'package:time_tracker_pro/timer_add_form.dart';
 import 'package:time_tracker_pro/time_tracker_page.dart';
 import 'package:intl/intl.dart';
-import 'package:time_tracker_pro/database_viewer_screen.dart';
+//import 'package:time_tracker_pro/database_viewer_screen.dart';
 import 'package:time_tracker_pro/models.dart' as app_models;
 import 'package:time_tracker_pro/analytics_screen.dart';
 import 'package:time_tracker_pro/cost_entry_screen.dart';
@@ -83,16 +83,7 @@ class AppDrawer extends StatelessWidget {
               );
             },
           ),
-          ListTile(
-            leading: const Icon(Icons.receipt_long),
-            title: const Text('Database Viewer'),
-            onTap: () {
-              Navigator.pop(context);
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) => const DatabaseViewerScreen()),
-              );
-            },
-          ),
+
         ],
       ),
     );
@@ -169,8 +160,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       if (!mounted) return;
 
+      final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
       final recentTimeActivities = allRecentActivities
-          .where((record) => record.type == app_models.RecordType.time)
+          .where((record) {
+        if (record.type != app_models.RecordType.time) return false;
+        if (record.date.isBefore(sevenDaysAgo)) return false;
+
+        // Check if project is active
+        try {
+          final project = _allProjectsForLookup.firstWhere(
+                (p) => p.projectName == record.categoryOrProject,
+          );
+          return !project.isCompleted;
+        } catch (e) {
+          return false;
+        }
+      })
           .toList();
 
       final sortedProjects = projects.where((p) => !p.isCompleted).toList();
