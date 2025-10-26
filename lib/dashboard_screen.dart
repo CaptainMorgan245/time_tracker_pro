@@ -168,8 +168,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
         // Check if project is active
         try {
-          final project = _allProjectsForLookup.firstWhere(
-                (p) => p.projectName == record.categoryOrProject,
+          // Extract project name from "Client - Project" format
+          final parts = record.categoryOrProject.split(' - ');
+          final projectName = parts.length > 1 ? parts.last : record.categoryOrProject;
+
+          final project = projects.firstWhere(
+                (p) => p.projectName == projectName,
           );
           return !project.isCompleted;
         } catch (e) {
@@ -177,7 +181,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
       })
           .toList();
-
+      recentTimeActivities.sort((a, b) => b.date.compareTo(a.date));
       final sortedProjects = projects.where((p) => !p.isCompleted).toList();
       sortedProjects.sort((a, b) => b.id!.compareTo(a.id!));
 

@@ -39,12 +39,12 @@ class CostRecordForm extends StatefulWidget {
 class CostRecordFormState extends State<CostRecordForm> {
   final _formKey = GlobalKey<FormState>();
 
-  final TextEditingController _itemNameController = TextEditingController();
+  // REMOVED: _itemNameController - no longer needed
   final TextEditingController _costController = TextEditingController();
   final TextEditingController _quantityController = TextEditingController();
   final TextEditingController _odometerReadingController = TextEditingController();
 
-  final FocusNode _itemNameFocusNode = FocusNode();
+  // REMOVED: _itemNameFocusNode - no longer needed
 
   Project? selectedProject;
   DateTime _selectedPurchaseDate = DateTime.now();
@@ -58,11 +58,11 @@ class CostRecordFormState extends State<CostRecordForm> {
 
   @override
   void dispose() {
-    _itemNameController.dispose();
+    // REMOVED: _itemNameController.dispose();
     _costController.dispose();
     _quantityController.dispose();
     _odometerReadingController.dispose();
-    _itemNameFocusNode.dispose();
+    // REMOVED: _itemNameFocusNode.dispose();
     super.dispose();
   }
 
@@ -77,7 +77,7 @@ class CostRecordFormState extends State<CostRecordForm> {
   void populateForm(JobMaterials expense) {
     setState(() {
       _editingExpenseId = expense.id;
-      _itemNameController.text = expense.itemName;
+      // REMOVED: _itemNameController.text = expense.itemName;
       _costController.text = expense.cost.toStringAsFixed(2);
       _quantityController.text = expense.quantity?.toStringAsFixed(2) ?? '';
       _odometerReadingController.text = expense.odometerReading?.toStringAsFixed(0) ?? '';
@@ -112,7 +112,7 @@ class CostRecordFormState extends State<CostRecordForm> {
 
   void resetForm() {
     _formKey.currentState?.reset();
-    _itemNameController.clear();
+    // REMOVED: _itemNameController.clear();
     _costController.clear();
     _quantityController.clear();
     _odometerReadingController.clear();
@@ -137,7 +137,7 @@ class CostRecordFormState extends State<CostRecordForm> {
   }
 
   void focusFirstField() {
-    _itemNameFocusNode.requestFocus();
+    // REMOVED: _itemNameFocusNode.requestFocus(); - no longer needed
   }
 
   void _submitForm() {
@@ -149,7 +149,7 @@ class CostRecordFormState extends State<CostRecordForm> {
       final newExpense = JobMaterials(
           id: _editingExpenseId,
           projectId: submissionProjectId,
-          itemName: _itemNameController.text.isEmpty ? 'N/A' : _itemNameController.text,
+          itemName: 'General Expense', // FIXED: Set to generic name since field is removed
           cost: double.parse(_costController.text),
           purchaseDate: _selectedPurchaseDate,
           description: null, // REMOVED: No longer collecting description
@@ -185,16 +185,17 @@ class CostRecordFormState extends State<CostRecordForm> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Vendor and Date row
+            // VENDOR + DATE + COST on one row (saves space!)
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
+                  flex: 2,
                   child: ValueListenableBuilder<List<String>>(
                     valueListenable: widget.vendorsNotifier,
                     builder: (context, vendors, _) {
                       return DropdownButtonFormField<String>(
-                        decoration: const InputDecoration(labelText: 'Vendor/Subtrade (Optional)'),
+                        decoration: const InputDecoration(labelText: 'Vendor'),
                         value: _selectedVendorOrSubtrade,
                         onChanged: (String? newValue) => setState(() => _selectedVendorOrSubtrade = newValue),
                         items: vendors.map((vendor) => DropdownMenuItem<String>(
@@ -205,44 +206,30 @@ class CostRecordFormState extends State<CostRecordForm> {
                     },
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 8),
                 Expanded(
+                  flex: 2,
                   child: InkWell(
                     onTap: () => _selectPurchaseDate(context),
                     child: InputDecorator(
                       decoration: const InputDecoration(
-                        labelText: 'Purchase Date *',
+                        labelText: 'Date *',
                         suffixIcon: Icon(Icons.calendar_today),
                       ),
-                      child: Text(DateFormat('MMM dd, yyyy').format(_selectedPurchaseDate)),
+                      child: Text(DateFormat('MMM dd').format(_selectedPurchaseDate)),
                     ),
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Item name and cost row
-            Row(
-              children: [
+                const SizedBox(width: 8),
                 Expanded(
-                  flex: 2,
-                  child: TextFormField(
-                    controller: _itemNameController,
-                    focusNode: _itemNameFocusNode,
-                    decoration: const InputDecoration(labelText: 'Item Name/Description *'),
-                    validator: (value) => (value == null || value.isEmpty) ? 'Item name is required' : null,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
+                  flex: 1,
                   child: TextFormField(
                     controller: _costController,
                     decoration: const InputDecoration(labelText: 'Cost *'),
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     validator: (value) {
-                      if (value == null || value.isEmpty) return 'Cost is required';
-                      if (double.tryParse(value) == null) return 'Enter valid cost';
+                      if (value == null || value.isEmpty) return 'Required';
+                      if (double.tryParse(value) == null) return 'Invalid';
                       return null;
                     },
                   ),
@@ -303,7 +290,7 @@ class CostRecordFormState extends State<CostRecordForm> {
               },
             ),
 
-            // REMOVED: Description field to fix keyboard overflow
+            // REMOVED: Description field and Item name field to fix keyboard overflow
             const SizedBox(height: 8),
 
             // Buttons

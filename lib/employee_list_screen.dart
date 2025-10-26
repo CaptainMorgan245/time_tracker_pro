@@ -61,7 +61,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
   }
   // end method: _updateEmployee
 
-  // start method: _deleteEmployee
+  /*/ start method: _deleteEmployee
   Future<void> _deleteEmployee(int id) async {
     final employee = widget.employees.firstWhere((e) => e.id == id);
     if (!employee.isDeleted) {
@@ -77,7 +77,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
     await _showEditDialog(null);
   }
   // end method: _showAddEmployeeDialog
-
+*/
   // start method: _showEditDialog (Unified Dialog)
   Future<void> _showEditDialog(Employee? employee) async {
     final isNew = employee == null;
@@ -137,7 +137,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
                 child: Text(isDeleted ? 'Activate' : 'Deactivate',
                     style: TextStyle(color: isDeleted ? Colors.green : Colors.red)),
                 onPressed: () {
-                  final updatedEmployee = employee!.copyWith(isDeleted: !isDeleted);
+                  final updatedEmployee = employee.copyWith(isDeleted: !isDeleted);
                   _updateEmployee(updatedEmployee);
                   Navigator.of(context).pop();
                 },
@@ -149,7 +149,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
                   if (isNew) {
                     _addEmployee(nameController.text, selectedRole?.id);
                   } else {
-                    final updatedEmployee = employee!.copyWith(
+                    final updatedEmployee = employee.copyWith(
                       name: nameController.text,
                       titleId: selectedRole?.id,
                     );

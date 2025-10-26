@@ -80,6 +80,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       if (projects.length == 1) {
         _selectedProjectId = projects.first.id;
         _generateSingleSummaryCard(_selectedProjectId!);
+      } else if (_currentView == AnalyticsView.none) {
+        // Auto-generate project list report when page is empty
+        _currentView = AnalyticsView.projectListTable;
+        _projectListTableFuture = _projectRepo.getProjectListReport(
+            activeOnly: _selectedReportType == ReportType.activeProjects);
       }
     });
   }

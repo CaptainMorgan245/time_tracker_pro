@@ -90,6 +90,7 @@ class CostRecordFormTopRow extends StatelessWidget {
                       child: Text(c)
                   )).toList(),
                   onChanged: (String? newValue) {
+                    // ignore: invalid_use_of_protected_member
                     formStateKey.currentState?.setState(() {
                       formStateKey.currentState!.selectedExpenseCategory = newValue;
                       formStateKey.currentState!.isFuelCategory = newValue == 'Fuel';
@@ -508,7 +509,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
       ),
     );
   }
-
+/*
   Project? _getInternalProject() {
     try {
       return _allProjects.firstWhere((p) => p.id == 0);
@@ -522,4 +523,5 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     final minutes = (seconds % 3600) ~/ 60;
     return '${hours}h ${minutes}m';
   }
+  */
 }

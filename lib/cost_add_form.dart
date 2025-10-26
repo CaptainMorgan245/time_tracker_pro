@@ -29,8 +29,7 @@ class _ExpenseAddFormState extends State<ExpenseAddForm> {
   // Form Key for validation
   final _formKey = GlobalKey<FormState>();
 
-  // Controllers for text fields
-  final TextEditingController _itemNameController = TextEditingController();
+  // Controllers for text fields - REMOVED _itemNameController
   final TextEditingController _costController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _quantityController = TextEditingController();
@@ -47,7 +46,7 @@ class _ExpenseAddFormState extends State<ExpenseAddForm> {
 
   @override
   void dispose() {
-    _itemNameController.dispose();
+    // REMOVED _itemNameController.dispose();
     _costController.dispose();
     _descriptionController.dispose();
     _quantityController.dispose();
@@ -74,7 +73,7 @@ class _ExpenseAddFormState extends State<ExpenseAddForm> {
     if (_formKey.currentState!.validate()) {
       final newExpense = app_models.JobMaterials(
         projectId: _selectedProject!.id!,
-        itemName: _itemNameController.text,
+        itemName: '', // EMPTY since we removed the field
         cost: double.parse(_costController.text),
         purchaseDate: _selectedPurchaseDate ?? DateTime.now(),
         description: _descriptionController.text.isNotEmpty ? _descriptionController.text : null,
@@ -118,17 +117,38 @@ class _ExpenseAddFormState extends State<ExpenseAddForm> {
               ),
               const SizedBox(height: 16),
 
-              // Item Name and Cost Row
+              // VENDOR + DATE + COST on one row
               Row(
                 children: [
                   Expanded(
-                    child: TextFormField(
-                      controller: _itemNameController,
-                      decoration: const InputDecoration(labelText: 'Item Name *'),
-                      validator: (value) => value!.isEmpty ? 'Please enter an item name' : null,
+                    child: DropdownButtonFormField<String>(
+                      decoration: const InputDecoration(labelText: 'Vendor'),
+                      value: _selectedVendor,
+                      items: widget.vendors.map((vendor) {
+                        return DropdownMenuItem<String>(
+                          value: vendor,
+                          child: Text(vendor),
+                        );
+                      }).toList(),
+                      onChanged: (String? newValue) {
+                        setState(() {
+                          _selectedVendor = newValue;
+                        });
+                      },
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => _selectPurchaseDate(context),
+                      child: Text(
+                        _selectedPurchaseDate == null
+                            ? 'Date *'
+                            : DateFormat('MMM d').format(_selectedPurchaseDate!),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: TextFormField(
                       controller: _costController,
@@ -138,12 +158,8 @@ class _ExpenseAddFormState extends State<ExpenseAddForm> {
                       ),
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
                       validator: (value) {
-                        if (value!.isEmpty) {
-                          return 'Please enter a cost';
-                        }
-                        if (double.tryParse(value) == null) {
-                          return 'Invalid number';
-                        }
+                        if (value!.isEmpty) return 'Required';
+                        if (double.tryParse(value) == null) return 'Invalid';
                         return null;
                       },
                     ),
@@ -152,38 +168,21 @@ class _ExpenseAddFormState extends State<ExpenseAddForm> {
               ),
               const SizedBox(height: 16),
 
-              // Purchase Date and Category Row
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () => _selectPurchaseDate(context),
-                      child: Text(
-                        _selectedPurchaseDate == null
-                            ? 'Select Purchase Date *'
-                            : DateFormat('MMM d, yyyy').format(_selectedPurchaseDate!),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      decoration: const InputDecoration(labelText: 'Category'),
-                      value: _selectedExpenseCategory,
-                      items: widget.expenseCategories.map((category) {
-                        return DropdownMenuItem<String>(
-                          value: category,
-                          child: Text(category),
-                        );
-                      }).toList(),
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          _selectedExpenseCategory = newValue;
-                        });
-                      },
-                    ),
-                  ),
-                ],
+              // Category Row
+              DropdownButtonFormField<String>(
+                decoration: const InputDecoration(labelText: 'Category'),
+                value: _selectedExpenseCategory,
+                items: widget.expenseCategories.map((category) {
+                  return DropdownMenuItem<String>(
+                    value: category,
+                    child: Text(category),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  setState(() {
+                    _selectedExpenseCategory = newValue;
+                  });
+                },
               ),
               const SizedBox(height: 16),
 
@@ -209,45 +208,21 @@ class _ExpenseAddFormState extends State<ExpenseAddForm> {
               ),
               const SizedBox(height: 16),
 
-              // Vehicle and Vendor
-              Row(
-                children: [
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      decoration: const InputDecoration(labelText: 'Vehicle Designation'),
-                      value: _selectedVehicleDesignation,
-                      items: widget.vehicleDesignations.map((designation) {
-                        return DropdownMenuItem<String>(
-                          value: designation,
-                          child: Text(designation),
-                        );
-                      }).toList(),
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          _selectedVehicleDesignation = newValue;
-                        });
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      decoration: const InputDecoration(labelText: 'Vendor/Subtrade'),
-                      value: _selectedVendor,
-                      items: widget.vendors.map((vendor) {
-                        return DropdownMenuItem<String>(
-                          value: vendor,
-                          child: Text(vendor),
-                        );
-                      }).toList(),
-                      onChanged: (String? newValue) {
-                        setState(() {
-                          _selectedVendor = newValue;
-                        });
-                      },
-                    ),
-                  ),
-                ],
+              // Vehicle Designation
+              DropdownButtonFormField<String>(
+                decoration: const InputDecoration(labelText: 'Vehicle Designation'),
+                value: _selectedVehicleDesignation,
+                items: widget.vehicleDesignations.map((designation) {
+                  return DropdownMenuItem<String>(
+                    value: designation,
+                    child: Text(designation),
+                  );
+                }).toList(),
+                onChanged: (String? newValue) {
+                  setState(() {
+                    _selectedVehicleDesignation = newValue;
+                  });
+                },
               ),
               const SizedBox(height: 16),
 
