@@ -97,7 +97,7 @@ class Project {
       'completion_date': completionDate?.toIso8601String(),
       'is_internal': isInternal ? 1 : 0,
       'billed_hourly_rate': billedHourlyRate,
-      'project_price': fixedPrice, // DB column is 'project_price'
+      'project_price': fixedPrice,
     };
   }
 
@@ -114,7 +114,7 @@ class Project {
           : null,
       isInternal: map['is_internal'] == 1,
       billedHourlyRate: (map['billed_hourly_rate'] as num?)?.toDouble(),
-      fixedPrice: (map['project_price'] as num?)?.toDouble(), // DB column is 'project_price'
+      fixedPrice: (map['project_price'] as num?)?.toDouble(),
     );
   }
 
@@ -143,6 +143,15 @@ class Project {
       fixedPrice: fixedPrice ?? this.fixedPrice,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is Project && other.id == id;
+  }
+
+  @override
+  int get hashCode => id.hashCode;
 
   @override
   String toString() {

@@ -158,29 +158,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final employees = await _employeeRepo.getEmployees();
       final allRecentActivities = await dbHelper.getAllRecordsV2();
 
+      debugPrint('===== DASHBOARD DEBUG =====');
+      debugPrint('Total activities from DB: ${allRecentActivities.length}');
+      debugPrint('Active projects: ${projects.where((p) => !p.isCompleted).length}');
+      debugPrint('Total projects: ${projects.length}');
+
       if (!mounted) return;
 
       final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
       final recentTimeActivities = allRecentActivities
           .where((record) {
-        if (record.type != app_models.RecordType.time) return false;
-        if (record.date.isBefore(sevenDaysAgo)) return false;
+        debugPrint('Checking record ${record.id}: type=${record.type}, date=${record.date}');
 
-        // Check if project is active
+        if (record.type != app_models.RecordType.time) {
+          debugPrint('  -> Skipped: not time type');
+          return false;
+        }
+        if (record.date.isBefore(sevenDaysAgo)) {
+          debugPrint('  -> Skipped: too old');
+          return false;
+        }
+
         try {
-          // Extract project name from "Client - Project" format
           final parts = record.categoryOrProject.split(' - ');
-          final projectName = parts.length > 1 ? parts.last : record.categoryOrProject;
+          final projectName = parts.length > 1 ? parts.sublist(1).join(' - ') : record.categoryOrProject;
+          debugPrint('  -> Looking for project: $projectName');
 
           final project = projects.firstWhere(
                 (p) => p.projectName == projectName,
           );
+          debugPrint('  -> Found project, isCompleted: ${project.isCompleted}');
           return !project.isCompleted;
         } catch (e) {
+          debugPrint('  -> ERROR: $e');
           return false;
         }
       })
           .toList();
+
+      debugPrint('Final filtered activities: ${recentTimeActivities.length}');
+      debugPrint('===========================');
+
       recentTimeActivities.sort((a, b) => b.date.compareTo(a.date));
       final sortedProjects = projects.where((p) => !p.isCompleted).toList();
       sortedProjects.sort((a, b) => b.id!.compareTo(a.id!));
@@ -230,7 +248,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           final now = DateTime.now();
           final elapsed = now.difference(entry.startTime);
           // START FIX: Use .inSeconds instead of .toInt()
-          final initialDuration = elapsed - Duration(seconds: entry.pausedDuration.inSeconds);
+          final initialDuration = elapsed - entry.pausedDuration;
           // END FIX
           _currentDurations[entry.id!] = initialDuration;
           _startTimerUpdate(entry);
@@ -444,7 +462,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if(mounted){
           setState(() {
             // START FIX: Use .inSeconds instead of .toInt()
-            _currentDurations[entry.id!] = elapsed - Duration(seconds: entry.pausedDuration.inSeconds);
+            _currentDurations[entry.id!] = elapsed - entry.pausedDuration;
             // END FIX
           });
         }
@@ -542,7 +560,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       final entry = _activeEntries.firstWhere((e) => e.id == entryId);
       // START FIX: Use .inSeconds instead of .toInt()
-      final duration = DateTime.now().difference(entry.startTime) - Duration(seconds: entry.pausedDuration.inSeconds);
+      final duration = DateTime.now().difference(entry.startTime) - entry.pausedDuration;
       // END FIX
 
       final stoppedEntry = entry.copyWith(
