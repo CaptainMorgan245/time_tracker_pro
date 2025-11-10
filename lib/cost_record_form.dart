@@ -1,4 +1,5 @@
-// lib/cost_record_form.dart
+// lib/cost_record_form.dart (COMPLETE FILE - Final Stable Version)
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -39,12 +40,12 @@ class CostRecordForm extends StatefulWidget {
 class CostRecordFormState extends State<CostRecordForm> {
   final _formKey = GlobalKey<FormState>();
 
-  // REMOVED: _itemNameController - no longer needed
+  final TextEditingController _itemNameController = TextEditingController();
+  final FocusNode _itemNameFocusNode = FocusNode();
+
   final TextEditingController _costController = TextEditingController();
   final TextEditingController _quantityController = TextEditingController();
   final TextEditingController _odometerReadingController = TextEditingController();
-
-  // REMOVED: _itemNameFocusNode - no longer needed
 
   Project? selectedProject;
   DateTime _selectedPurchaseDate = DateTime.now();
@@ -56,13 +57,37 @@ class CostRecordFormState extends State<CostRecordForm> {
   static const int _internalProjectId = 0;
   int? _editingExpenseId;
 
+  // =======================================================
+  // | PUBLIC METHODS FOR DIALOG INTERACTION |
+  // =======================================================
+
+  String getCurrentItemName() {
+    return _itemNameController.text;
+  }
+
+  void setItemName(String newName) {
+    if (mounted && _itemNameController.text != newName) {
+      setState(() {
+        _itemNameController.text = newName;
+      });
+    }
+  }
+
+  // 💥 FIX: ADDED MISSING PUBLIC SUBMISSION METHOD
+  void triggerSubmit() {
+    _submitForm();
+  }
+
+  // =======================================================
+
   @override
   void dispose() {
-    // REMOVED: _itemNameController.dispose();
+    _itemNameController.dispose();
+    _itemNameFocusNode.dispose();
+
     _costController.dispose();
     _quantityController.dispose();
     _odometerReadingController.dispose();
-    // REMOVED: _itemNameFocusNode.dispose();
     super.dispose();
   }
 
@@ -77,14 +102,16 @@ class CostRecordFormState extends State<CostRecordForm> {
   void populateForm(JobMaterials expense) {
     setState(() {
       _editingExpenseId = expense.id;
-      // REMOVED: _itemNameController.text = expense.itemName;
+
+      // Load Item Name/Description from the expense model for EDITING
+      _itemNameController.text = expense.itemName ?? '';
+
       _costController.text = expense.cost.toStringAsFixed(2);
       _quantityController.text = expense.quantity?.toStringAsFixed(2) ?? '';
       _odometerReadingController.text = expense.odometerReading?.toStringAsFixed(0) ?? '';
       _selectedPurchaseDate = expense.purchaseDate;
       isFuelCategory = expense.expenseCategory == 'Fuel';
 
-      // Sync parent state with the loaded expense data
       widget.onCompanyExpenseToggle.value = expense.isCompanyExpense;
 
       if (widget.expenseCategoriesNotifier.value.contains(expense.expenseCategory)) {
@@ -112,7 +139,9 @@ class CostRecordFormState extends State<CostRecordForm> {
 
   void resetForm() {
     _formKey.currentState?.reset();
-    // REMOVED: _itemNameController.clear();
+
+    _itemNameController.clear();
+
     _costController.clear();
     _quantityController.clear();
     _odometerReadingController.clear();
@@ -121,12 +150,10 @@ class CostRecordFormState extends State<CostRecordForm> {
       _selectedPurchaseDate = DateTime.now();
       isFuelCategory = false;
       selectedExpenseCategory = null;
-      _selectedVehicleDesignation = null;
       _selectedVendorOrSubtrade = null;
       selectedProject = null;
     });
 
-    // Reset parent state as well
     widget.onCompanyExpenseToggle.value = false;
   }
 
@@ -137,33 +164,51 @@ class CostRecordFormState extends State<CostRecordForm> {
   }
 
   void focusFirstField() {
-    // REMOVED: _itemNameFocusNode.requestFocus(); - no longer needed
+    _itemNameFocusNode.requestFocus();
   }
 
   void _submitForm() {
     SystemChannels.textInput.invokeMethod('TextInput.hide');
-    if (_formKey.currentState!.validate()) {
-      // Get company expense state from parent
-      final bool isCompanyExpenseFromParent = widget.onCompanyExpenseToggle.value;
-      final int submissionProjectId = isCompanyExpenseFromParent ? _internalProjectId : selectedProject!.id!;
-      final newExpense = JobMaterials(
-          id: _editingExpenseId,
-          projectId: submissionProjectId,
-          itemName: 'General Expense', // FIXED: Set to generic name since field is removed
-          cost: double.parse(_costController.text),
-          purchaseDate: _selectedPurchaseDate,
-          description: null, // REMOVED: No longer collecting description
-          expenseCategory: selectedExpenseCategory,
-          isCompanyExpense: isCompanyExpenseFromParent,
-          vehicleDesignation: isCompanyExpenseFromParent ? _selectedVehicleDesignation : null,
-          vendorOrSubtrade: _selectedVendorOrSubtrade,
-          unit: isFuelCategory ? 'Liters' : null,
-          quantity: isCompanyExpenseFromParent ? (_quantityController.text.isNotEmpty ? double.tryParse(_quantityController.text) : null) : null,
-          odometerReading: isCompanyExpenseFromParent ? (_odometerReadingController.text.isNotEmpty ? double.tryParse(_odometerReadingController.text) : null) : null,
-          baseQuantity: null
-      );
-      widget.onAddExpense(newExpense, widget.isEditing);
+
+    if (!_formKey.currentState!.validate()) {
+      return;
     }
+
+    if (!widget.onCompanyExpenseToggle.value && selectedProject == null) {
+      return;
+    }
+
+    final bool isCompanyExpenseFromParent = widget.onCompanyExpenseToggle.value;
+    final int submissionProjectId = isCompanyExpenseFromParent ? _internalProjectId : selectedProject!.id!;
+
+    // Fallback logic for Item Name
+    final String submittedItemName = _itemNameController.text.isNotEmpty
+        ? _itemNameController.text
+        : 'General Expense';
+
+    final newExpense = JobMaterials(
+        id: _editingExpenseId,
+        projectId: submissionProjectId,
+
+        itemName: submittedItemName,
+
+        cost: double.parse(_costController.text),
+        purchaseDate: _selectedPurchaseDate,
+
+        // CRITICAL FIX: Set description to null to prevent data corruption/conflict
+        description: null,
+
+        expenseCategory: selectedExpenseCategory,
+        isCompanyExpense: isCompanyExpenseFromParent,
+        vehicleDesignation: isCompanyExpenseFromParent ? _selectedVehicleDesignation : null,
+        vendorOrSubtrade: _selectedVendorOrSubtrade,
+        unit: isFuelCategory ? 'Liters' : null,
+        quantity: isCompanyExpenseFromParent ? (_quantityController.text.isNotEmpty ? double.tryParse(_quantityController.text) : null) : null,
+        odometerReading: isCompanyExpenseFromParent ? (_odometerReadingController.text.isNotEmpty ? double.tryParse(_odometerReadingController.text) : null) : null,
+        baseQuantity: null
+    );
+    // Call the handler function provided by the parent screen
+    widget.onAddExpense(newExpense, widget.isEditing);
   }
 
   Future<void> _selectPurchaseDate(BuildContext context) async {
@@ -290,8 +335,15 @@ class CostRecordFormState extends State<CostRecordForm> {
               },
             ),
 
-            // REMOVED: Description field and Item name field to fix keyboard overflow
-            const SizedBox(height: 8),
+            // Item Name / Description Controller Logic (Completely Invisible)
+            SizedBox(
+              height: 0,
+              width: 0,
+              child: Focus(
+                focusNode: _itemNameFocusNode,
+                child: const SizedBox.shrink(),
+              ),
+            ),
 
             // Buttons
             Row(
@@ -316,7 +368,7 @@ class CostRecordFormState extends State<CostRecordForm> {
                   child: SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _submitForm,
+                      onPressed: _submitForm, // This is the button that triggers the full commit
                       child: Text(buttonText),
                     ),
                   ),

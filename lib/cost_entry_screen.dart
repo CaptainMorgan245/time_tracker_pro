@@ -1,4 +1,5 @@
-// lib/cost_entry_screen.dart
+// lib/cost_entry_screen.dart (COMPLETE FILE - Final Layout Stable & Correct Instructions)
+
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/cost_record_form.dart';
@@ -6,24 +7,31 @@ import 'package:time_tracker_pro/project_repository.dart';
 import 'package:time_tracker_pro/settings_service.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/settings_model.dart';
+import 'package:intl/intl.dart';
 
 // Separate sticky top row widget
 class CostRecordFormTopRow extends StatelessWidget {
   final GlobalKey<CostRecordFormState> formStateKey;
   final ValueNotifier<List<Project>> filteredProjectsNotifier;
   final ValueNotifier<List<String>> expenseCategoriesNotifier;
+  final ValueNotifier<List<String>> vendorsNotifier;
+  final ValueNotifier<List<String>> vehicleDesignationsNotifier;
   final ValueNotifier<bool> isCompanyExpenseNotifier;
   final bool showCompletedProjects;
   final Function(bool showCompleted) onProjectFilterToggle;
+  final String currentItemName;
 
   const CostRecordFormTopRow({
     super.key,
     required this.formStateKey,
     required this.filteredProjectsNotifier,
     required this.expenseCategoriesNotifier,
+    required this.vendorsNotifier,
+    required this.vehicleDesignationsNotifier,
     required this.isCompanyExpenseNotifier,
     required this.showCompletedProjects,
     required this.onProjectFilterToggle,
+    required this.currentItemName,
   });
 
   Project? _getInternalProject() {
@@ -36,6 +44,9 @@ class CostRecordFormTopRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Define consistent padding for all form fields
+    const EdgeInsets consistentContentPadding = EdgeInsets.fromLTRB(12, 20, 8, 10);
+
     return Padding(
       padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 16.0),
       child: Row(
@@ -55,6 +66,7 @@ class CostRecordFormTopRow extends StatelessWidget {
                   decoration: InputDecoration(
                     labelText: 'Select Project',
                     suffixIcon: isProjectDropdownEnabled ? const Text('*') : null,
+                    contentPadding: consistentContentPadding, // Consistent height
                   ),
                   isDense: true,
                   value: currentProjectSelection,
@@ -77,13 +89,36 @@ class CostRecordFormTopRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 16),
+
+          // Item Names field - editable text field
           Flexible(
             flex: 5,
+            child: TextFormField(
+              key: ValueKey(currentItemName),
+              initialValue: currentItemName,
+              decoration: InputDecoration(
+                labelText: 'Item Names',
+                contentPadding: consistentContentPadding,
+                isDense: true,
+              ),
+              onChanged: (value) {
+                formStateKey.currentState?.setItemName(value);
+              },
+            ),
+          ),
+          const SizedBox(width: 16),
+
+          // FIX: Expense Category gets the narrower flex: 3 slot
+          Flexible(
+            flex: 3,
             child: ValueListenableBuilder<List<String>>(
               valueListenable: expenseCategoriesNotifier,
               builder: (context, categories, _) {
                 return DropdownButtonFormField<String>(
-                  decoration: const InputDecoration(labelText: 'Expense Category *'),
+                  decoration: InputDecoration(
+                    labelText: 'Expense Category *',
+                    contentPadding: consistentContentPadding, // Consistent height
+                  ),
                   value: formStateKey.currentState?.selectedExpenseCategory,
                   items: categories.map((c) => DropdownMenuItem<String>(
                       value: c,
@@ -100,61 +135,65 @@ class CostRecordFormTopRow extends StatelessWidget {
               },
             ),
           ),
+
           const SizedBox(width: 16),
           Flexible(
             flex: 4,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ValueListenableBuilder<bool>(
-                        valueListenable: isCompanyExpenseNotifier,
-                        builder: (context, isCompanyExpense, _) {
-                          return Checkbox(
-                            value: isCompanyExpense,
-                            onChanged: (bool? newValue) {
-                              isCompanyExpenseNotifier.value = newValue ?? false;
-                              if (isCompanyExpenseNotifier.value) {
-                                formStateKey.currentState?.setSelectedProject(_getInternalProject()!);
-                              }
-                            },
-                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          );
-                        },
-                      ),
-                      const Text(
-                        'Company Expense',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
-                      ),
-                    ],
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 0.0),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        ValueListenableBuilder<bool>(
+                          valueListenable: isCompanyExpenseNotifier,
+                          builder: (context, isCompanyExpense, _) {
+                            return Checkbox(
+                              value: isCompanyExpense,
+                              onChanged: (bool? newValue) {
+                                isCompanyExpenseNotifier.value = newValue ?? false;
+                                if (isCompanyExpenseNotifier.value) {
+                                  formStateKey.currentState?.setSelectedProject(_getInternalProject()!);
+                                }
+                              },
+                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            );
+                          },
+                        ),
+                        const Text(
+                          'Company Expense',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Checkbox(
-                        value: showCompletedProjects,
-                        onChanged: (bool? newValue) {
-                          onProjectFilterToggle(newValue ?? false);
-                        },
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      const Text(
-                        'Show Completed',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
-                      ),
-                    ],
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Checkbox(
+                          value: showCompletedProjects,
+                          onChanged: (bool? newValue) {
+                            onProjectFilterToggle(newValue ?? false);
+                          },
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        const Text(
+                          'Show Completed',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ],
@@ -281,26 +320,79 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     }
   }
 
+  // FIX 2: Delayed population logic to handle uncollapse
   void _populateFormFromExpense(JobMaterials expense) {
-    _formStateKey.currentState?.populateForm(expense);
     _isCompanyExpenseNotifier.value = expense.isCompanyExpense;
+
+    // 1. Trigger the uncollapse animation
     setState(() {
       _isEditing = true;
-      _isFormCollapsed = false; // Always expand form for editing
+      _isFormCollapsed = false;
     });
-    // Scroll back to top to see the form
-    if (_scrollController.hasClients && _scrollController.offset > 0) {
-      _scrollController.animateTo(
-        0,
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeOut,
-      );
-    }
-    // Auto-focus to bring up keyboard
+
+    // 2. WAIT for the animation to finish (or simply delay slightly)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _formStateKey.currentState?.focusFirstField();
+      // We delay for slightly longer than the AnimatedContainer duration (300ms)
+      Future.delayed(const Duration(milliseconds: 350), () {
+        if (!mounted) return;
+        // 3. POPULATE the form data ONLY AFTER the uncollapse is complete.
+        _formStateKey.currentState?.populateForm(expense);
+
+        // 4. Auto-focus field after data is populated
+        _formStateKey.currentState?.focusFirstField();
+      });
     });
   }
+
+  // FIXED: HANDLER FOR ITEM NAME DIALOG (Immediate Save)
+  Future<void> _handleDescriptionInput() async {
+    final isEditing = _isEditing;
+
+    final currentItemName = isEditing
+        ? (_formStateKey.currentState?.getCurrentItemName() ?? '')
+        : '';
+
+    final newDescription = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        final textController = TextEditingController(text: currentItemName);
+        return AlertDialog(
+          title: const Text('Enter Item Names'),
+          content: TextField(
+            controller: textController,
+            decoration: const InputDecoration(
+              labelText: 'Item Names',
+              hintText: 'e.g., 5 Gallons Diesel, Lunch for Crew',
+            ),
+            maxLines: 3,
+            minLines: 1,
+            autofocus: true,
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('CANCEL'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            ElevatedButton(
+              child: const Text('OK'),
+              onPressed: () => Navigator.of(context).pop(textController.text),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (newDescription != null) {
+      // 1. Update the form's internal controller with the new input
+      _formStateKey.currentState?.setItemName(newDescription);
+
+      // 2. FIX 1: Immediately trigger the database update if we are EDITING.
+      if (_isEditing) {
+        _formStateKey.currentState?.triggerSubmit();
+      }
+    }
+  }
+  // END FIXED DIALOG HANDLER
 
   void _handleClearOrCancel() {
     _formStateKey.currentState?.resetForm();
@@ -312,6 +404,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     }
   }
 
+  // NOTE: This logic ensures only new records are cleared, keeping edited records populated.
   Future<void> _handleCostSubmission(JobMaterials expense, bool isEditing) async {
     try {
       if (isEditing) {
@@ -320,7 +413,10 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
         await DatabaseHelperV2.instance.addMaterialV2(expense);
       }
       if (mounted) {
-        _handleClearOrCancel();
+        // Only clear the form if it was a successful ADD.
+        if (!isEditing) {
+          _handleClearOrCancel();
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Expense ${isEditing ? 'updated' : 'added'} successfully.'),
@@ -367,6 +463,9 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // FIX 1: Retrieve the current Item Name here to pass to the Top Row
+    final currentItemNameForDisplay = _formStateKey.currentState?.getCurrentItemName() ?? '';
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
       body: _isLoading
@@ -390,9 +489,12 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                 formStateKey: _formStateKey,
                 filteredProjectsNotifier: _filteredProjectsNotifier,
                 expenseCategoriesNotifier: _expenseCategoriesNotifier,
+                vendorsNotifier: _vendorsNotifier,
+                vehicleDesignationsNotifier: _vehicleDesignationsNotifier,
                 isCompanyExpenseNotifier: _isCompanyExpenseNotifier,
                 showCompletedProjects: _showCompletedProjects,
                 onProjectFilterToggle: _applyProjectFilter,
+                currentItemName: currentItemNameForDisplay,
               ),
             ),
 
@@ -434,9 +536,9 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
             Expanded(
               child: ValueListenableBuilder<int>(
                 valueListenable: dbNotifier,
-                builder: (context, _, __) => FutureBuilder<List<dynamic>>(
+                builder: (context, _, __) => FutureBuilder<List<JobMaterials>>(
                   key: ValueKey(_showCompletedProjects),
-                  future: DatabaseHelperV2.instance.getProjectRecordsV2(
+                  future: DatabaseHelperV2.instance.getCostEntryMaterials(
                     _showCompletedProjects,
                     _allProjects,
                   ),
@@ -458,7 +560,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                       return const SizedBox(
                         height: 200,
                         child: Center(
-                          child: Text("No records found for selected projects."),
+                          child: Text("No cost records found for selected projects."),
                         ),
                       );
                     }
@@ -469,35 +571,46 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                       itemBuilder: (context, index) {
                         final record = records[index];
 
-                        if (record is JobMaterials) {
-                          final projectName = _getProjectNameById(record.projectId);
-                          return Card(
-                            margin: const EdgeInsets.symmetric(vertical: 4),
-                            child: ListTile(
-                              leading: const Icon(Icons.receipt, color: Colors.green),
-                              title: Text(
-                                'EXPENSE: ${record.itemName} (\$${record.cost.toStringAsFixed(2)})',
-                              ),
-                              subtitle: Text(
-                                'Project: $projectName | Category: ${record.expenseCategory ?? 'N/A'}',
-                              ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit, color: Colors.blueGrey),
-                                    onPressed: () => _populateFormFromExpense(record),
-                                  ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_forever, color: Colors.red),
-                                    onPressed: () => _deleteExpense(record.id!),
-                                  ),
-                                ],
-                              ),
+                        final projectName = _getProjectNameById(record.projectId);
+
+                        // DISPLAY LOGIC: Rely ONLY on itemName
+                        final vendorName = record.vendorOrSubtrade ?? 'Unknown Vendor';
+                        final costAmount = NumberFormat.currency(locale: 'en_US', symbol: '\$').format(record.cost);
+
+                        // FIX: Rely ONLY on record.itemName
+                        final itemName = record.itemName ?? 'No Item Description';
+
+                        return Card(
+                          margin: const EdgeInsets.symmetric(vertical: 4),
+                          child: ListTile(
+                            leading: const Icon(Icons.receipt, color: Colors.green),
+
+                            // TOP LINE: [Vendor Name] | Cost: [Amount] | [Item Name]
+                            title: Text(
+                              '$vendorName | Cost: $costAmount | $itemName',
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 14),
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          );
-                        }
-                        return const SizedBox.shrink();
+
+                            // SUBTITLE: Project | Category
+                            subtitle: Text(
+                              'Project: $projectName | Category: ${record.expenseCategory ?? 'N/A'}',
+                            ),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit, color: Colors.blueGrey),
+                                  onPressed: () => _populateFormFromExpense(record),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_forever, color: Colors.red),
+                                  onPressed: () => _deleteExpense(record.id!),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
                       },
                     );
                   },
@@ -509,19 +622,4 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
       ),
     );
   }
-/*
-  Project? _getInternalProject() {
-    try {
-      return _allProjects.firstWhere((p) => p.id == 0);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  String _formatDuration(int seconds) {
-    final hours = seconds ~/ 3600;
-    final minutes = (seconds % 3600) ~/ 60;
-    return '${hours}h ${minutes}m';
-  }
-  */
 }

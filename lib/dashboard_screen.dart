@@ -10,7 +10,7 @@ import 'package:time_tracker_pro/client_and_project_screen.dart';
 import 'package:time_tracker_pro/timer_add_form.dart';
 import 'package:time_tracker_pro/time_tracker_page.dart';
 import 'package:intl/intl.dart';
-//import 'package:time_tracker_pro/database_viewer_screen.dart';
+import 'package:time_tracker_pro/database_viewer_screen.dart';
 import 'package:time_tracker_pro/models.dart' as app_models;
 import 'package:time_tracker_pro/analytics_screen.dart';
 import 'package:time_tracker_pro/cost_entry_screen.dart';
@@ -83,7 +83,16 @@ class AppDrawer extends StatelessWidget {
               );
             },
           ),
-
+          ListTile(
+            leading: const Icon(Icons.bug_report),
+            title: const Text('Database Viewer'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const DatabaseViewerScreen()),
+              );
+            },
+          ),
         ],
       ),
     );
@@ -156,50 +165,46 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       final projects = await _projectRepo.getProjects();
       final employees = await _employeeRepo.getEmployees();
-      final allRecentActivities = await dbHelper.getAllRecordsV2();
 
-      debugPrint('===== DASHBOARD DEBUG =====');
-      debugPrint('Total activities from DB: ${allRecentActivities.length}');
-      debugPrint('Active projects: ${projects.where((p) => !p.isCompleted).length}');
-      debugPrint('Total projects: ${projects.length}');
+      // 💥 CRITICAL REFACTOR: Use the dedicated query
+      final recentTimeActivities = await dbHelper.getDashboardTimeEntries();
 
       if (!mounted) return;
 
+      // --- START: Removed Redundant/Inefficient Dart Filtering Logic ---
+      // The database query now handles:
+      // 1. Time entries only.
+      // 2. Last 7 days filtering.
+      // 3. Active projects filtering (is_completed = 0).
+      // 4. Sorting by date DESC.
+      // The following code block has been removed:
+      /*
       final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
       final recentTimeActivities = allRecentActivities
           .where((record) {
-        debugPrint('Checking record ${record.id}: type=${record.type}, date=${record.date}');
-
-        if (record.type != app_models.RecordType.time) {
-          debugPrint('  -> Skipped: not time type');
-          return false;
-        }
-        if (record.date.isBefore(sevenDaysAgo)) {
-          debugPrint('  -> Skipped: too old');
-          return false;
-        }
-
-        try {
-          final parts = record.categoryOrProject.split(' - ');
-          final projectName = parts.length > 1 ? parts.sublist(1).join(' - ') : record.categoryOrProject;
-          debugPrint('  -> Looking for project: $projectName');
-
-          final project = projects.firstWhere(
-                (p) => p.projectName == projectName,
-          );
-          debugPrint('  -> Found project, isCompleted: ${project.isCompleted}');
-          return !project.isCompleted;
-        } catch (e) {
-          debugPrint('  -> ERROR: $e');
-          return false;
-        }
-      })
+            // ... lots of debugPrint statements removed
+            if (record.type != app_models.RecordType.time) {
+              return false;
+            }
+            if (record.date.isBefore(sevenDaysAgo)) {
+              return false;
+            }
+            try {
+              final parts = record.categoryOrProject.split(' - ');
+              final projectName = parts.length > 1 ? parts.sublist(1).join(' - ') : record.categoryOrProject;
+              final project = projects.firstWhere(
+                    (p) => p.projectName == projectName,
+              );
+              return !project.isCompleted;
+            } catch (e) {
+              return false;
+            }
+          })
           .toList();
-
-      debugPrint('Final filtered activities: ${recentTimeActivities.length}');
-      debugPrint('===========================');
-
       recentTimeActivities.sort((a, b) => b.date.compareTo(a.date));
+      */
+      // --- END: Removed Redundant/Inefficient Dart Filtering Logic ---
+
       final sortedProjects = projects.where((p) => !p.isCompleted).toList();
       sortedProjects.sort((a, b) => b.id!.compareTo(a.id!));
 
@@ -368,7 +373,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   const SizedBox(height: 32),
                   const Text(
-                    'Recent Activities',
+                    'Recent Activities (Last 7 Days)',
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 10),

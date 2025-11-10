@@ -14,6 +14,9 @@ class DatabaseViewerScreen extends StatefulWidget {
 }
 
 class _DatabaseViewerScreenState extends State<DatabaseViewerScreen> {
+  // Filter and sort state
+  String _recordFilter = 'all'; // 'all', 'time', 'expense'
+  String _sortBy = 'date_desc'; // 'date_desc', 'date_asc', 'id_desc'
 
   // **** NEW METHOD TO SHOW THE SCHEMA ****
   // This contains all the logic, without touching the database_helper.dart file.
@@ -102,19 +105,41 @@ class _DatabaseViewerScreenState extends State<DatabaseViewerScreen> {
     }
   }
 
+  List<AllRecordViewModel> _filterAndSortRecords(List<AllRecordViewModel> records) {
+    // Apply filter
+    List<AllRecordViewModel> filtered = records;
+    if (_recordFilter == 'time') {
+      filtered = records.where((r) => r.type == RecordType.time).toList();
+    } else if (_recordFilter == 'expense') {
+      filtered = records.where((r) => r.type == RecordType.expense).toList();
+    }
 
+    // Apply sort
+    switch (_sortBy) {
+      case 'date_desc':
+        filtered.sort((a, b) => b.date.compareTo(a.date));
+        break;
+      case 'date_asc':
+        filtered.sort((a, b) => a.date.compareTo(b.date));
+        break;
+      case 'id_desc':
+        filtered.sort((a, b) => b.id.compareTo(a.id));
+        break;
+    }
+
+    return filtered;
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Database Viewer (V2)'),
-        // **** NEW ACTION BUTTON ADDED HERE ****
         actions: [
           IconButton(
             icon: const Icon(Icons.info_outline),
             tooltip: 'View Database Schema',
-            onPressed: _showDatabaseSchema, // This calls the new method above
+            onPressed: _showDatabaseSchema,
           ),
         ],
       ),
@@ -132,15 +157,29 @@ class _DatabaseViewerScreenState extends State<DatabaseViewerScreen> {
               }
 
               if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return Column(children: [_buildV2Indicator(dbVersion), const Expanded(child: Center(child: Text('No records found in the database.')))]);
+                return Column(children: [
+                  _buildV2Indicator(dbVersion),
+                  _buildFilterControls(),
+                  const Expanded(child: Center(child: Text('No records found in the database.')))
+                ]);
               }
 
-              final records = snapshot.data!;
+              final allRecords = snapshot.data!;
+              final filteredRecords = _filterAndSortRecords(allRecords);
+
               return Column(
-                  children: [
-                    _buildV2Indicator(dbVersion, isLoading: isLoading),
-                    Expanded(child: ListView.builder(itemCount: records.length, itemBuilder: (context, index) => _buildRecordCard(records[index])))
-                  ]
+                children: [
+                  _buildV2Indicator(dbVersion, isLoading: isLoading),
+                  _buildFilterControls(),
+                  Expanded(
+                    child: filteredRecords.isEmpty
+                        ? const Center(child: Text('No records match the current filter.'))
+                        : ListView.builder(
+                      itemCount: filteredRecords.length,
+                      itemBuilder: (context, index) => _buildRecordCard(filteredRecords[index]),
+                    ),
+                  ),
+                ],
               );
             },
           );
@@ -151,6 +190,58 @@ class _DatabaseViewerScreenState extends State<DatabaseViewerScreen> {
         label: const Text('Add Test Expense'),
         icon: const Icon(Icons.add),
         backgroundColor: Colors.blue,
+      ),
+    );
+  }
+
+  Widget _buildFilterControls() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      color: Colors.grey.shade200,
+      child: Row(
+        children: [
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              value: _recordFilter,
+              decoration: const InputDecoration(
+                labelText: 'Show',
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'all', child: Text('All Records')),
+                DropdownMenuItem(value: 'time', child: Text('Time Entries Only')),
+                DropdownMenuItem(value: 'expense', child: Text('Expenses Only')),
+              ],
+              onChanged: (value) {
+                setState(() {
+                  _recordFilter = value!;
+                });
+              },
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              value: _sortBy,
+              decoration: const InputDecoration(
+                labelText: 'Sort By',
+                isDense: true,
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'date_desc', child: Text('Date (Newest First)')),
+                DropdownMenuItem(value: 'date_asc', child: Text('Date (Oldest First)')),
+                DropdownMenuItem(value: 'id_desc', child: Text('ID (Newest First)')),
+              ],
+              onChanged: (value) {
+                setState(() {
+                  _sortBy = value!;
+                });
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -222,7 +313,6 @@ class _DatabaseViewerScreenState extends State<DatabaseViewerScreen> {
             IconButton(
               icon: const Icon(Icons.delete_outline, color: Colors.red),
               onPressed: () {
-                // V2 CHANGE: This is the corrected code block.
                 final String tableName = record.type == RecordType.time ? 'time_entries' : 'materials';
                 DatabaseHelperV2.instance.deleteRecordV2(id: record.id, fromTable: tableName);
               },

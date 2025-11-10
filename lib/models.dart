@@ -364,8 +364,7 @@ class JobMaterials {
   });
 
   Map<String, dynamic> toMap() {
-    return {
-      'id': id,
+    final map = <String, dynamic>{
       'project_id': projectId,
       'item_name': itemName,
       'cost': cost,
@@ -381,6 +380,13 @@ class JobMaterials {
       'vehicle_designation': vehicleDesignation,
       'vendor_or_subtrade': vendorOrSubtrade,
     };
+
+    // Only include id if it's not null (for updates, not inserts)
+    if (id != null) {
+      map['id'] = id;
+    }
+
+    return map;
   }
 
   factory JobMaterials.fromMap(Map<String, dynamic> map) {

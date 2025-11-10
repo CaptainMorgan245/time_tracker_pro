@@ -159,6 +159,97 @@ class DatabaseHelperV2 {
     debugPrint('[DB_V2] All tables created and default settings inserted successfully.');
   }
 
+  // =======================================================================
+  // |                       DASHBOARD DEDICATED QUERY                     |
+  // =======================================================================
+
+  /// Retrieves a specific list of time entries needed for the Dashboard view.
+  ///
+  /// Criteria:
+  /// - Time entries only (based on the time_entries table).
+  /// - Entries linked to projects where `is_completed` is NOT 1 (i.e., active).
+  /// - Entries that started within the last 7 days.
+  /// - Results include project and client names for display (AllRecordViewModel structure).
+
+  // --- START: NEW COST ENTRY DEDICATED QUERY ---
+
+  /// Retrieves material/expense records for the Cost Entry screen.
+  ///
+  /// @param showCompleted If true, includes materials linked to completed projects.
+  /// @param projects The list of project objects to filter against.
+  Future<List<JobMaterials>> getCostEntryMaterials(bool showCompleted, List<Project> allProjects) async {
+    final db = await database;
+
+    // Get project IDs based on filter logic matching the old getProjectRecordsV2
+    final projectIds = showCompleted
+        ? allProjects.where((p) => p.isCompleted).map((p) => p.id).toList()
+        : allProjects.where((p) => !p.isCompleted || p.isInternal).map((p) => p.id).toList();
+
+    if (projectIds.isEmpty) return [];
+
+    final placeholders = projectIds.map((_) => '?').join(',');
+
+    // Get materials/expenses for these projects (similar to old materialsQuery)
+    final materialsQuery = await db.query(
+      'materials',
+      where: 'project_id IN ($placeholders) AND is_deleted = 0',
+      whereArgs: projectIds,
+      orderBy: 'purchase_date DESC',
+      limit: 50, // Keep limit for performance
+    );
+
+    // Convert to model objects
+    return materialsQuery.map((m) => JobMaterials.fromMap(m)).toList();
+  }
+
+// --- END: NEW COST ENTRY DEDICATED QUERY ---
+
+  Future<List<AllRecordViewModel>> getDashboardTimeEntries() async {
+    final db = await database;
+    final List<AllRecordViewModel> allRecords = [];
+
+    // Calculate the start time for the 7-day filter
+    // NOTE: SQLite date comparisons must use ISO8601 strings (TEXT column 'start_time')
+    final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
+    final sevenDaysAgoIso = sevenDaysAgo.toIso8601String();
+
+    // Query combines time_entries, projects, and clients with filtering
+    final timeQuery = '''
+      SELECT 
+        t.id, t.start_time, t.work_details, t.final_billed_duration_seconds, 
+        p.project_name, c.name as client_name
+      FROM time_entries t
+      JOIN projects p ON t.project_id = p.id
+      JOIN clients c ON p.client_id = c.id
+      WHERE 
+        t.is_deleted = 0 
+        AND p.is_completed = 0 -- Filter: Active Projects Only
+        AND t.start_time >= ?  -- Filter: Last 7 Days (uses ISO string comparison)
+      ORDER BY t.start_time DESC
+    ''';
+
+    // The single argument is the ISO string for 7 days ago.
+    final timeEntryMaps = await db.rawQuery(timeQuery, [sevenDaysAgoIso]);
+
+    for (var map in timeEntryMaps) {
+      final projectName = map['project_name'] as String? ?? 'Unknown Project';
+      final clientName = map['client_name'] as String? ?? 'Unknown Client';
+
+      allRecords.add(AllRecordViewModel(
+        id: map['id'] as int,
+        type: RecordType.time,
+        date: DateTime.parse(map['start_time'] as String),
+        description: map['work_details'] as String? ?? 'No Details',
+        // Assuming value is duration in hours
+        value: (map['final_billed_duration_seconds'] as num? ?? 0.0) / 3600.0,
+        categoryOrProject: '$clientName - $projectName',
+      ));
+    }
+
+    return allRecords;
+  }
+  // =======================================================================
+
   Future<List<AllRecordViewModel>> getAllRecordsV2() async {
     final db = await database;
     final List<AllRecordViewModel> allRecords = [];
