@@ -203,19 +203,25 @@ class ProjectRepository {
 
   Future<int> insertProject(Project project) async {
     final db = await dbHelper.database;
-    return await db.insert('projects', project.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    final result = await db.insert('projects', project.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    dbHelper.notifyDatabaseChanged();
+    return result;
   }
 
   Future<int> updateProject(Project project) async {
     final db = await dbHelper.database;
-    return await db.update(
+    final result = await db.update(
       'projects', project.toMap(), where: 'id = ?', whereArgs: [project.id],
     );
+    dbHelper.notifyDatabaseChanged();
+    return result;
   }
 
   Future<int> deleteProject(int id) async {
     final db = await dbHelper.database;
-    return await db.delete('projects', where: 'id = ?', whereArgs: [id]);
+    final result = await db.delete('projects', where: 'id = ?', whereArgs: [id]);
+    dbHelper.notifyDatabaseChanged();
+    return result;
   }
 
   Future<bool> hasAssociatedRecords(int projectId) async {

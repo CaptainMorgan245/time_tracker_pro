@@ -137,12 +137,12 @@ class DatabaseHelperV2 {
         ''');
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS employees (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, employee_number TEXT UNIQUE, name TEXT NOT NULL, title_id INTEGER, is_deleted INTEGER NOT NULL DEFAULT 0, FOREIGN KEY (title_id) REFERENCES roles(id)
+            id INTEGER PRIMARY KEY AUTOINCREMENT, employee_number TEXT UNIQUE, name TEXT NOT NULL, title_id INTEGER, hourly_rate REAL, is_deleted INTEGER NOT NULL DEFAULT 0, FOREIGN KEY (title_id) REFERENCES roles(id)
           )
         ''');
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS time_entries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, employee_id INTEGER, start_time TEXT NOT NULL, end_time TEXT, paused_duration REAL DEFAULT 0.0, final_billed_duration_seconds REAL, is_paused INTEGER DEFAULT 0, pause_start_time TEXT, is_deleted INTEGER DEFAULT 0, work_details TEXT, FOREIGN KEY (project_id) REFERENCES projects(id), FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE SET NULL
+            id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, employee_id INTEGER, start_time TEXT NOT NULL, end_time TEXT, paused_duration REAL DEFAULT 0.0, final_billed_duration_seconds REAL, hourly_rate REAL, is_paused INTEGER DEFAULT 0, pause_start_time TEXT, is_deleted INTEGER DEFAULT 0, work_details TEXT, FOREIGN KEY (project_id) REFERENCES projects(id), FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE SET NULL
           )
         ''');
       await txn.execute('''
@@ -177,13 +177,23 @@ class DatabaseHelperV2 {
   ///
   /// @param showCompleted If true, includes materials linked to completed projects.
   /// @param projects The list of project objects to filter against.
-  Future<List<JobMaterials>> getCostEntryMaterials(bool showCompleted, List<Project> allProjects) async {
+  Future<List<JobMaterials>> getCostEntryMaterials(
+      bool showCompleted,
+      List<Project> allProjects,
+      {int? selectedProjectId}
+      ) async {
     final db = await database;
 
-    // Get project IDs based on filter logic matching the old getProjectRecordsV2
-    final projectIds = showCompleted
-        ? allProjects.where((p) => p.isCompleted).map((p) => p.id).toList()
-        : allProjects.where((p) => !p.isCompleted || p.isInternal).map((p) => p.id).toList();
+    // If a specific project is selected, filter by that project only
+    List<int> projectIds;
+    if (selectedProjectId != null) {
+      projectIds = [selectedProjectId];
+    } else {
+      // Get project IDs based on filter logic matching the old getProjectRecordsV2
+      projectIds = showCompleted
+          ? allProjects.where((p) => p.isCompleted && p.id != null).map((p) => p.id!).toList()
+          : allProjects.where((p) => (!p.isCompleted || p.isInternal) && p.id != null).map((p) => p.id!).toList();
+    }
 
     if (projectIds.isEmpty) return [];
 

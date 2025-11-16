@@ -1,4 +1,4 @@
-// lib/cost_entry_screen.dart (COMPLETE FILE - Final Layout Stable & Correct Instructions)
+// lib/cost_entry_screen.dart (COMPLETE FILE - Fixed with Integer Project IDs)
 
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/database_helper.dart';
@@ -34,14 +34,6 @@ class CostRecordFormTopRow extends StatelessWidget {
     required this.currentItemName,
   });
 
-  Project? _getInternalProject() {
-    try {
-      return filteredProjectsNotifier.value.firstWhere((p) => p.id == 0);
-    } catch (_) {
-      return null;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     // Define consistent padding for all form fields
@@ -52,35 +44,41 @@ class CostRecordFormTopRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
+          // FIXED: Project dropdown now uses integer IDs
           Flexible(
             flex: 4,
             child: ValueListenableBuilder<List<Project>>(
               valueListenable: filteredProjectsNotifier,
               builder: (context, projects, _) {
                 final isProjectDropdownEnabled = !isCompanyExpenseNotifier.value;
-                final currentProjectSelection = isCompanyExpenseNotifier.value
-                    ? _getInternalProject()
-                    : formStateKey.currentState?.selectedProject;
+                final currentProjectId = isCompanyExpenseNotifier.value
+                    ? 0  // Internal project ID
+                    : formStateKey.currentState?.selectedProjectId;
 
-                return DropdownButtonFormField<Project>(
+                return DropdownButtonFormField<int>(
                   decoration: InputDecoration(
                     labelText: 'Select Project',
                     suffixIcon: isProjectDropdownEnabled ? const Text('*') : null,
-                    contentPadding: consistentContentPadding, // Consistent height
+                    contentPadding: consistentContentPadding,
                   ),
                   isDense: true,
-                  value: currentProjectSelection,
+                  value: currentProjectId,
                   onChanged: isProjectDropdownEnabled
-                      ? (Project? newValue) {
-                    formStateKey.currentState?.setSelectedProject(newValue!);
+                      ? (int? newValue) {
+                    if (newValue != null) {
+                      formStateKey.currentState?.setSelectedProjectId(newValue);
+                      // Update parent's filtering variable
+                      final parentState = formStateKey.currentContext?.findAncestorStateOfType<_CostEntryScreenState>();
+                      parentState?._updateSelectedProjectFilter(newValue);
+                    }
                   }
                       : null,
                   items: projects.map((project) {
                     final displayName = project.isInternal
                         ? 'Internal Company Project'
                         : project.projectName;
-                    return DropdownMenuItem<Project>(
-                      value: project,
+                    return DropdownMenuItem<int>(
+                      value: project.id,
                       child: Text(displayName, overflow: TextOverflow.ellipsis),
                     );
                   }).toList(),
@@ -108,7 +106,7 @@ class CostRecordFormTopRow extends StatelessWidget {
           ),
           const SizedBox(width: 16),
 
-          // FIX: Expense Category gets the narrower flex: 3 slot
+          // Expense Category
           Flexible(
             flex: 3,
             child: ValueListenableBuilder<List<String>>(
@@ -117,7 +115,7 @@ class CostRecordFormTopRow extends StatelessWidget {
                 return DropdownButtonFormField<String>(
                   decoration: InputDecoration(
                     labelText: 'Expense Category *',
-                    contentPadding: consistentContentPadding, // Consistent height
+                    contentPadding: consistentContentPadding,
                   ),
                   value: formStateKey.currentState?.selectedExpenseCategory,
                   items: categories.map((c) => DropdownMenuItem<String>(
@@ -157,7 +155,8 @@ class CostRecordFormTopRow extends StatelessWidget {
                               onChanged: (bool? newValue) {
                                 isCompanyExpenseNotifier.value = newValue ?? false;
                                 if (isCompanyExpenseNotifier.value) {
-                                  formStateKey.currentState?.setSelectedProject(_getInternalProject()!);
+                                  // FIXED: Set by ID instead of object
+                                  formStateKey.currentState?.setSelectedProjectId(0);
                                 }
                               },
                               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -165,7 +164,7 @@ class CostRecordFormTopRow extends StatelessWidget {
                           },
                         ),
                         const Text(
-                          'Company Expense',
+                          'Vehicle Expense',
                           textAlign: TextAlign.center,
                           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10),
                         ),
@@ -229,6 +228,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   final ValueNotifier<bool> _isCompanyExpenseNotifier = ValueNotifier(false);
 
   List<Project> _allProjects = [];
+  int? _selectedProjectIdForFiltering;
 
   @override
   void initState() {
@@ -262,7 +262,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   }
 
   Future<void> _loadAllData() async {
-    if (mounted && _isLoading) setState(() => _isLoading = true);
+    if (mounted) setState(() => _isLoading = true);
     try {
       final dataFutures = [
         _projectRepo.getProjects(),
@@ -311,40 +311,46 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
       _showCompletedProjects = showCompleted;
     });
 
-    _formStateKey.currentState?.resetForm();
-
     if (showCompleted) {
       _filteredProjectsNotifier.value = _allProjects.where((p) => p.isCompleted).toList();
     } else {
       _filteredProjectsNotifier.value = _allProjects.where((p) => !p.isCompleted || p.isInternal).toList();
     }
+
+    // Reset form with first available project from NEW filtered list
+    if (_filteredProjectsNotifier.value.isNotEmpty) {
+      final firstNonInternal = _filteredProjectsNotifier.value.firstWhere(
+              (p) => !p.isInternal,
+          orElse: () => _filteredProjectsNotifier.value.first
+      );
+      _formStateKey.currentState?.selectedProjectId = firstNonInternal.id;
+      _selectedProjectIdForFiltering = firstNonInternal.id;
+    }
   }
 
-  // FIX 2: Delayed population logic to handle uncollapse
+  void _updateSelectedProjectFilter(int projectId) {
+    setState(() {
+      _selectedProjectIdForFiltering = projectId;
+    });
+  }
+
   void _populateFormFromExpense(JobMaterials expense) {
     _isCompanyExpenseNotifier.value = expense.isCompanyExpense;
 
-    // 1. Trigger the uncollapse animation
     setState(() {
       _isEditing = true;
       _isFormCollapsed = false;
     });
 
-    // 2. WAIT for the animation to finish (or simply delay slightly)
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // We delay for slightly longer than the AnimatedContainer duration (300ms)
       Future.delayed(const Duration(milliseconds: 350), () {
         if (!mounted) return;
-        // 3. POPULATE the form data ONLY AFTER the uncollapse is complete.
         _formStateKey.currentState?.populateForm(expense);
-
-        // 4. Auto-focus field after data is populated
         _formStateKey.currentState?.focusFirstField();
       });
     });
   }
 
-  // FIXED: HANDLER FOR ITEM NAME DIALOG (Immediate Save)
   Future<void> _handleDescriptionInput() async {
     final isEditing = _isEditing;
 
@@ -383,16 +389,13 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     );
 
     if (newDescription != null) {
-      // 1. Update the form's internal controller with the new input
       _formStateKey.currentState?.setItemName(newDescription);
 
-      // 2. FIX 1: Immediately trigger the database update if we are EDITING.
       if (_isEditing) {
         _formStateKey.currentState?.triggerSubmit();
       }
     }
   }
-  // END FIXED DIALOG HANDLER
 
   void _handleClearOrCancel() {
     _formStateKey.currentState?.resetForm();
@@ -404,7 +407,6 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     }
   }
 
-  // NOTE: This logic ensures only new records are cleared, keeping edited records populated.
   Future<void> _handleCostSubmission(JobMaterials expense, bool isEditing) async {
     try {
       if (isEditing) {
@@ -413,7 +415,6 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
         await DatabaseHelperV2.instance.addMaterialV2(expense);
       }
       if (mounted) {
-        // Only clear the form if it was a successful ADD.
         if (!isEditing) {
           _handleClearOrCancel();
         }
@@ -463,7 +464,6 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // FIX 1: Retrieve the current Item Name here to pass to the Top Row
     final currentItemNameForDisplay = _formStateKey.currentState?.getCurrentItemName() ?? '';
 
     return Scaffold(
@@ -475,7 +475,6 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
         bottom: false,
         child: Column(
           children: [
-            // STICKY TOP ROW - never scrolls away but looks integrated
             Card(
               elevation: 2.0,
               margin: const EdgeInsets.fromLTRB(8, 8, 8, 0),
@@ -498,7 +497,6 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
               ),
             ),
 
-            // COLLAPSIBLE FORM BODY - integrates visually with top row
             AnimatedContainer(
               duration: const Duration(milliseconds: 300),
               height: _isFormCollapsed ? 0 : null,
@@ -524,23 +522,23 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                   onClearForm: _handleClearOrCancel,
                   isEditing: _isEditing,
                   onCompanyExpenseToggle: _isCompanyExpenseNotifier,
-                  isCollapsed: false, // Always show body when visible
-                  onCollapseToggle: () {}, // Not used
+                  isCollapsed: false,
+                  onCollapseToggle: () {},
                 ),
               ),
             ),
 
             const Divider(height: 1),
 
-            // SCROLLABLE EXPENSE LIST
             Expanded(
               child: ValueListenableBuilder<int>(
                 valueListenable: dbNotifier,
                 builder: (context, _, __) => FutureBuilder<List<JobMaterials>>(
-                  key: ValueKey(_showCompletedProjects),
+                  key: ValueKey('${_showCompletedProjects}_${_selectedProjectIdForFiltering}'),
                   future: DatabaseHelperV2.instance.getCostEntryMaterials(
                     _showCompletedProjects,
                     _allProjects,
+                    selectedProjectId: _selectedProjectIdForFiltering,
                   ),
                   builder: (context, snapshot) {
                     if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
@@ -572,27 +570,19 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                         final record = records[index];
 
                         final projectName = _getProjectNameById(record.projectId);
-
-                        // DISPLAY LOGIC: Rely ONLY on itemName
                         final vendorName = record.vendorOrSubtrade ?? 'Unknown Vendor';
                         final costAmount = NumberFormat.currency(locale: 'en_US', symbol: '\$').format(record.cost);
-
-                        // FIX: Rely ONLY on record.itemName
                         final itemName = record.itemName ?? 'No Item Description';
 
                         return Card(
                           margin: const EdgeInsets.symmetric(vertical: 4),
                           child: ListTile(
                             leading: const Icon(Icons.receipt, color: Colors.green),
-
-                            // TOP LINE: [Vendor Name] | Cost: [Amount] | [Item Name]
                             title: Text(
                               '$vendorName | Cost: $costAmount | $itemName',
                               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 14),
                               overflow: TextOverflow.ellipsis,
                             ),
-
-                            // SUBTITLE: Project | Category
                             subtitle: Text(
                               'Project: $projectName | Category: ${record.expenseCategory ?? 'N/A'}',
                             ),

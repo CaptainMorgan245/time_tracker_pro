@@ -44,10 +44,11 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
   // end method: _loadEmployees
 
   // start method: _addEmployee
-  Future<void> _addEmployee(String name, int? roleId) async {
+  Future<void> _addEmployee(String name, int? roleId, double? hourlyRate) async {
     final newEntry = Employee(
       name: name,
       titleId: roleId,
+      hourlyRate: hourlyRate,
     );
     await _employeeRepo.insertEmployee(newEntry);
     _loadEmployees();
@@ -82,6 +83,9 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
   Future<void> _showEditDialog(Employee? employee) async {
     final isNew = employee == null;
     final nameController = TextEditingController(text: employee?.name ?? '');
+    final hourlyRateController = TextEditingController(
+        text: employee?.hourlyRate?.toString() ?? ''
+    );
     final employeeNumber = employee?.employeeNumber ?? 'Not Assigned';
     final isDeleted = employee?.isDeleted ?? false;
     Role? selectedRole = employee != null
@@ -125,6 +129,12 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
                   selectedRole = newValue;
                 },
               ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: hourlyRateController,
+                decoration: const InputDecoration(labelText: 'Hourly Rate'),
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              ),
             ],
           ),
           actions: [
@@ -146,12 +156,14 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
               child: Text(isNew ? 'Add' : 'Save'),
               onPressed: () {
                 if (nameController.text.isNotEmpty) {
+                  final parsedRate = double.tryParse(hourlyRateController.text);
                   if (isNew) {
-                    _addEmployee(nameController.text, selectedRole?.id);
+                    _addEmployee(nameController.text, selectedRole?.id, parsedRate);
                   } else {
                     final updatedEmployee = employee.copyWith(
                       name: nameController.text,
                       titleId: selectedRole?.id,
+                      hourlyRate: parsedRate,
                     );
                     _updateEmployee(updatedEmployee);
                   }
@@ -164,6 +176,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
       },
     );
   }
+  // end method: _showEditDialog
 
   // start method: _buildEmployeeList
   Widget _buildEmployeeList(List<Employee> list, Color color, {bool inactive = false}) {
@@ -234,5 +247,6 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
       ),
     );
   }
+// end method: build
 }
 // end class: _EmployeeListScreenState

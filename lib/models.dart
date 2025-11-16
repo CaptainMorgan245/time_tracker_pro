@@ -97,7 +97,7 @@ class Project {
       'completion_date': completionDate?.toIso8601String(),
       'is_internal': isInternal ? 1 : 0,
       'billed_hourly_rate': billedHourlyRate,
-      'project_price': fixedPrice,
+      'project_price': fixedPrice, // DB column is 'project_price'
     };
   }
 
@@ -114,7 +114,7 @@ class Project {
           : null,
       isInternal: map['is_internal'] == 1,
       billedHourlyRate: (map['billed_hourly_rate'] as num?)?.toDouble(),
-      fixedPrice: (map['project_price'] as num?)?.toDouble(),
+      fixedPrice: (map['project_price'] as num?)?.toDouble(), // DB column is 'project_price'
     );
   }
 
@@ -145,15 +145,6 @@ class Project {
   }
 
   @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-    return other is Project && other.id == id;
-  }
-
-  @override
-  int get hashCode => id.hashCode;
-
-  @override
   String toString() {
     return 'Project(id: $id, name: $projectName, clientId: $clientId, pricingModel: $pricingModel, fixedPrice: $fixedPrice)';
   }
@@ -164,6 +155,7 @@ class Employee {
   final String? employeeNumber;
   final String name;
   final int? titleId;
+  final double? hourlyRate;
   final bool isDeleted;
 
   Employee({
@@ -171,6 +163,7 @@ class Employee {
     this.employeeNumber,
     required this.name,
     this.titleId,
+    this.hourlyRate,
     this.isDeleted = false,
   });
 
@@ -180,6 +173,7 @@ class Employee {
       'employee_number': employeeNumber,
       'name': name,
       'title_id': titleId,
+      'hourly_rate': hourlyRate,
       'is_deleted': isDeleted ? 1 : 0,
     };
   }
@@ -190,6 +184,7 @@ class Employee {
       employeeNumber: map['employee_number'],
       name: map['name'],
       titleId: map['title_id'],
+      hourlyRate: (map['hourly_rate'] as num?)?.toDouble(),
       isDeleted: map['is_deleted'] == 1,
     );
   }
@@ -199,6 +194,7 @@ class Employee {
     String? employeeNumber,
     String? name,
     int? titleId,
+    double? hourlyRate,
     bool? isDeleted,
   }) {
     return Employee(
@@ -206,6 +202,7 @@ class Employee {
       employeeNumber: employeeNumber ?? this.employeeNumber,
       name: name ?? this.name,
       titleId: titleId ?? this.titleId,
+      hourlyRate: hourlyRate ?? this.hourlyRate,
       isDeleted: isDeleted ?? this.isDeleted,
     );
   }
@@ -242,6 +239,7 @@ class TimeEntry {
   final DateTime? endTime;
   final Duration pausedDuration;
   final double? finalBilledDurationSeconds;
+  final double? hourlyRate;
   final bool isPaused;
   final DateTime? pauseStartTime;
   final bool isDeleted;
@@ -259,6 +257,7 @@ class TimeEntry {
     this.pauseStartTime,
     this.isDeleted = false,
     this.workDetails,
+    this.hourlyRate,
   });
 
   factory TimeEntry.fromMap(Map<String, dynamic> map) {
@@ -279,6 +278,7 @@ class TimeEntry {
           : null,
       isDeleted: map['is_deleted'] == 1,
       workDetails: map['work_details'],
+      hourlyRate: (map['hourly_rate'] as num?)?.toDouble(),
     );
   }
 
@@ -296,6 +296,7 @@ class TimeEntry {
       'pause_start_time': pauseStartTime?.toIso8601String(),
       'is_deleted': isDeleted ? 1 : 0,
       'work_details': workDetails,
+      'hourly_rate': hourlyRate,
     };
   }
 
@@ -307,6 +308,7 @@ class TimeEntry {
     DateTime? endTime,
     Duration? pausedDuration,
     double? finalBilledDurationSeconds,
+    double? hourlyRate,
     bool? isPaused,
     DateTime? pauseStartTime,
     bool? isDeleted,
@@ -320,6 +322,7 @@ class TimeEntry {
       endTime: endTime ?? this.endTime,
       pausedDuration: pausedDuration ?? this.pausedDuration,
       finalBilledDurationSeconds: finalBilledDurationSeconds ?? this.finalBilledDurationSeconds,
+      hourlyRate: hourlyRate ?? this.hourlyRate,
       isPaused: isPaused ?? this.isPaused,
       pauseStartTime: pauseStartTime ?? this.pauseStartTime,
       isDeleted: isDeleted ?? this.isDeleted,
@@ -364,7 +367,8 @@ class JobMaterials {
   });
 
   Map<String, dynamic> toMap() {
-    final map = <String, dynamic>{
+    return {
+      'id': id,
       'project_id': projectId,
       'item_name': itemName,
       'cost': cost,
@@ -380,13 +384,6 @@ class JobMaterials {
       'vehicle_designation': vehicleDesignation,
       'vendor_or_subtrade': vendorOrSubtrade,
     };
-
-    // Only include id if it's not null (for updates, not inserts)
-    if (id != null) {
-      map['id'] = id;
-    }
-
-    return map;
   }
 
   factory JobMaterials.fromMap(Map<String, dynamic> map) {

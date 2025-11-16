@@ -1,4 +1,4 @@
-// lib/cost_record_form.dart (COMPLETE FILE - Final Stable Version)
+// lib/cost_record_form.dart (COMPLETE FILE - Fixed with Integer Project IDs)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -47,7 +47,8 @@ class CostRecordFormState extends State<CostRecordForm> {
   final TextEditingController _quantityController = TextEditingController();
   final TextEditingController _odometerReadingController = TextEditingController();
 
-  Project? selectedProject;
+  // CHANGE: Use int ID instead of Project object
+  int? selectedProjectId;
   DateTime _selectedPurchaseDate = DateTime.now();
   String? selectedExpenseCategory;
   String? _selectedVendorOrSubtrade;
@@ -56,10 +57,6 @@ class CostRecordFormState extends State<CostRecordForm> {
 
   static const int _internalProjectId = 0;
   int? _editingExpenseId;
-
-  // =======================================================
-  // | PUBLIC METHODS FOR DIALOG INTERACTION |
-  // =======================================================
 
   String getCurrentItemName() {
     return _itemNameController.text;
@@ -73,18 +70,14 @@ class CostRecordFormState extends State<CostRecordForm> {
     }
   }
 
-  // 💥 FIX: ADDED MISSING PUBLIC SUBMISSION METHOD
   void triggerSubmit() {
     _submitForm();
   }
-
-  // =======================================================
 
   @override
   void dispose() {
     _itemNameController.dispose();
     _itemNameFocusNode.dispose();
-
     _costController.dispose();
     _quantityController.dispose();
     _odometerReadingController.dispose();
@@ -102,10 +95,7 @@ class CostRecordFormState extends State<CostRecordForm> {
   void populateForm(JobMaterials expense) {
     setState(() {
       _editingExpenseId = expense.id;
-
-      // Load Item Name/Description from the expense model for EDITING
       _itemNameController.text = expense.itemName ?? '';
-
       _costController.text = expense.cost.toStringAsFixed(2);
       _quantityController.text = expense.quantity?.toStringAsFixed(2) ?? '';
       _odometerReadingController.text = expense.odometerReading?.toStringAsFixed(0) ?? '';
@@ -130,18 +120,13 @@ class CostRecordFormState extends State<CostRecordForm> {
         _selectedVendorOrSubtrade = null;
       }
 
-      selectedProject = widget.availableProjectsNotifier.value.cast<Project?>().firstWhere(
-            (p) => p?.id == expense.projectId,
-        orElse: () => null,
-      );
+      selectedProjectId = expense.projectId;
     });
   }
 
   void resetForm() {
     _formKey.currentState?.reset();
-
     _itemNameController.clear();
-
     _costController.clear();
     _quantityController.clear();
     _odometerReadingController.clear();
@@ -151,15 +136,17 @@ class CostRecordFormState extends State<CostRecordForm> {
       isFuelCategory = false;
       selectedExpenseCategory = null;
       _selectedVendorOrSubtrade = null;
-      selectedProject = null;
+      selectedProjectId = widget.availableProjectsNotifier.value
+          .firstWhere((p) => !p.isInternal, orElse: () => widget.availableProjectsNotifier.value.first)
+          .id;
     });
 
     widget.onCompanyExpenseToggle.value = false;
   }
 
-  void setSelectedProject(Project project) {
+  void setSelectedProjectId(int projectId) {
     setState(() {
-      selectedProject = project;
+      selectedProjectId = projectId;
     });
   }
 
@@ -168,20 +155,20 @@ class CostRecordFormState extends State<CostRecordForm> {
   }
 
   void _submitForm() {
+    print('Debug: Submit called, selectedProjectId = $selectedProjectId');
     SystemChannels.textInput.invokeMethod('TextInput.hide');
 
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    if (!widget.onCompanyExpenseToggle.value && selectedProject == null) {
+    if (!widget.onCompanyExpenseToggle.value && selectedProjectId == null) {
       return;
     }
 
     final bool isCompanyExpenseFromParent = widget.onCompanyExpenseToggle.value;
-    final int submissionProjectId = isCompanyExpenseFromParent ? _internalProjectId : selectedProject!.id!;
+    final int submissionProjectId = isCompanyExpenseFromParent ? _internalProjectId : selectedProjectId!;
 
-    // Fallback logic for Item Name
     final String submittedItemName = _itemNameController.text.isNotEmpty
         ? _itemNameController.text
         : 'General Expense';
@@ -189,15 +176,10 @@ class CostRecordFormState extends State<CostRecordForm> {
     final newExpense = JobMaterials(
         id: _editingExpenseId,
         projectId: submissionProjectId,
-
         itemName: submittedItemName,
-
         cost: double.parse(_costController.text),
         purchaseDate: _selectedPurchaseDate,
-
-        // CRITICAL FIX: Set description to null to prevent data corruption/conflict
         description: null,
-
         expenseCategory: selectedExpenseCategory,
         isCompanyExpense: isCompanyExpenseFromParent,
         vehicleDesignation: isCompanyExpenseFromParent ? _selectedVehicleDesignation : null,
@@ -207,7 +189,6 @@ class CostRecordFormState extends State<CostRecordForm> {
         odometerReading: isCompanyExpenseFromParent ? (_odometerReadingController.text.isNotEmpty ? double.tryParse(_odometerReadingController.text) : null) : null,
         baseQuantity: null
     );
-    // Call the handler function provided by the parent screen
     widget.onAddExpense(newExpense, widget.isEditing);
   }
 
@@ -230,7 +211,6 @@ class CostRecordFormState extends State<CostRecordForm> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // VENDOR + DATE + COST on one row (saves space!)
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -283,7 +263,6 @@ class CostRecordFormState extends State<CostRecordForm> {
             ),
             const SizedBox(height: 16),
 
-            // Company expense vehicle fields (conditional)
             ValueListenableBuilder<bool>(
               valueListenable: widget.onCompanyExpenseToggle,
               builder: (context, isCompanyExpenseFromParent, _) {
@@ -335,7 +314,6 @@ class CostRecordFormState extends State<CostRecordForm> {
               },
             ),
 
-            // Item Name / Description Controller Logic (Completely Invisible)
             SizedBox(
               height: 0,
               width: 0,
@@ -345,7 +323,6 @@ class CostRecordFormState extends State<CostRecordForm> {
               ),
             ),
 
-            // Buttons
             Row(
               children: [
                 Flexible(
@@ -368,7 +345,7 @@ class CostRecordFormState extends State<CostRecordForm> {
                   child: SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: _submitForm, // This is the button that triggers the full commit
+                      onPressed: _submitForm,
                       child: Text(buttonText),
                     ),
                   ),

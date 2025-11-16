@@ -27,6 +27,7 @@ class AddEmployeeForm extends StatefulWidget {
 class _AddEmployeeFormState extends State<AddEmployeeForm> {
   final EmployeeRepository _employeeRepo = EmployeeRepository();
   final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _hourlyRateController = TextEditingController();
 
   Role? _selectedRole;
   bool _isSubmitting = false;
@@ -35,6 +36,7 @@ class _AddEmployeeFormState extends State<AddEmployeeForm> {
   @override
   void dispose() {
     _nameController.dispose();
+    _hourlyRateController.dispose();
     super.dispose();
   }
   // end method: dispose
@@ -54,6 +56,7 @@ class _AddEmployeeFormState extends State<AddEmployeeForm> {
     final newEmployee = Employee(
       name: name,
       titleId: role.id,
+      hourlyRate: double.tryParse(_hourlyRateController.text) ?? role.standardRate,
     );
 
     setState(() => _isSubmitting = true);
@@ -61,6 +64,7 @@ class _AddEmployeeFormState extends State<AddEmployeeForm> {
     try {
       await _employeeRepo.insertEmployee(newEmployee);
       _nameController.clear();
+      _hourlyRateController.clear();
       setState(() => _selectedRole = null);
       widget.onEmployeeAdded();
     } catch (e) {
@@ -109,9 +113,21 @@ class _AddEmployeeFormState extends State<AddEmployeeForm> {
                     onChanged: (int? selectedId) {
                       setState(() {
                         _selectedRole = validRoles.firstWhere((r) => r.id == selectedId);
+                        // Auto-populate hourly rate with role's standard rate
+                        if (_selectedRole != null) {
+                          _hourlyRateController.text = _selectedRole!.standardRate.toString();
+                        }
                       });
                     },
                     decoration: const InputDecoration(labelText: 'Role'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _hourlyRateController,
+                    decoration: const InputDecoration(labelText: 'Hourly Rate'),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   ),
                 ),
               ],
