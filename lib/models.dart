@@ -537,6 +537,7 @@ class AllRecordViewModel {
   final String description;
   final double value; // Can be hours for time, or amount for cost/payment
   final String categoryOrProject;
+  final int? employeeId;
 
   AllRecordViewModel({
     required this.id,
@@ -545,6 +546,7 @@ class AllRecordViewModel {
     required this.description,
     required this.value,
     required this.categoryOrProject,
+    this.employeeId,
   });
 
   @override

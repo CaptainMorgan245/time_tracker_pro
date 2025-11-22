@@ -81,7 +81,7 @@ class EmployeeRepository {
 
   Future<List<EmployeeSummaryViewModel>> fetchEmployeeSummaries() async {
     final db = await _databaseHelper.database;
-    // Correcting the SQL query to fit your schema
+    // Calculate total labor cost using employee's hourly_rate
     List<Map<String, dynamic>> summaries = await db.rawQuery('''
     SELECT 
       e.name AS employeeName, 
@@ -89,11 +89,7 @@ class EmployeeRepository {
       r.name AS roleTitle,
       COUNT(DISTINCT t.project_id) AS projectsCount,
       SUM(t.final_billed_duration_seconds / 3600.0) AS totalHours,
-      SUM((t.final_billed_duration_seconds / 3600.0) * 
-        (CASE p.pricing_model
-          WHEN 'hourly' THEN p.billed_hourly_rate
-          ELSE 0 END)
-      ) AS totalBilledValue
+      SUM((t.final_billed_duration_seconds / 3600.0) * IFNULL(e.hourly_rate, 0)) AS totalBilledValue
     FROM employees e
     JOIN time_entries t ON e.id = t.employee_id
     JOIN projects p ON t.project_id = p.id
@@ -172,7 +168,7 @@ class EmployeeRepository {
       selectFields.add('SUM(te.final_billed_duration_seconds / 3600.0) AS total_hours');
     }
     if (settings.includes['Total Billed Value'] == true) {
-      selectFields.add('SUM((te.final_billed_duration_seconds / 3600.0) * (CASE p.pricing_model WHEN \'hourly\' THEN p.billed_hourly_rate ELSE 0 END)) AS billed_value');
+      selectFields.add('SUM((te.final_billed_duration_seconds / 3600.0) * IFNULL(e.hourly_rate, 0)) AS billed_value');
     }
 
     final query = '''

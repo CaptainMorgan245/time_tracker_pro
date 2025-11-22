@@ -11,11 +11,12 @@ class SettingsService {
   final _databaseHelper = DatabaseHelperV2.instance;
   final String tableName = 'settings';
 
-  /// Checks if the settings table has at least one row.
+  /// Checks if setup has been completed by checking the setup_completed flag.
   Future<bool> hasSettings() async {
     final db = await _databaseHelper.database;
     final List<Map<String, dynamic>> maps = await db.query(tableName, limit: 1);
-    return maps.isNotEmpty;
+    if (maps.isEmpty) return false;
+    return (maps.first['setup_completed'] as int?) == 1;
   }
 
   /// Loads settings from the database.

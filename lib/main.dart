@@ -19,17 +19,17 @@ Future<void> main() async {
   }
 
   // This line remains the same
-  runApp(const TrialApp());
+  runApp(const TimeTrackerProApp());
 }
 // THE REST OF YOUR FILE IS PERFECT AND REMAINS THE SAME
 
-class TrialApp extends StatelessWidget {
-  const TrialApp({super.key});
+class TimeTrackerProApp extends StatelessWidget {
+  const TimeTrackerProApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'UI Trial 2',
+      title: 'Time Tracker Pro',
       theme: ThemeData(
         primarySwatch: Colors.blueGrey,
         scaffoldBackgroundColor: Colors.grey[350],
@@ -96,6 +96,69 @@ class TrialApp extends StatelessWidget {
               body: const Center(child: CircularProgressIndicator()),
             );
           }
+          
+          // Handle errors gracefully
+          if (snapshot.hasError) {
+            return Scaffold(
+              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              body: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.error_outline,
+                            size: 64,
+                            color: Colors.red[700],
+                          ),
+                          const SizedBox(height: 24),
+                          const Text(
+                            'Unable to Start App',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'An error occurred while loading the application settings.',
+                            style: TextStyle(fontSize: 16),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Error: ${snapshot.error}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 24),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.of(context).pushReplacement(
+                                MaterialPageRoute(
+                                  builder: (context) => const TimeTrackerProApp(),
+                                ),
+                              );
+                            },
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
+          
           if (snapshot.hasData && snapshot.data!) {
             return const DashboardScreen();
           } else {

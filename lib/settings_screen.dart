@@ -80,7 +80,8 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         autoBackupReminderFrequency: int.tryParse(backupFrequencyController.text) ?? 10,
         defaultReportMonths: int.tryParse(reportMonthsController.text) ?? 3,
         // If a burden rate is passed, use it. Otherwise, keep the existing one.
-        companyHourlyRate: currentBurdenRate ?? _settings.companyHourlyRate
+        companyHourlyRate: currentBurdenRate ?? _settings.companyHourlyRate,
+        setupCompleted: true,  // <-- ADDED: Mark setup as complete when saving
     );
 
     // The corrected code

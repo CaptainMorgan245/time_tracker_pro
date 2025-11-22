@@ -392,7 +392,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           leading: Icon(isTime ? Icons.timer_outlined : Icons.shopping_cart_outlined, color: Theme.of(context).primaryColor),
                           title: Text(record.categoryOrProject, style: Theme.of(context).textTheme.titleMedium),
                           subtitle: Text(
-                            '${DateFormat('MMM d, yyyy').format(record.date)} | ${record.description}',
+                            '${DateFormat('MMM d, yyyy').format(record.date)} | Emp: ${_getEmployeeName(record.employeeId)} | ${record.description}',
                             style: Theme.of(context).textTheme.bodyMedium,
                           ),
                           trailing: Text(
@@ -507,7 +507,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Timer started.')),
       );
-      _timerFormKey.currentState?.resetForm();
+      _timerFormKey.currentState?.clearEmployeeAndDetails();
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

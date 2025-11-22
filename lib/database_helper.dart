@@ -10,7 +10,7 @@ import 'package:time_tracker_pro/models.dart';
 //import 'package:time_tracker_pro/models/project_summary.dart';
 
 // ============================================================================
-// |                  FINAL, STABLE V3 DATABASE HELPER                      |
+// |                  FINAL, STABLE V4 DATABASE HELPER                      |
 // ============================================================================
 
 class DatabaseHelperV2 {
@@ -21,8 +21,8 @@ class DatabaseHelperV2 {
   static Completer<Database>? _dbCompleter;
   static const String _dbName = 'time_tracker_pro.db';
 
-  // MODIFICATION 1: Bump version to 3
-  static const int _dbVersion = 3;
+  // MODIFICATION 1: Bump version to 4
+  static const int _dbVersion = 4;
 
   final ValueNotifier<int> databaseNotifier = ValueNotifier(0);
 
@@ -101,6 +101,12 @@ class DatabaseHelperV2 {
           await db.execute("ALTER TABLE projects RENAME COLUMN fixedPrice TO project_price");
           debugPrint('[DB_V2] V3 Migration: Renamed column fixedPrice to project_price in projects table.');
         }
+
+        // MODIFICATION 3: Migration logic for version 4 (add setup_completed flag)
+        if (oldVersion < 4) {
+          await db.execute("ALTER TABLE settings ADD COLUMN setup_completed INTEGER DEFAULT 0");
+          debugPrint('[DB_V2] V4 Migration: Added setup_completed column to settings table.');
+        }
       },
       onDowngrade: onDatabaseDowngradeDelete,
     );
@@ -112,12 +118,12 @@ class DatabaseHelperV2 {
     await db.transaction((txn) async {
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS settings (
-            id INTEGER PRIMARY KEY, employee_number_prefix TEXT, next_employee_number INTEGER, vehicle_designations TEXT, vendors TEXT, company_hourly_rate REAL, burden_rate REAL, time_rounding_interval INTEGER, auto_backup_reminder_frequency INTEGER, app_runs_since_backup INTEGER, measurement_system TEXT, default_report_months INTEGER
+            id INTEGER PRIMARY KEY, employee_number_prefix TEXT, next_employee_number INTEGER, vehicle_designations TEXT, vendors TEXT, company_hourly_rate REAL, burden_rate REAL, time_rounding_interval INTEGER, auto_backup_reminder_frequency INTEGER, app_runs_since_backup INTEGER, measurement_system TEXT, default_report_months INTEGER, setup_completed INTEGER DEFAULT 0
           )
         ''');
       await txn.execute('''
-          INSERT INTO settings(id, next_employee_number, company_hourly_rate, burden_rate, time_rounding_interval, auto_backup_reminder_frequency, app_runs_since_backup, default_report_months)
-          VALUES(1, 1, 0.0, 0.0, 15, 10, 0, 3)
+          INSERT INTO settings(id, next_employee_number, company_hourly_rate, burden_rate, time_rounding_interval, auto_backup_reminder_frequency, app_runs_since_backup, default_report_months, setup_completed)
+          VALUES(1, 1, 0.0, 0.0, 15, 10, 0, 3, 0)
         ''');
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS clients (
@@ -218,27 +224,24 @@ class DatabaseHelperV2 {
     final db = await database;
     final List<AllRecordViewModel> allRecords = [];
 
-    // Calculate the start time for the 7-day filter
-    // NOTE: SQLite date comparisons must use ISO8601 strings (TEXT column 'start_time')
     final sevenDaysAgo = DateTime.now().subtract(const Duration(days: 7));
     final sevenDaysAgoIso = sevenDaysAgo.toIso8601String();
 
-    // Query combines time_entries, projects, and clients with filtering
     final timeQuery = '''
-      SELECT 
-        t.id, t.start_time, t.work_details, t.final_billed_duration_seconds, 
-        p.project_name, c.name as client_name
-      FROM time_entries t
-      JOIN projects p ON t.project_id = p.id
-      JOIN clients c ON p.client_id = c.id
-      WHERE 
-        t.is_deleted = 0 
-        AND p.is_completed = 0 -- Filter: Active Projects Only
-        AND t.start_time >= ?  -- Filter: Last 7 Days (uses ISO string comparison)
-      ORDER BY t.start_time DESC
-    ''';
+    SELECT 
+      t.id, t.start_time, t.work_details, t.final_billed_duration_seconds, 
+      t.employee_id,
+      p.project_name, c.name as client_name
+    FROM time_entries t
+    JOIN projects p ON t.project_id = p.id
+    JOIN clients c ON p.client_id = c.id
+    WHERE 
+      t.is_deleted = 0 
+      AND p.is_completed = 0
+      AND t.start_time >= ?
+    ORDER BY t.start_time DESC
+  ''';
 
-    // The single argument is the ISO string for 7 days ago.
     final timeEntryMaps = await db.rawQuery(timeQuery, [sevenDaysAgoIso]);
 
     for (var map in timeEntryMaps) {
@@ -250,9 +253,9 @@ class DatabaseHelperV2 {
         type: RecordType.time,
         date: DateTime.parse(map['start_time'] as String),
         description: map['work_details'] as String? ?? 'No Details',
-        // Assuming value is duration in hours
         value: (map['final_billed_duration_seconds'] as num? ?? 0.0) / 3600.0,
         categoryOrProject: '$clientName - $projectName',
+        employeeId: map['employee_id'] as int?,
       ));
     }
 
@@ -486,4 +489,4 @@ class DatabaseHelperV2 {
     debugPrint('[DB_V2] ===== ALL DATA DELETED =====');
   }
 // END: ADDED MISSING FUNCTION
-} // <--- THE CRITICAL MISSING BRACE IS NOW HERE
+}

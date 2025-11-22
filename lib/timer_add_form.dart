@@ -54,6 +54,17 @@ class TimerAddFormState extends State<TimerAddForm> {
     });
   }
 
+  void clearEmployeeAndDetails() {
+    setState(() {
+      _selectedEmployee = null;
+      _workDetailsController.clear();
+      _selectedStartTime = null;
+      _selectedStopTime = null;
+      _editingRecordId = null;
+      // Keep _selectedProject and _selectedDate
+    });
+  }
+
   /// Pre-fills the form for starting a new timer based on a previous record.
   /// This only sets the project and employee, and clears all other fields
   /// to ensure the form is in a "new entry" state.
@@ -295,7 +306,9 @@ class TimerAddFormState extends State<TimerAddForm> {
                           contentPadding: EdgeInsets.symmetric(horizontal: 12),
                           labelText: 'Select Project',
                         ),
-                        initialValue: _selectedProject,
+                        value: _selectedProject != null && projects.any((p) => p.id == _selectedProject!.id)
+                            ? projects.firstWhere((p) => p.id == _selectedProject!.id)
+                            : null,
                         items: projects.map((project) {
                           return DropdownMenuItem<Project>(
                             value: project,

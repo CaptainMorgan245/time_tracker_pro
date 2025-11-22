@@ -9,7 +9,7 @@ class SettingsModel {
   final List<String> vehicleDesignations;
   final List<String> vendors;
   final double? companyHourlyRate;
-  final double burdenRate; // <-- 1. ADDED PROPERTY
+  final double burdenRate;
 
   // New settings fields
   final int timeRoundingInterval; // 0 = no rounding, 15 or 30 minutes
@@ -17,6 +17,7 @@ class SettingsModel {
   final int appRunsSinceBackup; // Counter for backup reminder
   final String measurementSystem; // 'metric' or 'imperial'
   final int defaultReportMonths; // Default lookback period for reports
+  final bool setupCompleted; // Setup completion flag
 
   SettingsModel({
     this.id = 1,
@@ -25,12 +26,13 @@ class SettingsModel {
     List<String>? vehicleDesignations,
     List<String>? vendors,
     this.companyHourlyRate,
-    this.burdenRate = 0.0, // <-- 2. ADDED TO CONSTRUCTOR
+    this.burdenRate = 0.0,
     this.timeRoundingInterval = 0,
     this.autoBackupReminderFrequency = 10,
     this.appRunsSinceBackup = 0,
     this.measurementSystem = 'metric',
     this.defaultReportMonths = 3,
+    this.setupCompleted = false,
   }) : vehicleDesignations = vehicleDesignations ?? [],
         vendors = vendors ?? [];
 
@@ -55,12 +57,13 @@ class SettingsModel {
       companyHourlyRate: map['company_hourly_rate'] != null
           ? (map['company_hourly_rate'] as num).toDouble()
           : null,
-      burdenRate: (map['burden_rate'] as num?)?.toDouble() ?? 0.0, // <-- 3. ADDED TO fromMap
+      burdenRate: (map['burden_rate'] as num?)?.toDouble() ?? 0.0,
       timeRoundingInterval: map['time_rounding_interval'] ?? 15,
       autoBackupReminderFrequency: map['auto_backup_reminder_frequency'] ?? 10,
       appRunsSinceBackup: map['app_runs_since_backup'] ?? 0,
       measurementSystem: map['measurement_system'] ?? 'metric',
       defaultReportMonths: map['default_report_months'] ?? 3,
+      setupCompleted: (map['setup_completed'] as int?) == 1,
     );
   }
   // end method: fromMap
@@ -74,12 +77,13 @@ class SettingsModel {
       'vehicle_designations': jsonEncode(vehicleDesignations),
       'vendors': jsonEncode(vendors),
       'company_hourly_rate': companyHourlyRate,
-      'burden_rate': burdenRate, // <-- 4. ADDED TO toMap
+      'burden_rate': burdenRate,
       'time_rounding_interval': timeRoundingInterval,
       'auto_backup_reminder_frequency': autoBackupReminderFrequency,
       'app_runs_since_backup': appRunsSinceBackup,
       'measurement_system': measurementSystem,
       'default_report_months': defaultReportMonths,
+      'setup_completed': setupCompleted ? 1 : 0,
     };
   }
   // end method: toMap
@@ -92,12 +96,13 @@ class SettingsModel {
     List<String>? vehicleDesignations,
     List<String>? vendors,
     double? companyHourlyRate,
-    double? burdenRate, // <-- 5. ADDED TO copyWith
+    double? burdenRate,
     int? timeRoundingInterval,
     int? autoBackupReminderFrequency,
     int? appRunsSinceBackup,
     String? measurementSystem,
     int? defaultReportMonths,
+    bool? setupCompleted,
   }) {
     return SettingsModel(
       id: id ?? this.id,
@@ -106,12 +111,13 @@ class SettingsModel {
       vehicleDesignations: vehicleDesignations ?? this.vehicleDesignations,
       vendors: vendors ?? this.vendors,
       companyHourlyRate: companyHourlyRate ?? this.companyHourlyRate,
-      burdenRate: burdenRate ?? this.burdenRate, // <-- 5. ADDED LOGIC
+      burdenRate: burdenRate ?? this.burdenRate,
       timeRoundingInterval: timeRoundingInterval ?? this.timeRoundingInterval,
       autoBackupReminderFrequency: autoBackupReminderFrequency ?? this.autoBackupReminderFrequency,
       appRunsSinceBackup: appRunsSinceBackup ?? this.appRunsSinceBackup,
       measurementSystem: measurementSystem ?? this.measurementSystem,
       defaultReportMonths: defaultReportMonths ?? this.defaultReportMonths,
+      setupCompleted: setupCompleted ?? this.setupCompleted,
     );
   }
 // end method: copyWith
