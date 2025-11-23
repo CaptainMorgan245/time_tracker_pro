@@ -45,7 +45,8 @@ class SettingsService {
       'auto_backup_reminder_frequency': 10,
       'app_runs_since_backup': 0,
       'measurement_system': 'metric',
-      'default_report_months': 3
+      'default_report_months': 3,
+      'expense_markup_percentage': 0.0,
     });
   }
 

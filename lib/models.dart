@@ -470,6 +470,7 @@ class AppSettings {
   final int? appRunsSinceBackup;
   final String? measurementSystem;
   final int? defaultReportMonths;
+  final double? expenseMarkupPercentage;
 
   AppSettings({
     this.id = 1,
@@ -484,6 +485,7 @@ class AppSettings {
     this.appRunsSinceBackup,
     this.measurementSystem,
     this.defaultReportMonths,
+    this.expenseMarkupPercentage,
   });
 
   factory AppSettings.fromMap(Map<String, dynamic> map) {
@@ -506,25 +508,27 @@ class AppSettings {
       appRunsSinceBackup: map['app_runs_since_backup'],
       measurementSystem: map['measurement_system'],
       defaultReportMonths: map['default_report_months'],
+      expenseMarkupPercentage: (map['expense_markup_percentage'] as num?)?.toDouble(),
     );
   }
 
   Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'employee_number_prefix': employeeNumberPrefix,
-      'next_employee_number': nextEmployeeNumber,
-      'vehicle_designations': vehicleDesignations.join(','),
-      'vendors': vendors.join(','),
-      'company_hourly_rate': companyHourlyRate,
-      'burden_rate': burdenRate,
-      'time_rounding_interval': timeRoundingInterval,
-      'auto_backup_reminder_frequency': autoBackupReminderFrequency,
-      'app_runs_since_backup': appRunsSinceBackup,
-      'measurement_system': measurementSystem,
-      'default_report_months': defaultReportMonths,
-    };
-  }
+  return {
+    'id': id,
+    'employee_number_prefix': employeeNumberPrefix,
+    'next_employee_number': nextEmployeeNumber,
+    'vehicle_designations': vehicleDesignations.join(','),
+    'vendors': vendors.join(','),
+    'company_hourly_rate': companyHourlyRate,
+    'burden_rate': burdenRate,
+    'time_rounding_interval': timeRoundingInterval,
+    'auto_backup_reminder_frequency': autoBackupReminderFrequency,
+    'app_runs_since_backup': appRunsSinceBackup,
+    'measurement_system': measurementSystem,
+    'default_report_months': defaultReportMonths,
+    'expense_markup_percentage': expenseMarkupPercentage,
+  };
+}
 }
 
 // For the main dashboard screen

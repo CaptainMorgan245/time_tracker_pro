@@ -22,7 +22,7 @@ class DatabaseHelperV2 {
   static const String _dbName = 'time_tracker_pro.db';
 
   // MODIFICATION 1: Bump version to 4
-  static const int _dbVersion = 4;
+  static const int _dbVersion = 5;
 
   final ValueNotifier<int> databaseNotifier = ValueNotifier(0);
 
@@ -107,6 +107,10 @@ class DatabaseHelperV2 {
           await db.execute("ALTER TABLE settings ADD COLUMN setup_completed INTEGER DEFAULT 0");
           debugPrint('[DB_V2] V4 Migration: Added setup_completed column to settings table.');
         }
+        if (oldVersion < 5) {
+          await db.execute("ALTER TABLE settings ADD COLUMN expense_markup_percentage REAL DEFAULT 0.0");
+          debugPrint('[DB_V2] V5 Migration: Added expense_markup_percentage column to settings table.');
+  }
       },
       onDowngrade: onDatabaseDowngradeDelete,
     );
@@ -118,12 +122,11 @@ class DatabaseHelperV2 {
     await db.transaction((txn) async {
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS settings (
-            id INTEGER PRIMARY KEY, employee_number_prefix TEXT, next_employee_number INTEGER, vehicle_designations TEXT, vendors TEXT, company_hourly_rate REAL, burden_rate REAL, time_rounding_interval INTEGER, auto_backup_reminder_frequency INTEGER, app_runs_since_backup INTEGER, measurement_system TEXT, default_report_months INTEGER, setup_completed INTEGER DEFAULT 0
-          )
+          id INTEGER PRIMARY KEY, employee_number_prefix TEXT, next_employee_number INTEGER, vehicle_designations TEXT, vendors TEXT, company_hourly_rate REAL, burden_rate REAL, time_rounding_interval INTEGER, auto_backup_reminder_frequency INTEGER, app_runs_since_backup INTEGER, measurement_system TEXT, default_report_months INTEGER, expense_markup_percentage REAL, setup_completed INTEGER DEFAULT 0)
         ''');
       await txn.execute('''
-          INSERT INTO settings(id, next_employee_number, company_hourly_rate, burden_rate, time_rounding_interval, auto_backup_reminder_frequency, app_runs_since_backup, default_report_months, setup_completed)
-          VALUES(1, 1, 0.0, 0.0, 15, 10, 0, 3, 0)
+          INSERT INTO settings(id, next_employee_number, company_hourly_rate, burden_rate, time_rounding_interval, auto_backup_reminder_frequency, app_runs_since_backup, default_report_months, expense_markup_percentage, setup_completed)
+  VALUES(1, 1, 0.0, 0.0, 15, 10, 0, 3, 0.0, 0)
         ''');
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS clients (

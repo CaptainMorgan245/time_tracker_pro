@@ -33,6 +33,8 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   final TextEditingController nextEmployeeNumberController = TextEditingController();
   final TextEditingController backupFrequencyController = TextEditingController();
   final TextEditingController reportMonthsController = TextEditingController();
+  final TextEditingController expenseMarkupPercentageController = TextEditingController();
+
 
   // start method: initState
   @override
@@ -51,6 +53,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     nextEmployeeNumberController.dispose();
     backupFrequencyController.dispose();
     reportMonthsController.dispose();
+    expenseMarkupPercentageController.dispose();
     super.dispose();
   }
   // end method: dispose
@@ -64,6 +67,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     nextEmployeeNumberController.text = (_settings.nextEmployeeNumber ?? 1).toString();
     backupFrequencyController.text = _settings.autoBackupReminderFrequency.toString();
     reportMonthsController.text = _settings.defaultReportMonths.toString();
+    expenseMarkupPercentageController.text = _settings.expenseMarkupPercentage.toStringAsFixed(2);
     });
   }
 // end method: _loadSettings
@@ -79,6 +83,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         nextEmployeeNumber: int.tryParse(nextEmployeeNumberController.text),
         autoBackupReminderFrequency: int.tryParse(backupFrequencyController.text) ?? 10,
         defaultReportMonths: int.tryParse(reportMonthsController.text) ?? 3,
+        expenseMarkupPercentage: double.tryParse(expenseMarkupPercentageController.text) ?? 0.0,
         // If a burden rate is passed, use it. Otherwise, keep the existing one.
         companyHourlyRate: currentBurdenRate ?? _settings.companyHourlyRate,
         setupCompleted: true,  // <-- ADDED: Mark setup as complete when saving
@@ -309,7 +314,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                               icon: const Icon(Icons.help_outline, size: 18),
                               onPressed: () => _showHelpDialog(
                                 'Backup & Reports',
-                                'Backup Reminder: Shows a reminder to backup your data every X times you open the app. Set to 0 to disable reminders. Dismissing the reminder resets the counter.\n\nDefault Report Period: Default number of months to display in quick reports. You can still override this when generating detailed reports. Prevents overwhelming displays of years of data.',
+                                'Backup Reminder: Shows a reminder to backup your data every X times you open the app. Set to 0 to disable reminders. Dismissing the reminder resets the counter.\n\nDefault Report Period: Default number of months to display in quick reports. You can still override this when generating detailed reports. Prevents overwhelming displays of years of data.\n\nExpense Markup: Optional markup percentage for materials/expenses. Set to 0 for no markup (pass-through cost). Most contractors use 15-20% to cover time, risk, and cash flow.',
                               ),
                               padding: EdgeInsets.zero,
                               constraints: const BoxConstraints(),
@@ -347,6 +352,15 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                               ),
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: expenseMarkupPercentageController,
+                          decoration: const InputDecoration(
+                            labelText: 'Expense Markup %',
+                            helperText: 'Set to 0 for no markup (e.g., 15 for 15%)',
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
                         ),
                       ],
                     ),
