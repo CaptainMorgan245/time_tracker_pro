@@ -17,6 +17,7 @@ class SettingsModel {
   final int appRunsSinceBackup; // Counter for backup reminder
   final String measurementSystem; // 'metric' or 'imperial'
   final int defaultReportMonths; // Default lookback period for reports
+  final double expenseMarkupPercentage;
   final bool setupCompleted; // Setup completion flag
 
   SettingsModel({
@@ -32,6 +33,7 @@ class SettingsModel {
     this.appRunsSinceBackup = 0,
     this.measurementSystem = 'metric',
     this.defaultReportMonths = 3,
+    this.expenseMarkupPercentage = 0.0,
     this.setupCompleted = false,
   }) : vehicleDesignations = vehicleDesignations ?? [],
         vendors = vendors ?? [];
@@ -64,6 +66,7 @@ class SettingsModel {
       measurementSystem: map['measurement_system'] ?? 'metric',
       defaultReportMonths: map['default_report_months'] ?? 3,
       setupCompleted: (map['setup_completed'] as int?) == 1,
+      expenseMarkupPercentage: (map['expense_markup_percentage'] as num?)?.toDouble() ?? 0.0,
     );
   }
   // end method: fromMap
@@ -84,6 +87,7 @@ class SettingsModel {
       'measurement_system': measurementSystem,
       'default_report_months': defaultReportMonths,
       'setup_completed': setupCompleted ? 1 : 0,
+      'expense_markup_percentage': expenseMarkupPercentage,
     };
   }
   // end method: toMap
@@ -102,6 +106,7 @@ class SettingsModel {
     int? appRunsSinceBackup,
     String? measurementSystem,
     int? defaultReportMonths,
+    double? expenseMarkupPercentage,
     bool? setupCompleted,
   }) {
     return SettingsModel(
@@ -117,6 +122,7 @@ class SettingsModel {
       appRunsSinceBackup: appRunsSinceBackup ?? this.appRunsSinceBackup,
       measurementSystem: measurementSystem ?? this.measurementSystem,
       defaultReportMonths: defaultReportMonths ?? this.defaultReportMonths,
+      expenseMarkupPercentage: expenseMarkupPercentage ?? this.expenseMarkupPercentage,
       setupCompleted: setupCompleted ?? this.setupCompleted,
     );
   }
