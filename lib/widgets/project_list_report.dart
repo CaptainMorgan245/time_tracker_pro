@@ -19,19 +19,29 @@ class ProjectListReport extends StatelessWidget {
       // Create CSV data
       List<List<dynamic>> csvData = [
         // Header row
-        ['Project', 'Client', 'Pricing Model', 'Hours', 'Labour Cost', 'Expenses', 'Total Cost', 'Billed Value', 'Profit/Loss'],
+        [
+          'Project',
+          'Client',
+          'Pricing Model',
+          'Hours',
+          'Labor Cost',
+          'Materials Cost',
+          'Total Cost',
+          'Billed Value',
+          'Profit/Loss'
+        ],
         // Data rows
         ...reportData.map((data) => [
-          data.projectName,
-          data.clientName ?? 'N/A',
-          data.pricingModel,
-          data.totalHours.toStringAsFixed(2),
-          data.totalLabourCost.toStringAsFixed(2),
-          data.totalExpenses.toStringAsFixed(2),
-          (data.totalLabourCost + data.totalExpenses).toStringAsFixed(2),
-          data.totalBilledValue.toStringAsFixed(2),
-          data.profitLoss.toStringAsFixed(2),
-        ]),
+              data.projectName,
+              data.clientName ?? 'N/A',
+              data.pricingModel,
+              data.totalHours.toStringAsFixed(2),
+              data.laborCost.toStringAsFixed(2),
+              data.materialsCost.toStringAsFixed(2),
+              data.totalCost.toStringAsFixed(2),
+              data.totalBilledValue.toStringAsFixed(2),
+              data.profitLoss.toStringAsFixed(2),
+            ]),
       ];
 
       // Convert to CSV string
@@ -95,30 +105,72 @@ class ProjectListReport extends StatelessWidget {
             ),
             const Divider(),
             const Divider(),
-
             SizedBox(
               width: double.infinity,
               child: DataTable(
                 columnSpacing: 12,
                 horizontalMargin: 8,
                 columns: const [
-                  DataColumn(label: Expanded(child: Text('Project', style: TextStyle(fontWeight: FontWeight.bold)))),
-                  DataColumn(label: Expanded(child: Text('Client', style: TextStyle(fontWeight: FontWeight.bold)))),
-                  DataColumn(label: Text('Pricing', style: TextStyle(fontWeight: FontWeight.bold))),
-                  DataColumn(label: Text('Hours', style: TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
-                  DataColumn(label: Text('Cost', style: TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
-                  DataColumn(label: Text('Billed Value', style: TextStyle(fontWeight: FontWeight.bold), textAlign: TextAlign.right)),
-                  DataColumn(label: Text('P/L', style: TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(
+                      label: Expanded(
+                          child: Text('Project',
+                              style: TextStyle(fontWeight: FontWeight.bold)))),
+                  DataColumn(
+                      label: Expanded(
+                          child: Text('Client',
+                              style: TextStyle(fontWeight: FontWeight.bold)))),
+                  DataColumn(
+                      label: Text('Pricing',
+                          style: TextStyle(fontWeight: FontWeight.bold))),
+                  DataColumn(
+                      label: Text('Hours',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.right)),
+                  DataColumn(
+                      label: Text('Labor Cost',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.right)),
+                  DataColumn(
+                      label: Text('Materials Cost',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.right)),
+                  DataColumn(
+                      label: Text('Total Cost',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.right)),
+                  DataColumn(
+                      label: Text('Billed Value',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.right)),
+                  DataColumn(
+                      label: Text('P/L',
+                          style: TextStyle(fontWeight: FontWeight.bold))),
                 ],
-                rows: reportData.map((data) => DataRow(cells: [
-                  DataCell(Text(data.projectName, style: const TextStyle(fontWeight: FontWeight.w500))),
-                  DataCell(Text(data.clientName ?? 'N/A')),
-                  DataCell(Text(data.pricingModel.split('_').map((s) => s[0].toUpperCase() + s.substring(1)).join(' '))),
-                  DataCell(Text(data.totalHours.toStringAsFixed(1), textAlign: TextAlign.right)),
-                  DataCell(Text(_currencyFormat.format(data.totalLabourCost + data.totalExpenses), textAlign: TextAlign.right)),
-                  DataCell(Text(_currencyFormat.format(data.totalBilledValue), textAlign: TextAlign.right)),
-                  DataCell(Text(_currencyFormat.format(data.profitLoss))),
-                ])).toList(),
+                rows: reportData
+                    .map((data) => DataRow(cells: [
+                          DataCell(Text(data.projectName,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w500))),
+                          DataCell(Text(data.clientName ?? 'N/A')),
+                          DataCell(Text(data.pricingModel
+                              .split('_')
+                              .map((s) =>
+                                  s[0].toUpperCase() + s.substring(1))
+                              .join(' '))),
+                          DataCell(Text(data.totalHours.toStringAsFixed(1),
+                              textAlign: TextAlign.right)),
+                          DataCell(Text(_currencyFormat.format(data.laborCost),
+                              textAlign: TextAlign.right)),
+                          DataCell(Text(_currencyFormat.format(data.materialsCost),
+                              textAlign: TextAlign.right)),
+                          DataCell(Text(_currencyFormat.format(data.totalCost),
+                              textAlign: TextAlign.right)),
+                          DataCell(Text(
+                              _currencyFormat.format(data.totalBilledValue),
+                              textAlign: TextAlign.right)),
+                          DataCell(Text(_currencyFormat.format(data.profitLoss))),
+                        ]))
+                    .toList(),
               ),
             ),
           ],

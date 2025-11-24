@@ -43,6 +43,7 @@ class ProjectRepository {
     // 3. Fetch Burden Rate (This is the critical line that failed silently)
     // Now correctly calls the stable getBurdenRate method from SettingsService.
     final double companyBurdenRate = await settingsService.getBurdenRate();
+    final double markupPercentage = (await settingsService.loadSettings()).expenseMarkupPercentage;
 
     // --- Data Extraction and Financial Calculations ---
 
@@ -70,6 +71,10 @@ class ProjectRepository {
     }
 
     final profitLoss = totalBilledValue - totalLabourCost - totalExpenses;
+    // Calculate materials cost with markup and total cost
+    final double materialsCost = totalExpenses * (1 + (markupPercentage / 100));
+    final double laborCost = totalLabourCost;
+    final double totalCost = laborCost + materialsCost;
     // -----------------------------------------------------------------------
 
     return ProjectSummaryViewModel(
@@ -78,9 +83,11 @@ class ProjectRepository {
       clientName: clientName,
       pricingModel: pricingModel,
       billedRate: billedRate,
+      fixedPrice: fixedPrice,
       totalHours: totalHours,
-      totalExpenses: totalExpenses,
-      totalLabourCost: totalLabourCost,
+      laborCost: laborCost,
+      materialsCost: materialsCost,
+      totalCost: totalCost,
       totalBilledValue: totalBilledValue,
       profitLoss: profitLoss,
     );

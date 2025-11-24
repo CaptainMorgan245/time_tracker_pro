@@ -325,8 +325,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             if (!snapshot.hasData || snapshot.data == null) {
               return const Center(child: Text('Project details not found.'));
             }
-            final summaryData = snapshot.data!;
-            return ProjectSummaryCard(summaryData: summaryData);
+            return ProjectSummaryCard(summaryData: snapshot.data!);
           },
         );
 

@@ -604,9 +604,11 @@ class ProjectSummaryViewModel {
   final String projectName;
   final String pricingModel;
   final double billedRate;
+  final double? fixedPrice; // ADDED: To carry the fixed price for the report
   final double totalHours;
-  final double totalExpenses;
-  final double totalLabourCost;
+  final double laborCost; // RENAMED: from totalLabourCost
+  final double materialsCost; // RENAMED: from totalExpenses, will include markup
+  final double totalCost; // ADDED: laborCost + materialsCost
   final double totalBilledValue;
   final String? clientName;
   final double profitLoss;
@@ -616,9 +618,11 @@ class ProjectSummaryViewModel {
     required this.projectName,
     required this.pricingModel,
     required this.billedRate,
+    this.fixedPrice,
     required this.totalHours,
-    required this.totalExpenses,
-    required this.totalLabourCost,
+    required this.laborCost,
+    required this.materialsCost,
+    required this.totalCost,
     required this.totalBilledValue,
     required this.clientName,
     required this.profitLoss,
@@ -626,7 +630,8 @@ class ProjectSummaryViewModel {
 
   @override
   String toString() {
-    return 'ProjectSummary(name: $projectName, Hours: ${totalHours.toStringAsFixed(2)}, Expenses: ${totalExpenses.toStringAsFixed(2)}, P/L: ${profitLoss.toStringAsFixed(2)})';
+    // UPDATED: toString for better debugging
+    return 'ProjectSummary(name: $projectName, Hours: ${totalHours.toStringAsFixed(2)}, Labor: ${laborCost.toStringAsFixed(2)}, Materials: ${materialsCost.toStringAsFixed(2)}, Total Cost: ${totalCost.toStringAsFixed(2)}, P/L: ${profitLoss.toStringAsFixed(2)})';
   }
 }
 
