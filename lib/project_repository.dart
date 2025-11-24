@@ -43,7 +43,7 @@ class ProjectRepository {
     // 3. Fetch Burden Rate (This is the critical line that failed silently)
     // Now correctly calls the stable getBurdenRate method from SettingsService.
     final double companyBurdenRate = await settingsService.getBurdenRate();
-    final double markupPercentage = (await settingsService.loadSettings()).expenseMarkupPercentage;
+    final double markupPercentage = (await settingsService.loadSettings()).expenseMarkupPercentage ?? 0.0;
 
     // --- Data Extraction and Financial Calculations ---
 
