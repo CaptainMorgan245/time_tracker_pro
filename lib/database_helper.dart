@@ -22,7 +22,7 @@ class DatabaseHelperV2 {
   static const String _dbName = 'time_tracker_pro.db';
 
   // MODIFICATION 1: Bump version to 4
-  static const int _dbVersion = 5;
+  static const int _dbVersion = 6;
 
   final ValueNotifier<int> databaseNotifier = ValueNotifier(0);
 
@@ -110,8 +110,14 @@ class DatabaseHelperV2 {
         if (oldVersion < 5) {
           await db.execute("ALTER TABLE settings ADD COLUMN expense_markup_percentage REAL DEFAULT 0.0");
           debugPrint('[DB_V2] V5 Migration: Added expense_markup_percentage column to settings table.');
-  }
+        }  // <-- This brace was missing
+
+        if (oldVersion < 6) {
+          await db.execute("ALTER TABLE projects ADD COLUMN expense_markup_percentage REAL DEFAULT 15.0");
+          debugPrint('[DB_V2] V6 Migration: Added expense_markup_percentage column to projects table.');
+        }
       },
+
       onDowngrade: onDatabaseDowngradeDelete,
     );
   }

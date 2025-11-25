@@ -66,12 +66,13 @@ class Project {
   final String projectName;
   final int clientId;
   final String? location;
-  final String pricingModel; // 'hourly', 'fixed'
+  final String pricingModel;
   final bool isCompleted;
   final DateTime? completionDate;
   final bool isInternal;
   final double? billedHourlyRate;
   final double? fixedPrice;
+  final double expenseMarkupPercentage;
 
   const Project({
     this.id,
@@ -84,6 +85,7 @@ class Project {
     this.isInternal = false,
     this.billedHourlyRate,
     this.fixedPrice,
+    this.expenseMarkupPercentage = 15.0,
   });
 
   Map<String, dynamic> toMap() {
@@ -97,7 +99,8 @@ class Project {
       'completion_date': completionDate?.toIso8601String(),
       'is_internal': isInternal ? 1 : 0,
       'billed_hourly_rate': billedHourlyRate,
-      'project_price': fixedPrice, // DB column is 'project_price'
+      'project_price': fixedPrice,
+      'expense_markup_percentage': expenseMarkupPercentage,
     };
   }
 
@@ -109,12 +112,11 @@ class Project {
       location: map['location'],
       pricingModel: map['pricing_model'] ?? 'hourly',
       isCompleted: map['is_completed'] == 1,
-      completionDate: map['completion_date'] != null
-          ? DateTime.tryParse(map['completion_date'])
-          : null,
+      completionDate: map['completion_date'] != null ? DateTime.tryParse(map['completion_date']) : null,
       isInternal: map['is_internal'] == 1,
       billedHourlyRate: (map['billed_hourly_rate'] as num?)?.toDouble(),
-      fixedPrice: (map['project_price'] as num?)?.toDouble(), // DB column is 'project_price'
+      fixedPrice: (map['project_price'] as num?)?.toDouble(),
+      expenseMarkupPercentage: (map['expense_markup_percentage'] as num?)?.toDouble() ?? 15.0,
     );
   }
 
@@ -129,6 +131,7 @@ class Project {
     bool? isInternal,
     double? billedHourlyRate,
     double? fixedPrice,
+    double? expenseMarkupPercentage,
   }) {
     return Project(
       id: id ?? this.id,
@@ -141,6 +144,7 @@ class Project {
       isInternal: isInternal ?? this.isInternal,
       billedHourlyRate: billedHourlyRate ?? this.billedHourlyRate,
       fixedPrice: fixedPrice ?? this.fixedPrice,
+      expenseMarkupPercentage: expenseMarkupPercentage ?? this.expenseMarkupPercentage,
     );
   }
 
@@ -223,7 +227,9 @@ class EmployeeSummaryViewModel {
     required this.projectsCount,
     required this.totalHours,
     required this.totalBilledValue,
-  });
+
+  }
+  );
 
   @override
   String toString() {
