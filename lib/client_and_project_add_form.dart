@@ -5,6 +5,7 @@ import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/client_repository.dart';
 import 'package:time_tracker_pro/project_repository.dart';
 import 'package:flutter/services.dart';
+import 'package:time_tracker_pro/services/settings_service.dart';
 
 class ClientAndProjectAddForm extends StatefulWidget {
   final List<Client> clients;
@@ -32,11 +33,27 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
   final TextEditingController _locationController = TextEditingController();
   final TextEditingController _billedHourlyRateController = TextEditingController();
   final TextEditingController _fixedPriceController = TextEditingController();
+  final TextEditingController _expenseMarkupController = TextEditingController();
 
   Client? _selectedClient;
   String _selectedPricingModel = 'hourly';
   bool _isNewClient = false;
   bool _isSubmitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDefaultMarkup();
+  }
+
+  Future<void> _loadDefaultMarkup() async {
+    final settings = await SettingsService.instance.loadSettings();
+    if (mounted) {
+      setState(() {
+        _expenseMarkupController.text = (settings.expenseMarkupPercentage ?? 15.0).toString();
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -47,6 +64,7 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
     _locationController.dispose();
     _billedHourlyRateController.dispose();
     _fixedPriceController.dispose();
+    _expenseMarkupController.dispose();
     super.dispose();
   }
 
@@ -58,6 +76,8 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
     _locationController.clear();
     _billedHourlyRateController.clear();
     _fixedPriceController.clear();
+    _expenseMarkupController.clear();
+    _loadDefaultMarkup();
     setState(() {
       _selectedClient = null;
       _isNewClient = false;
@@ -118,6 +138,7 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
           fixedPrice: _selectedPricingModel != 'hourly' && _fixedPriceController.text.isNotEmpty
               ? double.tryParse(_fixedPriceController.text)
               : null,
+          expenseMarkupPercentage: double.tryParse(_expenseMarkupController.text) ?? 15.0,
         );
         await _projectRepo.insertProject(newProject);
       }
@@ -275,6 +296,15 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
                       inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d\.]'))],
                     ),
                   ),
+                SizedBox(
+                  width: itemWidth,
+                  child: TextField(
+                    controller: _expenseMarkupController,
+                    decoration: const InputDecoration(labelText: 'Expense Markup %'),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d\.]'))],
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 24),

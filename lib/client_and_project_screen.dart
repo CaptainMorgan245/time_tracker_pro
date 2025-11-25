@@ -1,6 +1,7 @@
 // lib/client_and_project_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/client_repository.dart';
 import 'package:time_tracker_pro/project_repository.dart';
@@ -137,6 +138,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
 
     // Use a single controller for both 'fixed' and 'project_based' prices.
     final fixedPriceController = TextEditingController(text: project.fixedPrice?.toString());
+    final expenseMarkupController = TextEditingController(text: project.expenseMarkupPercentage.toString());
 
     // FIX 1: Normalize the initial value from the database to prevent RSOD.
     String? selectedPricingModel = project.pricingModel;
@@ -215,6 +217,13 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                             keyboardType: TextInputType.number,
                           ),
                         ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: expenseMarkupController,
+                        decoration: const InputDecoration(labelText: 'Expense Markup %'),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[\d\.]'))],
+                      ),
                     ],
                   ),
                 ),
@@ -282,6 +291,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                           pricingModel: selectedPricingModel,
                           billedHourlyRate: hourlyRate,
                           fixedPrice: newFixedPrice,
+                          expenseMarkupPercentage: double.tryParse(expenseMarkupController.text) ?? 15.0,
                           // If 'projectBasedPrice' exists in the model, set it to null
                           // to explicitly only use fixedPrice, respecting the DB schema.
                           // projectBasedPrice: null,
