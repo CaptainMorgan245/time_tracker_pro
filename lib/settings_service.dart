@@ -3,6 +3,7 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/settings_model.dart';
+import 'package:flutter/foundation.dart';  // <-- ADD THIS LINE
 
 class SettingsService {
   SettingsService._privateConstructor();
@@ -10,6 +11,8 @@ class SettingsService {
 
   final _databaseHelper = DatabaseHelperV2.instance;
   final String tableName = 'settings';
+
+
 
   /// Checks if setup has been completed by checking the setup_completed flag.
   Future<bool> hasSettings() async {
@@ -62,5 +65,11 @@ class SettingsService {
       );
       return true; // Return TRUE because it was a new insert.
     }
+  }
+  /// NEW: Method to retrieve the burden rate for the ProjectRepository
+  Future<double> getBurdenRate() async {
+    final settings = await loadSettings();
+    // Return the stored burden rate, or fall back to 50.0 if still null
+    return settings.burdenRate;
   }
 }

@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/dashboard_screen.dart';
 import 'package:time_tracker_pro/settings_screen.dart';
-import 'package:time_tracker_pro/settings_service.dart';
+import 'package:time_tracker_pro/services/settings_service.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'dart:io' show Platform;
 

@@ -6,7 +6,7 @@ import 'package:time_tracker_pro/models.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:time_tracker_pro/dropdown_repository.dart';
-import 'package:time_tracker_pro/services/settings_service.dart';
+import 'package:time_tracker_pro/settings_service.dart';
 import 'package:time_tracker_pro/models/analytics_models.dart';
 
 class ProjectRepository {
@@ -32,7 +32,7 @@ class ProjectRepository {
 
     final projectMap = projectMaps.first;
 
-    // 2. Fetch aggregated summary details (time, expenses, client name)
+    // 2. Fetch aggregated summary details, which now includes true labor cost
     final summaryDetails = await dropdownRepo.getProjectSummaryDetails(projectId);
 
     if (summaryDetails.isEmpty || !summaryDetails.containsKey('client_name')) {
@@ -40,10 +40,9 @@ class ProjectRepository {
       throw Exception("Summary aggregation failed due to missing keys or empty data.");
     }
 
-    // 3. Fetch Burden Rate (This is the critical line that failed silently)
-    // Now correctly calls the stable getBurdenRate method from SettingsService.
+    // 3. Fetch global burden rate for fixed-price calculations
     final double companyBurdenRate = await settingsService.getBurdenRate();
-    final double markupPercentage = (await settingsService.loadSettings()).expenseMarkupPercentage ?? 0.0;
+    final double markupPercentage = (projectMap['expense_markup_percentage'] as num?)?.toDouble() ?? 15.0;
 
     // --- Data Extraction and Financial Calculations ---
 
@@ -53,29 +52,27 @@ class ProjectRepository {
     final String? clientName = summaryDetails['client_name'] as String?;
     final double totalHours = (summaryDetails['total_hours'] as num? ?? 0.0).toDouble();
     final double totalExpenses = (summaryDetails['total_expenses'] as num? ?? 0.0).toDouble();
-
+    // Get the true labor cost from our updated query
+    final double trueLaborCost = (summaryDetails['total_labor_cost'] as num? ?? 0.0).toDouble();
     final double billedHourlyRate = (projectMap['billed_hourly_rate'] as num? ?? 0.0).toDouble();
     final double fixedPrice = (projectMap['project_price'] as num? ?? 0.0).toDouble();
 
     final double billedRate = (pricingModel == 'hourly') ? billedHourlyRate : fixedPrice;
 
-    final double totalLabourCost;
+    // --- CORRECTED LOGIC FOR LABOR COST AND BILLED VALUE ---
+    final double laborCost = trueLaborCost; // This is the final INTERNAL cost of labor
     final double totalBilledValue;
 
     if (pricingModel == 'fixed' || pricingModel == 'project_based') {
-      totalLabourCost = totalHours * companyBurdenRate;
       totalBilledValue = fixedPrice;
-    } else {
-      totalLabourCost = totalHours * billedHourlyRate;
+    } else { // 'hourly'
       totalBilledValue = totalHours * billedHourlyRate;
     }
-
-    final profitLoss = totalBilledValue - totalLabourCost - totalExpenses;
-    // Calculate materials cost with markup and total cost
+    // DELETE LINE:debugPrint('*** FINAL DEBUG: laborCost=$laborCost, totalBilledValue=$totalBilledValue ***');
     final double materialsCost = totalExpenses * (1 + (markupPercentage / 100));
-    final double laborCost = totalLabourCost;
     final double totalCost = laborCost + materialsCost;
-    // -----------------------------------------------------------------------
+    final double profitLoss = totalBilledValue - totalCost;
+    // --------------------------------------------------------
 
     return ProjectSummaryViewModel(
       projectId: projectId,

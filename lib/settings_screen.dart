@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/settings_model.dart';
-import 'package:time_tracker_pro/settings_service.dart';
+import 'package:time_tracker_pro/services/settings_service.dart';
 import 'package:time_tracker_pro/expenses_screen.dart';
 import 'package:time_tracker_pro/personnel_screen.dart';
 import 'package:time_tracker_pro/burden_rate_settings_screen.dart';

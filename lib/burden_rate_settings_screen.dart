@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:time_tracker_pro/settings_service.dart';import 'package:time_tracker_pro/settings_model.dart';
+import 'package:time_tracker_pro/services/settings_service.dart';import 'package:time_tracker_pro/settings_model.dart';
 
 // start class: BurdenRateSettingsScreen
 class BurdenRateSettingsScreen extends StatefulWidget {
@@ -82,8 +82,10 @@ class _BurdenRateSettingsScreenState extends State<BurdenRateSettingsScreen> {
 
     // 2. Create the final, fully updated settings object.
     // This includes the general settings from step 1 AND the new burden rate.
-    final updatedSettings = generalSettings.copyWith(companyHourlyRate: rate);
-
+    final updatedSettings = generalSettings.copyWith(
+      burdenRate: rate,
+      companyHourlyRate: rate,
+    );
     // 3. Save the single, unified settings object.
     await _settingsService.saveSettings(updatedSettings);
 

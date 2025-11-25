@@ -1,61 +1,77 @@
-// lib/services/settings_service.dart
+// lib/settings_service.dart
 
-import 'dart:async';
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:time_tracker_pro/models.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:time_tracker_pro/database_helper.dart';
+import 'package:time_tracker_pro/settings_model.dart';
+import 'package:flutter/foundation.dart';  // <-- ADD THIS LINE
 
 class SettingsService {
   SettingsService._privateConstructor();
   static final SettingsService instance = SettingsService._privateConstructor();
 
-  static const String _settingsKey = 'app_settings';
+  final _databaseHelper = DatabaseHelperV2.instance;
+  final String tableName = 'settings';
 
-  Future<AppSettings> loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    final String? settingsJson = prefs.getString(_settingsKey);
 
-    if (settingsJson != null) {
-      try {
-        final Map<String, dynamic> settingsMap = jsonDecode(settingsJson);
-        return AppSettings.fromMap(settingsMap);
-      } catch (e) {
-        // Log error and return default
-        return _createDefaultSettings();
-      }
+
+  /// Checks if setup has been completed by checking the setup_completed flag.
+  Future<bool> hasSettings() async {
+    final db = await _databaseHelper.database;
+    final List<Map<String, dynamic>> maps = await db.query(tableName, limit: 1);
+    if (maps.isEmpty) return false;
+    return (maps.first['setup_completed'] as int?) == 1;
+  }
+
+  /// Loads settings from the database.
+  /// If no settings exist, it returns a default SettingsModel instance.
+  Future<SettingsModel> loadSettings() async {
+    final db = await _databaseHelper.database;
+    final List<Map<String, dynamic>> maps = await db.query(tableName, limit: 1);
+
+    if (maps.isNotEmpty) {
+      return SettingsModel.fromMap(maps.first);
     }
-    return _createDefaultSettings();
+    // This should theoretically not be hit on subsequent runs, but it's safe to have.
+    return SettingsModel();
   }
 
-  Future<void> saveSettings(AppSettings settings) async {
-    final prefs = await SharedPreferences.getInstance();
-    final String settingsJson = jsonEncode(settings.toMap());
-    await prefs.setString(_settingsKey, settingsJson);
-  }
+  /// Saves settings. Returns `true` if it was a new insert, `false` if it was an update.
+  Future<bool> saveSettings(SettingsModel settings) async {
+    final db = await _databaseHelper.database;
 
-  AppSettings _createDefaultSettings() {
-    return AppSettings.fromMap({
-      'employee_number_prefix': 'EMP',
-      'next_employee_number': 100,
-      'vehicle_designations': 'Truck 1,Van 1,Excavator',  // ← STRING not List
-      'vendors': 'Home Depot,Esso,Uline',                 // ← STRING not List
-      'company_hourly_rate': 75.0,
-      'burden_rate': 50.0,
-      'time_rounding_interval': 15,
-      'auto_backup_reminder_frequency': 10,
-      'app_runs_since_backup': 0,
-      'measurement_system': 'metric',
-      'default_report_months': 3,
-      'expense_markup_percentage': 0.0,
-    });
-  }
+    final List<Map<String, dynamic>> existingMaps = await db.query(tableName, limit: 1);
+    final bool exists = existingMaps.isNotEmpty;
 
-  // NEW: Method to retrieve the single required value for the ProjectRepository
+    if (exists) {
+      // Update existing settings. The 'id' is always 1.
+      await db.update(
+        tableName,
+        settings.toMap(),
+        where: 'id = ?',
+        whereArgs: [1],
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      return false; // Return FALSE because it was an update.
+    } else {
+      // Insert new settings for the very first time.
+      // Ensure the first record has the static ID of 1.
+      final settingsMap = settings.toMap();
+      settingsMap['id'] = 1;
+
+      await db.insert(
+        tableName,
+        settingsMap,
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+      return true; // Return TRUE because it was a new insert.
+    }
+  }
+  /// NEW: Method to retrieve the burden rate for the ProjectRepository
   Future<double> getBurdenRate() async {
+    debugPrint('*** GET BURDEN RATE CALLED ***');
     final settings = await loadSettings();
     // Return the stored burden rate, or fall back to 50.0 if still null
-    return settings.burdenRate ?? 50.0;
+    debugPrint('*** GET BURDEN RATE: burdenRate=${settings.burdenRate}, settings=$settings ***');
+    return settings.burdenRate;
   }
 }
-
-// lib/services/settings_service.dart

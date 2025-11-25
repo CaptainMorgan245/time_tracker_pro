@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/cost_record_form.dart';
 import 'package:time_tracker_pro/project_repository.dart';
-import 'package:time_tracker_pro/settings_service.dart';
+import 'package:time_tracker_pro/services/settings_service.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/settings_model.dart';
 import 'package:intl/intl.dart';
