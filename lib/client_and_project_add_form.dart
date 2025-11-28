@@ -5,7 +5,8 @@ import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/client_repository.dart';
 import 'package:time_tracker_pro/project_repository.dart';
 import 'package:flutter/services.dart';
-import 'package:time_tracker_pro/services/settings_service.dart';
+import 'package:time_tracker_pro/database_helper.dart';
+import 'package:time_tracker_pro/settings_model.dart';
 
 class ClientAndProjectAddForm extends StatefulWidget {
   final List<Client> clients;
@@ -24,6 +25,7 @@ class ClientAndProjectAddForm extends StatefulWidget {
 class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
   final ClientRepository _clientRepo = ClientRepository();
   final ProjectRepository _projectRepo = ProjectRepository();
+  final _dbHelper = DatabaseHelperV2.instance;
 
   final TextEditingController _clientNameController = TextEditingController();
   final TextEditingController _contactPersonController = TextEditingController();
@@ -47,10 +49,15 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
   }
 
   Future<void> _loadDefaultMarkup() async {
-    final settings = await SettingsService.instance.loadSettings();
+    final db = await _dbHelper.database;
+    final settingsMap = await db.query('settings', where: 'id = ?', whereArgs: [1]);
+    final settings = settingsMap.isNotEmpty
+        ? SettingsModel.fromMap(settingsMap.first)
+        : SettingsModel();
+
     if (mounted) {
       setState(() {
-        _expenseMarkupController.text = (settings.expenseMarkupPercentage ?? 15.0).toString();
+        _expenseMarkupController.text = (settings.expenseMarkupPercentage).toString();
       });
     }
   }

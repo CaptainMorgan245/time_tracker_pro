@@ -3,7 +3,8 @@
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/dashboard_screen.dart';
 import 'package:time_tracker_pro/settings_screen.dart';
-import 'package:time_tracker_pro/services/settings_service.dart';
+import 'package:time_tracker_pro/database_helper.dart';
+import 'package:time_tracker_pro/settings_model.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'dart:io' show Platform;
 
@@ -25,6 +26,19 @@ Future<void> main() async {
 
 class TimeTrackerProApp extends StatelessWidget {
   const TimeTrackerProApp({super.key});
+
+  Future<bool> _hasSettings() async {
+    try {
+      final db = await DatabaseHelperV2.instance.database;
+      final settingsMap = await db.query('settings', where: 'id = ?', whereArgs: [1]);
+      if (settingsMap.isEmpty) return false;
+
+      final settings = SettingsModel.fromMap(settingsMap.first);
+      return settings.setupCompleted;
+    } catch (e) {
+      return false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -88,7 +102,7 @@ class TimeTrackerProApp extends StatelessWidget {
         ),
       ),
       home: FutureBuilder<bool>(
-        future: SettingsService.instance.hasSettings(),
+        future: _hasSettings(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return Scaffold(
@@ -96,7 +110,7 @@ class TimeTrackerProApp extends StatelessWidget {
               body: const Center(child: CircularProgressIndicator()),
             );
           }
-          
+
           // Handle errors gracefully
           if (snapshot.hasError) {
             return Scaffold(
@@ -158,7 +172,7 @@ class TimeTrackerProApp extends StatelessWidget {
               ),
             );
           }
-          
+
           if (snapshot.hasData && snapshot.data!) {
             return const DashboardScreen();
           } else {

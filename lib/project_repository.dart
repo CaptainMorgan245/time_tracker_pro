@@ -6,13 +6,12 @@ import 'package:time_tracker_pro/models.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:time_tracker_pro/dropdown_repository.dart';
-import 'package:time_tracker_pro/settings_service.dart';
+import 'package:time_tracker_pro/settings_model.dart';
 import 'package:time_tracker_pro/models/analytics_models.dart';
 
 class ProjectRepository {
   final dbHelper = DatabaseHelperV2.instance;
   final DropdownRepository dropdownRepo = DropdownRepository();
-  final SettingsService settingsService = SettingsService.instance;
 
   // =========================================================================
   // ANALYTICS METHODS
@@ -40,8 +39,12 @@ class ProjectRepository {
       throw Exception("Summary aggregation failed due to missing keys or empty data.");
     }
 
-    // 3. Fetch global burden rate for fixed-price calculations
-    final double companyBurdenRate = await settingsService.getBurdenRate();
+    // 3. Fetch global burden rate for fixed-price calculations directly from database
+    final settingsMap = await db.query('settings', where: 'id = ?', whereArgs: [1]);
+    final settings = settingsMap.isNotEmpty
+        ? SettingsModel.fromMap(settingsMap.first)
+        : SettingsModel();
+    final double companyBurdenRate = settings.burdenRate;
     final double markupPercentage = (projectMap['expense_markup_percentage'] as num?)?.toDouble() ?? 15.0;
 
     // --- Data Extraction and Financial Calculations ---

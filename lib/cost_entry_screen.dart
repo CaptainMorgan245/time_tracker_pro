@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/cost_record_form.dart';
 import 'package:time_tracker_pro/project_repository.dart';
-import 'package:time_tracker_pro/services/settings_service.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/settings_model.dart';
 import 'package:intl/intl.dart';
@@ -55,7 +54,7 @@ class CostRecordFormTopRow extends StatelessWidget {
                     ? 0  // Internal project ID
                     : formStateKey.currentState?.selectedProjectId;
 
-                return DropdownButtonFormField<int>(
+                return DropdownButtonFormField<int?>(
                   decoration: InputDecoration(
                     labelText: 'Select Project',
                     suffixIcon: isProjectDropdownEnabled ? const Text('*') : null,
@@ -73,15 +72,21 @@ class CostRecordFormTopRow extends StatelessWidget {
                     }
                   }
                       : null,
-                  items: projects.map((project) {
-                    final displayName = project.isInternal
-                        ? 'Internal Company Project'
-                        : project.projectName;
-                    return DropdownMenuItem<int>(
-                      value: project.id,
-                      child: Text(displayName, overflow: TextOverflow.ellipsis),
-                    );
-                  }).toList(),
+                  items: [
+                    const DropdownMenuItem<int?>(
+                      value: null,
+                      child: Text('-- Select Project --', style: TextStyle(fontStyle: FontStyle.italic)),
+                    ),
+                    ...projects.map((project) {
+                      final displayName = project.isInternal
+                          ? 'Internal Company Project'
+                          : project.projectName;
+                      return DropdownMenuItem<int?>(
+                        value: project.id,
+                        child: Text(displayName, overflow: TextOverflow.ellipsis),
+                      );
+                    }).toList(),
+                  ],
                 );
               },
             ),
@@ -213,7 +218,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   final _scrollController = ScrollController();
 
   final _projectRepo = ProjectRepository();
-  final _settingsService = SettingsService.instance;
+  final _dbHelper = DatabaseHelperV2.instance;
   final dbNotifier = DatabaseHelperV2.instance.databaseNotifier;
 
   bool _isEditing = false;
@@ -228,7 +233,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   final ValueNotifier<bool> _isCompanyExpenseNotifier = ValueNotifier(false);
 
   List<Project> _allProjects = [];
-  int? _selectedProjectIdForFiltering;
+  int? _selectedProjectIdForFiltering = null;
 
   @override
   void initState() {
@@ -264,15 +269,20 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   Future<void> _loadAllData() async {
     if (mounted) setState(() => _isLoading = true);
     try {
+      // Load settings directly from database
+      final db = await _dbHelper.database;
+      final settingsMap = await db.query('settings', where: 'id = ?', whereArgs: [1]);
+      final settings = settingsMap.isNotEmpty
+          ? SettingsModel.fromMap(settingsMap.first)
+          : SettingsModel();
+
       final dataFutures = [
         _projectRepo.getProjects(),
         DatabaseHelperV2.instance.getExpenseCategoriesV2(),
-        _settingsService.loadSettings(),
       ];
       final results = await Future.wait(dataFutures);
       final allProjects = results[0] as List<Project>;
       final categories = results[1] as List<ExpenseCategory>;
-      final settings = results[2] as SettingsModel;
 
       _allProjects = allProjects;
 
@@ -309,6 +319,8 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   void _applyProjectFilter(bool showCompleted) {
     setState(() {
       _showCompletedProjects = showCompleted;
+      // Reset filtering to show all projects when toggling
+      _selectedProjectIdForFiltering = null;
     });
 
     if (showCompleted) {
@@ -317,18 +329,18 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
       _filteredProjectsNotifier.value = _allProjects.where((p) => !p.isCompleted || p.isInternal).toList();
     }
 
-    // Reset form with first available project from NEW filtered list
+    // Set form dropdown to first available project, but DON'T filter the list
     if (_filteredProjectsNotifier.value.isNotEmpty) {
       final firstNonInternal = _filteredProjectsNotifier.value.firstWhere(
               (p) => !p.isInternal,
           orElse: () => _filteredProjectsNotifier.value.first
       );
       _formStateKey.currentState?.selectedProjectId = firstNonInternal.id;
-      _selectedProjectIdForFiltering = firstNonInternal.id;
+      // DON'T set _selectedProjectIdForFiltering here - leave it null to show all projects
     }
   }
 
-  void _updateSelectedProjectFilter(int projectId) {
+  void _updateSelectedProjectFilter(int? projectId) {
     setState(() {
       _selectedProjectIdForFiltering = projectId;
     });
@@ -403,7 +415,11 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
       setState(() {
         _isEditing = false;
         _isCompanyExpenseNotifier.value = false;
+        _selectedProjectIdForFiltering = null; // Clear project filter to show all
       });
+
+      // Clear dropdown to placeholder
+      _formStateKey.currentState?.setSelectedProjectId(null);
     }
   }
 
@@ -414,6 +430,10 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
       } else {
         await DatabaseHelperV2.instance.addMaterialV2(expense);
       }
+
+      // TRIGGER REFRESH - notify listeners that data changed
+      DatabaseHelperV2.instance.databaseNotifier.value++;
+
       if (mounted) {
         if (!isEditing) {
           _handleClearOrCancel();
@@ -579,12 +599,12 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                           child: ListTile(
                             leading: const Icon(Icons.receipt, color: Colors.green),
                             title: Text(
-                              '$vendorName | Cost: $costAmount | $itemName',
+                              'Project: $projectName | Cost: $costAmount | $itemName',
                               style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 14),
                               overflow: TextOverflow.ellipsis,
                             ),
                             subtitle: Text(
-                              'Project: $projectName | Category: ${record.expenseCategory ?? 'N/A'}',
+                              'Vendor: $vendorName | Category: ${record.expenseCategory ?? 'N/A'}',
                             ),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,

@@ -2,7 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:time_tracker_pro/services/settings_service.dart';import 'package:time_tracker_pro/settings_model.dart';
+import 'package:time_tracker_pro/database_helper.dart';
+import 'package:time_tracker_pro/settings_model.dart';
 
 // start class: BurdenRateSettingsScreen
 class BurdenRateSettingsScreen extends StatefulWidget {
@@ -30,7 +31,7 @@ class BurdenRateSettingsScreen extends StatefulWidget {
 
 // start class: _BurdenRateSettingsScreenState
 class _BurdenRateSettingsScreenState extends State<BurdenRateSettingsScreen> {
-  final SettingsService _settingsService = SettingsService.instance;
+  final _dbHelper = DatabaseHelperV2.instance;
   final TextEditingController _rateController = TextEditingController();
 
   // These controllers are for the calculator part only.
@@ -66,10 +67,10 @@ class _BurdenRateSettingsScreenState extends State<BurdenRateSettingsScreen> {
   }
   // end method: dispose
 
-  // **** COMPLETELY REWRITTEN _saveRate METHOD ****
-  // This is the core of the fix. It now reads the values from the other tab's
-  // controllers before saving.
+  // **** REFACTORED _saveRate METHOD - Direct database access ****
   Future<void> _saveRate(double rate) async {
+    final db = await _dbHelper.database;
+
     // 1. Get the current values from the General tab's controllers.
     final generalSettings = widget.settingsModel.copyWith(
       employeeNumberPrefix: widget.employeeNumberPrefixController.text.isEmpty
@@ -86,8 +87,17 @@ class _BurdenRateSettingsScreenState extends State<BurdenRateSettingsScreen> {
       burdenRate: rate,
       companyHourlyRate: rate,
     );
-    // 3. Save the single, unified settings object.
-    await _settingsService.saveSettings(updatedSettings);
+
+    // 3. Save directly to database
+    await db.update(
+      'settings',
+      updatedSettings.toMap(),
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+
+    // Notify listeners
+    _dbHelper.notifyDatabaseChanged();
 
     // 4. Update UI.
     if (!mounted) return; // This is the fix
@@ -318,4 +328,3 @@ class _BurdenRateSettingsScreenState extends State<BurdenRateSettingsScreen> {
 // end method: build
 }
 // end class: _BurdenRateSettingsScreenState
-

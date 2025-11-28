@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/models.dart';
-import 'package:time_tracker_pro/services/settings_service.dart';
+import 'package:time_tracker_pro/settings_model.dart';
 import 'package:time_tracker_pro/widgets/app_setting_list_card.dart';
 
 class ExpensesScreen extends StatefulWidget {
@@ -14,7 +14,7 @@ class ExpensesScreen extends StatefulWidget {
 }
 
 class _ExpensesScreenState extends State<ExpensesScreen> {
-  final SettingsService _settingsService = SettingsService.instance;
+  final _dbHelper = DatabaseHelperV2.instance;
 
   final TextEditingController _categoryController = TextEditingController();
   final TextEditingController _vehicleController = TextEditingController();
@@ -43,7 +43,13 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   }
 
   Future<void> _loadData() async {
-    final settings = await _settingsService.loadSettings();
+    // Load settings directly from database
+    final db = await _dbHelper.database;
+    final settingsMap = await db.query('settings', where: 'id = ?', whereArgs: [1]);
+    final settings = settingsMap.isNotEmpty
+        ? SettingsModel.fromMap(settingsMap.first)
+        : SettingsModel();
+
     final cats = await DatabaseHelperV2.instance.getExpenseCategoriesV2();
 
     if (!mounted) return;
@@ -94,15 +100,30 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     await onSave(list); // Pass the whole list to be saved
   }
 
-  // IMPROVEMENT RESTORED & NOTIFIER ADDED
+  // REFACTORED: Direct database access instead of SettingsService
   Future<void> _saveSettings({List<String>? vehicles, List<String>? vendors}) async {
-    final currentSettings = await _settingsService.loadSettings();
+    final db = await _dbHelper.database;
+
+    // Load current settings from database
+    final settingsMap = await db.query('settings', where: 'id = ?', whereArgs: [1]);
+    final currentSettings = settingsMap.isNotEmpty
+        ? SettingsModel.fromMap(settingsMap.first)
+        : SettingsModel();
+
+    // Create updated settings
     final updatedSettings = currentSettings.copyWith(
-      // Use the provided lists, or fallback to the current state lists
       vehicleDesignations: vehicles ?? _vehicles,
       vendors: vendors ?? _vendors,
     );
-    await _settingsService.saveSettings(updatedSettings);
+
+    // Save directly to database
+    await db.update(
+      'settings',
+      updatedSettings.toMap(),
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+
     // NOTIFY every other part of the app that settings have changed.
     DatabaseHelperV2.instance.databaseNotifier.value++;
   }

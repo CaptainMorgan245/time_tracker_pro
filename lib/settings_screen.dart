@@ -2,7 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/settings_model.dart';
-import 'package:time_tracker_pro/services/settings_service.dart';
+import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/expenses_screen.dart';
 import 'package:time_tracker_pro/personnel_screen.dart';
 import 'package:time_tracker_pro/burden_rate_settings_screen.dart';
@@ -24,7 +24,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
-  final SettingsService _settingsService = SettingsService.instance;
+  final _dbHelper = DatabaseHelperV2.instance;
 
   SettingsModel _settings = SettingsModel();
 
@@ -59,15 +59,18 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   // end method: dispose
 
   // start method: _loadSettings
-  // start method: _loadSettings
   Future<void> _loadSettings() async {
-    final loadedSettings = await _settingsService.loadSettings();
-    setState(() {_settings = loadedSettings; // Corrected line, removed dead code
-    employeeNumberPrefixController.text = _settings.employeeNumberPrefix ?? '';
-    nextEmployeeNumberController.text = (_settings.nextEmployeeNumber ?? 1).toString();
-    backupFrequencyController.text = _settings.autoBackupReminderFrequency.toString();
-    reportMonthsController.text = _settings.defaultReportMonths.toString();
-    expenseMarkupPercentageController.text = _settings.expenseMarkupPercentage.toStringAsFixed(2);
+    final db = await _dbHelper.database;
+    final maps = await db.query('settings', where: 'id = ?', whereArgs: [1]);
+    final loadedSettings = maps.isNotEmpty ? SettingsModel.fromMap(maps.first) : SettingsModel();
+
+    setState(() {
+      _settings = loadedSettings;
+      employeeNumberPrefixController.text = _settings.employeeNumberPrefix ?? '';
+      nextEmployeeNumberController.text = (_settings.nextEmployeeNumber ?? 1).toString();
+      backupFrequencyController.text = _settings.autoBackupReminderFrequency.toString();
+      reportMonthsController.text = _settings.defaultReportMonths.toString();
+      expenseMarkupPercentageController.text = _settings.expenseMarkupPercentage.toStringAsFixed(2);
     });
   }
 // end method: _loadSettings
@@ -89,8 +92,14 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         setupCompleted: true,  // <-- ADDED: Mark setup as complete when saving
     );
 
-    // The corrected code
-    await _settingsService.saveSettings(settings);
+    final db = await _dbHelper.database;
+    await db.update(
+      'settings',
+      settings.toMap(),
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+    _dbHelper.notifyDatabaseChanged();
 
     if (!mounted) return; // This is the fix. It checks if the widget is still on screen.
     ScaffoldMessenger.of(context).showSnackBar(

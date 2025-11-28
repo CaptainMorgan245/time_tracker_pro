@@ -144,7 +144,7 @@ class CostRecordFormState extends State<CostRecordForm> {
     widget.onCompanyExpenseToggle.value = false;
   }
 
-  void setSelectedProjectId(int projectId) {
+  void setSelectedProjectId(int? projectId) {
     setState(() {
       selectedProjectId = projectId;
     });
