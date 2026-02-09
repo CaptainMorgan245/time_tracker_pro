@@ -97,10 +97,26 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
 
     if (!mounted) return;
 
+    final activeEmployees = employees.where((e) => !e.isDeleted).toList();
+
     _projectsNotifier.value = projects.where((p) => !p.isCompleted).toList();
-    _employeesNotifier.value = employees.where((e) => !e.isDeleted).toList();
+    _employeesNotifier.value = activeEmployees;
     _allProjects = projects;
     _roles = roles;
+
+    // --- START: Safety checks to prevent RSOD ---
+    // If a selected item is no longer in the list after refresh, reset it.
+    if (_selectedEmployeeId != null) {
+      final employeeIds = activeEmployees.map((e) => e.id).toSet();
+      if (!employeeIds.contains(_selectedEmployeeId)) {
+        if (mounted) {
+          setState(() {
+            _selectedEmployeeId = null;
+          });
+        }
+      }
+    }
+    // --- END: Safety checks ---
 
     List<app_models.TimeEntry> filteredEntries = [];
     for (var record in allRecords) {
@@ -130,6 +146,20 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
         return false;
       }
       if (_endDate != null && entry.startTime.isAfter(_endDate!.add(const Duration(days: 1)))) {
+        return false;
+      }
+
+      // Filter out entries from completed projects
+      final project = _allProjects.firstWhere(
+            (p) => p.id == entry.projectId,
+        orElse: () => app_models.Project(
+            projectName: 'Unknown',
+            clientId: -1,
+            isCompleted: true,
+            pricingModel: 'unknown'
+        ),
+      );
+      if (project.isCompleted) {
         return false;
       }
 
@@ -590,23 +620,27 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
                   const SizedBox(height: 8),
 
                   // Row 3: Employee
-                  DropdownButtonFormField<int?>(
-                    decoration: const InputDecoration(
-                      labelText: 'Employee',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
-                    value: _selectedEmployeeId,
-                    items: [
-                      const DropdownMenuItem<int?>(value: null, child: Text('All Employees')),
-                      ..._employeesNotifier.value.map((employee) => DropdownMenuItem<int?>(
-                        value: employee.id,
-                        child: Text(employee.name),
-                      )),
-                    ],
-                    onChanged: (value) => setState(() => _selectedEmployeeId = value),
-                  ),
+                  ValueListenableBuilder<List<app_models.Employee>>(
+                      valueListenable: _employeesNotifier,
+                      builder: (context, employees, child) {
+                        return DropdownButtonFormField<int?>(
+                          decoration: const InputDecoration(
+                            labelText: 'Employee',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          ),
+                          value: _selectedEmployeeId,
+                          items: [
+                            const DropdownMenuItem<int?>(value: null, child: Text('All Employees')),
+                            ...employees.map((employee) => DropdownMenuItem<int?>(
+                              value: employee.id,
+                              child: Text(employee.name),
+                            )),
+                          ],
+                          onChanged: (value) => setState(() => _selectedEmployeeId = value),
+                        );
+                      }),
                   const SizedBox(height: 8),
 
                   // Action Buttons

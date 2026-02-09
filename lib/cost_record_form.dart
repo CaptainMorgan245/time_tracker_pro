@@ -15,8 +15,6 @@ class CostRecordForm extends StatefulWidget {
   final VoidCallback onClearForm;
   final bool isEditing;
   final ValueNotifier<bool> onCompanyExpenseToggle;
-  final bool isCollapsed;
-  final VoidCallback onCollapseToggle;
 
   const CostRecordForm({
     super.key,
@@ -29,8 +27,6 @@ class CostRecordForm extends StatefulWidget {
     required this.onClearForm,
     required this.isEditing,
     required this.onCompanyExpenseToggle,
-    required this.isCollapsed,
-    required this.onCollapseToggle,
   });
 
   @override
@@ -211,6 +207,92 @@ class CostRecordFormState extends State<CostRecordForm> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Only show these fields in edit mode
+            if (widget.isEditing) ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: ValueListenableBuilder<bool>(
+                      valueListenable: widget.onCompanyExpenseToggle,
+                      builder: (context, isCompanyExpense, _) {
+                        return ValueListenableBuilder<List<Project>>(
+                          valueListenable: widget.availableProjectsNotifier,
+                          builder: (context, projects, _) {
+                            final isProjectDropdownEnabled = !isCompanyExpense;
+                            final currentProjectId = isCompanyExpense ? 0 : selectedProjectId;
+
+                            return DropdownButtonFormField<int?>(
+                              decoration: const InputDecoration(
+                                labelText: 'Select Project *',
+                              ),
+                              value: currentProjectId,
+                              onChanged: isProjectDropdownEnabled
+                                  ? (int? newValue) {
+                                if (newValue != null) {
+                                  setState(() => selectedProjectId = newValue);
+                                }
+                              }
+                                  : null,
+                              items: [
+                                const DropdownMenuItem<int?>(
+                                  value: null,
+                                  child: Text('-- Select Project --', style: TextStyle(fontStyle: FontStyle.italic)),
+                                ),
+                                ...projects.map((project) {
+                                  final displayName = project.isInternal
+                                      ? 'Internal Company Project'
+                                      : project.projectName;
+                                  return DropdownMenuItem<int?>(
+                                    value: project.id,
+                                    child: Text(displayName, overflow: TextOverflow.ellipsis),
+                                  );
+                                }).toList(),
+                              ],
+                            );
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    flex: 2,
+                    child: TextFormField(
+                      controller: _itemNameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Item Name',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    flex: 2,
+                    child: ValueListenableBuilder<List<String>>(
+                      valueListenable: widget.expenseCategoriesNotifier,
+                      builder: (context, categories, _) {
+                        return DropdownButtonFormField<String>(
+                          decoration: const InputDecoration(
+                            labelText: 'Expense Category *',
+                          ),
+                          value: selectedExpenseCategory,
+                          items: categories.map((c) => DropdownMenuItem<String>(value: c, child: Text(c))).toList(),
+                          onChanged: (String? newValue) {
+                            setState(() {
+                              selectedExpenseCategory = newValue;
+                              isFuelCategory = (newValue == 'Fuel');
+                            });
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+            ],
+
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
