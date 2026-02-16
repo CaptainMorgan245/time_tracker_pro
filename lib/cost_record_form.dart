@@ -1,4 +1,4 @@
-// lib/cost_record_form.dart (COMPLETE FILE - Fixed with Integer Project IDs)
+// lib/cost_record_form.dart (COMPLETE FILE - With Phase Support)
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +10,7 @@ class CostRecordForm extends StatefulWidget {
   final ValueNotifier<List<String>> expenseCategoriesNotifier;
   final ValueNotifier<List<String>> vendorsNotifier;
   final ValueNotifier<List<String>> vehicleDesignationsNotifier;
+  final ValueNotifier<List<Phase>> phasesNotifier; // NEW: Phases
   final Function(JobMaterials expense, bool isEditing) onAddExpense;
   final Function(bool showCompleted) onProjectFilterToggle;
   final VoidCallback onClearForm;
@@ -22,6 +23,7 @@ class CostRecordForm extends StatefulWidget {
     required this.expenseCategoriesNotifier,
     required this.vendorsNotifier,
     required this.vehicleDesignationsNotifier,
+    required this.phasesNotifier, // NEW
     required this.onAddExpense,
     required this.onProjectFilterToggle,
     required this.onClearForm,
@@ -49,6 +51,7 @@ class CostRecordFormState extends State<CostRecordForm> {
   String? selectedExpenseCategory;
   String? _selectedVendorOrSubtrade;
   String? _selectedVehicleDesignation;
+  Phase? _selectedPhase; // NEW: Selected phase
   bool isFuelCategory = false;
 
   static const int _internalProjectId = 0;
@@ -116,6 +119,15 @@ class CostRecordFormState extends State<CostRecordForm> {
         _selectedVendorOrSubtrade = null;
       }
 
+      // NEW: Load phase from expense
+      try {
+        _selectedPhase = expense.phaseId != null
+            ? widget.phasesNotifier.value.firstWhere((p) => p.id == expense.phaseId)
+            : null;
+      } catch (e) {
+        _selectedPhase = null;
+      }
+
       selectedProjectId = expense.projectId;
     });
   }
@@ -132,6 +144,7 @@ class CostRecordFormState extends State<CostRecordForm> {
       isFuelCategory = false;
       selectedExpenseCategory = null;
       _selectedVendorOrSubtrade = null;
+      _selectedPhase = null; // NEW: Reset phase
       selectedProjectId = widget.availableProjectsNotifier.value
           .firstWhere((p) => !p.isInternal, orElse: () => widget.availableProjectsNotifier.value.first)
           .id;
@@ -180,6 +193,7 @@ class CostRecordFormState extends State<CostRecordForm> {
         isCompanyExpense: isCompanyExpenseFromParent,
         vehicleDesignation: isCompanyExpenseFromParent ? _selectedVehicleDesignation : null,
         vendorOrSubtrade: _selectedVendorOrSubtrade,
+        phaseId: _selectedPhase?.id, // NEW: Save phase ID
         unit: isFuelCategory ? 'Liters' : null,
         quantity: isCompanyExpenseFromParent ? (_quantityController.text.isNotEmpty ? double.tryParse(_quantityController.text) : null) : null,
         odometerReading: isCompanyExpenseFromParent ? (_odometerReadingController.text.isNotEmpty ? double.tryParse(_odometerReadingController.text) : null) : null,
@@ -293,11 +307,11 @@ class CostRecordFormState extends State<CostRecordForm> {
               const SizedBox(height: 16),
             ],
 
+            // NEW LAYOUT: Vendor | Date | Cost | Phase (all equal width)
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  flex: 2,
                   child: ValueListenableBuilder<List<String>>(
                     valueListenable: widget.vendorsNotifier,
                     builder: (context, vendors, _) {
@@ -315,7 +329,6 @@ class CostRecordFormState extends State<CostRecordForm> {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  flex: 2,
                   child: InkWell(
                     onTap: () => _selectPurchaseDate(context),
                     child: InputDecorator(
@@ -329,7 +342,6 @@ class CostRecordFormState extends State<CostRecordForm> {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  flex: 1,
                   child: TextFormField(
                     controller: _costController,
                     decoration: const InputDecoration(labelText: 'Cost *'),
@@ -338,6 +350,44 @@ class CostRecordFormState extends State<CostRecordForm> {
                       if (value == null || value.isEmpty) return 'Required';
                       if (double.tryParse(value) == null) return 'Invalid';
                       return null;
+                    },
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ValueListenableBuilder<List<Phase>>(
+                    valueListenable: widget.phasesNotifier,
+                    builder: (context, phases, child) {
+                      if (_selectedPhase != null && !phases.any((p) => p.id == _selectedPhase!.id)) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          setState(() {
+                            _selectedPhase = null;
+                          });
+                        });
+                      }
+                      return DropdownButtonFormField<Phase?>(
+                        decoration: const InputDecoration(
+                          labelText: 'Phase',
+                        ),
+                        value: _selectedPhase,
+                        items: [
+                          const DropdownMenuItem<Phase?>(
+                            value: null,
+                            child: Text('None'),
+                          ),
+                          ...phases.map((phase) {
+                            return DropdownMenuItem<Phase?>(
+                              value: phase,
+                              child: Text(phase.name),
+                            );
+                          }).toList(),
+                        ],
+                        onChanged: (Phase? newValue) {
+                          setState(() {
+                            _selectedPhase = newValue;
+                          });
+                        },
+                      );
                     },
                   ),
                 ),

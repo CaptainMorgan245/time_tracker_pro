@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/cost_record_form.dart';
 import 'package:time_tracker_pro/project_repository.dart';
+import 'package:time_tracker_pro/phase_repository.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/settings_model.dart';
 import 'package:intl/intl.dart';
@@ -213,6 +214,7 @@ class CostEntryScreen extends StatefulWidget {
 class _CostEntryScreenState extends State<CostEntryScreen> {
   final _formStateKey = GlobalKey<CostRecordFormState>();
   final _projectRepo = ProjectRepository();
+  PhaseRepository? _phaseRepo;
   final _dbHelper = DatabaseHelperV2.instance;
   final dbNotifier = DatabaseHelperV2.instance.databaseNotifier;
 
@@ -224,6 +226,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   final ValueNotifier<List<String>> _vendorsNotifier = ValueNotifier([]);
   final ValueNotifier<List<String>> _vehicleDesignationsNotifier = ValueNotifier([]);
   final ValueNotifier<bool> _isCompanyExpenseNotifier = ValueNotifier(false);
+  final ValueNotifier<List<Phase>> _phasesNotifier = ValueNotifier([]);
 
   List<Project> _allProjects = [];
   int? _selectedProjectIdForFiltering;
@@ -243,6 +246,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     _vendorsNotifier.dispose();
     _vehicleDesignationsNotifier.dispose();
     _isCompanyExpenseNotifier.dispose();
+    _phasesNotifier.dispose();
     super.dispose();
   }
 
@@ -250,6 +254,10 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     if (mounted) setState(() => _isLoading = true);
     try {
       final db = await _dbHelper.database;
+      _phaseRepo ??= PhaseRepository(db);
+      final phases = await _phaseRepo!.getAllPhases();
+      _phasesNotifier.value = phases;
+
       final settingsMap = await db.query('settings', where: 'id = ?', whereArgs: [1]);
       final settings = settingsMap.isNotEmpty ? SettingsModel.fromMap(settingsMap.first) : SettingsModel();
 
@@ -350,6 +358,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                   expenseCategoriesNotifier: _expenseCategoriesNotifier,
                   vendorsNotifier: _vendorsNotifier,
                   vehicleDesignationsNotifier: _vehicleDesignationsNotifier,
+                  phasesNotifier: _phasesNotifier,
                   onAddExpense: (expense, isEdit) async {
                     await _handleCostSubmission(expense, isEdit);
                     if (context.mounted) Navigator.pop(context);
@@ -433,6 +442,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                 expenseCategoriesNotifier: _expenseCategoriesNotifier,
                 vendorsNotifier: _vendorsNotifier,
                 vehicleDesignationsNotifier: _vehicleDesignationsNotifier,
+                phasesNotifier: _phasesNotifier,
                 onAddExpense: _handleCostSubmission,
                 onProjectFilterToggle: _applyProjectFilter,
                 onClearForm: _handleClearOrCancel,

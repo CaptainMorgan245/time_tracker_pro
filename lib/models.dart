@@ -229,7 +229,7 @@ class EmployeeSummaryViewModel {
     required this.totalBilledValue,
 
   }
-  );
+      );
 
   @override
   String toString() {
@@ -250,6 +250,7 @@ class TimeEntry {
   final DateTime? pauseStartTime;
   final bool isDeleted;
   final String? workDetails;
+  final int? phaseId; // NEW: Phase/tag for this time entry
 
   TimeEntry({
     this.id,
@@ -264,6 +265,7 @@ class TimeEntry {
     this.isDeleted = false,
     this.workDetails,
     this.hourlyRate,
+    this.phaseId, // NEW
   });
 
   factory TimeEntry.fromMap(Map<String, dynamic> map) {
@@ -285,6 +287,7 @@ class TimeEntry {
       isDeleted: map['is_deleted'] == 1,
       workDetails: map['work_details'],
       hourlyRate: (map['hourly_rate'] as num?)?.toDouble(),
+      phaseId: map['phase_id'], // NEW
     );
   }
 
@@ -303,6 +306,7 @@ class TimeEntry {
       'is_deleted': isDeleted ? 1 : 0,
       'work_details': workDetails,
       'hourly_rate': hourlyRate,
+      'phase_id': phaseId, // NEW
     };
   }
 
@@ -319,6 +323,7 @@ class TimeEntry {
     DateTime? pauseStartTime,
     bool? isDeleted,
     String? workDetails,
+    int? phaseId, // NEW
   }) {
     return TimeEntry(
       id: id ?? this.id,
@@ -333,6 +338,7 @@ class TimeEntry {
       pauseStartTime: pauseStartTime ?? this.pauseStartTime,
       isDeleted: isDeleted ?? this.isDeleted,
       workDetails: workDetails ?? this.workDetails,
+      phaseId: phaseId ?? this.phaseId, // NEW
     );
   }
 }
@@ -353,6 +359,7 @@ class JobMaterials {
   final bool isCompanyExpense;
   final String? vehicleDesignation;
   final String? vendorOrSubtrade;
+  final int? phaseId; // NEW: Phase/tag for this expense
 
   JobMaterials({
     this.id,
@@ -370,6 +377,7 @@ class JobMaterials {
     this.isCompanyExpense = false,
     this.vehicleDesignation,
     this.vendorOrSubtrade,
+    this.phaseId, // NEW
   });
 
   Map<String, dynamic> toMap() {
@@ -389,6 +397,7 @@ class JobMaterials {
       'is_company_expense': isCompanyExpense ? 1 : 0,
       'vehicle_designation': vehicleDesignation,
       'vendor_or_subtrade': vendorOrSubtrade,
+      'phase_id': phaseId, // NEW
     };
   }
 
@@ -409,7 +418,48 @@ class JobMaterials {
       isCompanyExpense: map['is_company_expense'] == 1,
       vehicleDesignation: map['vehicle_designation'],
       vendorOrSubtrade: map['vendor_or_subtrade'],
+      phaseId: map['phase_id'], // NEW
     );
+  }
+}
+
+// NEW: Phase model for tagging time entries and materials
+class Phase {
+  final int? id;
+  final String name;
+
+  Phase({
+    this.id,
+    required this.name,
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+    };
+  }
+
+  factory Phase.fromMap(Map<String, dynamic> map) {
+    return Phase(
+      id: map['id'],
+      name: map['name'],
+    );
+  }
+
+  Phase copyWith({
+    int? id,
+    String? name,
+  }) {
+    return Phase(
+      id: id ?? this.id,
+      name: name ?? this.name,
+    );
+  }
+
+  @override
+  String toString() {
+    return 'Phase(id: $id, name: $name)';
   }
 }
 

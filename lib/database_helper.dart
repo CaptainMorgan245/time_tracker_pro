@@ -10,7 +10,7 @@ import 'package:time_tracker_pro/models.dart';
 //import 'package:time_tracker_pro/models/project_summary.dart';
 
 // ============================================================================
-// |                  FINAL, STABLE V4 DATABASE HELPER                      |
+// |                  FINAL, STABLE V7 DATABASE HELPER                      |
 // ============================================================================
 
 class DatabaseHelperV2 {
@@ -21,8 +21,8 @@ class DatabaseHelperV2 {
   static Completer<Database>? _dbCompleter;
   static const String _dbName = 'time_tracker_pro.db';
 
-  // MODIFICATION 1: Bump version to 4
-  static const int _dbVersion = 6;
+  // MODIFICATION: Bump version to 7 for phases support
+  static const int _dbVersion = 7;
 
   final ValueNotifier<int> databaseNotifier = ValueNotifier(0);
 
@@ -110,11 +110,33 @@ class DatabaseHelperV2 {
         if (oldVersion < 5) {
           await db.execute("ALTER TABLE settings ADD COLUMN expense_markup_percentage REAL DEFAULT 0.0");
           debugPrint('[DB_V2] V5 Migration: Added expense_markup_percentage column to settings table.');
-        }  // <-- This brace was missing
+        }
 
         if (oldVersion < 6) {
           await db.execute("ALTER TABLE projects ADD COLUMN expense_markup_percentage REAL DEFAULT 15.0");
           debugPrint('[DB_V2] V6 Migration: Added expense_markup_percentage column to projects table.');
+        }
+
+        // NEW: Migration logic for version 7 (add phases support)
+        if (oldVersion < 7) {
+          // Create phases table
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS phases (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              name TEXT NOT NULL UNIQUE
+            )
+          ''');
+          debugPrint('[DB_V2] V7 Migration: Created phases table.');
+
+          // Add phase_id to time_entries
+          await db.execute("ALTER TABLE time_entries ADD COLUMN phase_id INTEGER REFERENCES phases(id)");
+          debugPrint('[DB_V2] V7 Migration: Added phase_id column to time_entries table.');
+
+          // Add phase_id to materials
+          await db.execute("ALTER TABLE materials ADD COLUMN phase_id INTEGER REFERENCES phases(id)");
+          debugPrint('[DB_V2] V7 Migration: Added phase_id column to materials table.');
+
+          debugPrint('[DB_V2] V7 Migration: Phase support migration complete.');
         }
       },
 
@@ -142,7 +164,7 @@ class DatabaseHelperV2 {
       // NOTE: Added the new 'project_price' column to the fresh creation schema
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS projects (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, project_name TEXT NOT NULL, client_id INTEGER NOT NULL, location TEXT, pricing_model TEXT DEFAULT 'hourly', is_completed INTEGER NOT NULL DEFAULT 0, completion_date TEXT, is_internal INTEGER NOT NULL DEFAULT 0, billed_hourly_rate REAL, project_price REAL, FOREIGN KEY (client_id) REFERENCES clients(id), UNIQUE(project_name, client_id)
+            id INTEGER PRIMARY KEY AUTOINCREMENT, project_name TEXT NOT NULL, client_id INTEGER NOT NULL, location TEXT, pricing_model TEXT DEFAULT 'hourly', is_completed INTEGER NOT NULL DEFAULT 0, completion_date TEXT, is_internal INTEGER NOT NULL DEFAULT 0, billed_hourly_rate REAL, project_price REAL, expense_markup_percentage REAL DEFAULT 15.0, FOREIGN KEY (client_id) REFERENCES clients(id), UNIQUE(project_name, client_id)
           )
         ''');
       await txn.execute('''
@@ -157,17 +179,23 @@ class DatabaseHelperV2 {
         ''');
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS time_entries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, employee_id INTEGER, start_time TEXT NOT NULL, end_time TEXT, paused_duration REAL DEFAULT 0.0, final_billed_duration_seconds REAL, hourly_rate REAL, is_paused INTEGER DEFAULT 0, pause_start_time TEXT, is_deleted INTEGER DEFAULT 0, work_details TEXT, FOREIGN KEY (project_id) REFERENCES projects(id), FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE SET NULL
+            id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, employee_id INTEGER, start_time TEXT NOT NULL, end_time TEXT, paused_duration REAL DEFAULT 0.0, final_billed_duration_seconds REAL, hourly_rate REAL, is_paused INTEGER DEFAULT 0, pause_start_time TEXT, is_deleted INTEGER DEFAULT 0, work_details TEXT, phase_id INTEGER, FOREIGN KEY (project_id) REFERENCES projects(id), FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE SET NULL, FOREIGN KEY (phase_id) REFERENCES phases(id)
           )
         ''');
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS materials (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, item_name TEXT NOT NULL, cost REAL NOT NULL, purchase_date TEXT, description TEXT, is_deleted INTEGER DEFAULT 0, expense_category TEXT, unit TEXT, quantity REAL, base_quantity REAL, odometer_reading REAL, is_company_expense INTEGER DEFAULT 0, vehicle_designation TEXT, vendor_or_subtrade TEXT, FOREIGN KEY (project_id) REFERENCES projects(id)
+            id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, item_name TEXT NOT NULL, cost REAL NOT NULL, purchase_date TEXT, description TEXT, is_deleted INTEGER DEFAULT 0, expense_category TEXT, unit TEXT, quantity REAL, base_quantity REAL, odometer_reading REAL, is_company_expense INTEGER DEFAULT 0, vehicle_designation TEXT, vendor_or_subtrade TEXT, phase_id INTEGER, FOREIGN KEY (project_id) REFERENCES projects(id), FOREIGN KEY (phase_id) REFERENCES phases(id)
           )
         ''');
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS expense_categories (
             id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL
+          )
+        ''');
+      // NEW: Create phases table for fresh installs
+      await txn.execute('''
+          CREATE TABLE IF NOT EXISTS phases (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE
           )
         ''');
     });
@@ -409,7 +437,8 @@ class DatabaseHelperV2 {
       'employees',
       'time_entries',
       'materials',
-      'expense_categories'
+      'expense_categories',
+      'phases' // NEW: Include phases table in export
     ];
 
     for (String tableName in tableNames) {
@@ -442,6 +471,7 @@ class DatabaseHelperV2 {
       'clients',
       'roles',
       'expense_categories',
+      'phases', // NEW: Include phases in import/deletion order
       'settings'
     ];
 
@@ -482,6 +512,7 @@ class DatabaseHelperV2 {
       'clients',
       'roles',
       'expense_categories',
+      'phases', // NEW: Include phases in deletion
       'settings'
     ];
 

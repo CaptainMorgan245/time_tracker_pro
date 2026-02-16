@@ -7,6 +7,7 @@ import 'package:time_tracker_pro/project_repository.dart';
 import 'package:time_tracker_pro/employee_repository.dart';
 import 'package:time_tracker_pro/time_entry_repository.dart';
 import 'package:time_tracker_pro/client_repository.dart';
+import 'package:time_tracker_pro/phase_repository.dart'; // NEW: Import phase repository
 import 'package:time_tracker_pro/timer_add_form.dart';
 import 'package:intl/intl.dart';
 import 'package:csv/csv.dart';
@@ -27,12 +28,14 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
   final ProjectRepository _projectRepo = ProjectRepository();
   final EmployeeRepository _employeeRepo = EmployeeRepository();
   final ClientRepository _clientRepo = ClientRepository();
+  PhaseRepository? _phaseRepo; // NEW: Phase repository
   final dbHelper = DatabaseHelperV2.instance;
 
   final GlobalKey<TimerAddFormState> _dialogFormKey = GlobalKey<TimerAddFormState>();
 
   final ValueNotifier<List<app_models.Project>> _projectsNotifier = ValueNotifier([]);
   final ValueNotifier<List<app_models.Employee>> _employeesNotifier = ValueNotifier([]);
+  final ValueNotifier<List<app_models.Phase>> _phasesNotifier = ValueNotifier([]); // NEW: Phases notifier
 
   List<app_models.TimeEntry> _allEntries = [];
   List<app_models.Client> _clients = [];
@@ -46,6 +49,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
   int? _selectedClientId;
   int? _selectedProjectId;
   int? _selectedEmployeeId;
+  int? _selectedPhaseId;
 
   @override
   void initState() {
@@ -77,6 +81,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
     dbHelper.databaseNotifier.removeListener(_loadData);
     _projectsNotifier.dispose();
     _employeesNotifier.dispose();
+    _phasesNotifier.dispose(); // NEW: Dispose phases notifier
     super.dispose();
   }
 
@@ -85,13 +90,17 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
       setState(() => _isLoading = true);
     }
 
+    // Initialize phase repository
+    final db = await dbHelper.database;
+    _phaseRepo ??= PhaseRepository(db);
+
     final allRecords = await dbHelper.getAllRecordsV2();
     final projects = await _projectRepo.getProjects();
     final employees = await _employeeRepo.getEmployees();
     final clients = await _clientRepo.getClients();
+    final phases = await _phaseRepo!.getAllPhases(); // NEW: Load phases
 
     // Load roles for employee rates
-    final db = await dbHelper.database;
     final rolesData = await db.query('roles');
     final roles = rolesData.map((r) => app_models.Role.fromMap(r)).toList();
 
@@ -101,6 +110,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
 
     _projectsNotifier.value = projects.where((p) => !p.isCompleted).toList();
     _employeesNotifier.value = activeEmployees;
+    _phasesNotifier.value = phases; // NEW: Set phases
     _allProjects = projects;
     _roles = roles;
 
@@ -167,6 +177,16 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
       if (_selectedEmployeeId != null && entry.employeeId != _selectedEmployeeId) {
         return false;
       }
+      // Phase filter
+      if (_selectedPhaseId != null) {
+        if (_selectedPhaseId == -1) {
+          // Filter for "No Phase" entries
+          if (entry.phaseId != null) return false;
+        } else {
+          // Filter for specific phase
+          if (entry.phaseId != _selectedPhaseId) return false;
+        }
+      }
 
       // Project filter
       if (_selectedProjectId != null && entry.projectId != _selectedProjectId) {
@@ -191,6 +211,15 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
   String _getClientName(int clientId) {
     try {
       return _clients.firstWhere((c) => c.id == clientId).name;
+    } catch (e) {
+      return 'Unknown';
+    }
+  }
+
+  String _getPhaseName(int? phaseId) {
+    if (phaseId == null) return 'No Phase';
+    try {
+      return _phasesNotifier.value.firstWhere((p) => p.id == phaseId).name;
     } catch (e) {
       return 'Unknown';
     }
@@ -334,7 +363,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
       builder: (BuildContext context) {
         return Dialog(
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 600),
+            constraints: const BoxConstraints(maxWidth: 800, maxHeight: 600),
             padding: const EdgeInsets.all(16),
             child: SingleChildScrollView(
               child: Column(
@@ -358,22 +387,25 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
                     key: _dialogFormKey,
                     projectsNotifier: _projectsNotifier,
                     employeesNotifier: _employeesNotifier,
+                    phasesNotifier: _phasesNotifier, // NEW: Pass phases
                     isLiveTimerForm: false,
-                    onSubmit: (project, employee, workDetails, startTime, stopTime) async {
+                    onSubmit: (project, employee, phase, workDetails, startTime, stopTime) async { // UPDATED: Added phase
                       await _submitManualEntry(
                         project: project,
                         employee: employee,
+                        phase: phase, // NEW: Pass phase
                         workDetails: workDetails,
                         startTime: startTime,
                         stopTime: stopTime,
                       );
                       if (mounted) Navigator.of(context).pop();
                     },
-                    onUpdate: (id, project, employee, workDetails, startTime, stopTime) async {
+                    onUpdate: (id, project, employee, phase, workDetails, startTime, stopTime) async { // UPDATED: Added phase
                       await _updateManualEntry(
                         id: int.parse(id),
                         project: project,
                         employee: employee,
+                        phase: phase, // NEW: Pass phase
                         workDetails: workDetails,
                         startTime: startTime,
                         stopTime: stopTime,
@@ -398,11 +430,13 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
           entry: entry,
           projectsNotifier: _projectsNotifier,
           employeesNotifier: _employeesNotifier,
-          onUpdate: (id, project, employee, workDetails, startTime, stopTime) async {
+          phasesNotifier: _phasesNotifier, // NEW: Pass phases
+          onUpdate: (id, project, employee, phase, workDetails, startTime, stopTime) async { // UPDATED: Added phase
             await _updateManualEntry(
               id: id,
               project: project,
               employee: employee,
+              phase: phase, // NEW: Pass phase
               workDetails: workDetails,
               startTime: startTime,
               stopTime: stopTime,
@@ -417,6 +451,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
   Future<void> _submitManualEntry({
     required app_models.Project? project,
     required app_models.Employee? employee,
+    required app_models.Phase? phase, // NEW: Phase parameter
     required String? workDetails,
     required DateTime? startTime,
     required DateTime? stopTime,
@@ -439,6 +474,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
     final newEntry = app_models.TimeEntry(
       projectId: project.id!,
       employeeId: employee?.id,
+      phaseId: phase?.id, // NEW: Save phase ID
       startTime: startTime,
       endTime: stopTime,
       workDetails: workDetails,
@@ -457,6 +493,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
     required int id,
     required app_models.Project? project,
     required app_models.Employee? employee,
+    required app_models.Phase? phase, // NEW: Phase parameter
     required String? workDetails,
     required DateTime? startTime,
     required DateTime? stopTime,
@@ -474,6 +511,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
       id: id,
       projectId: project.id!,
       employeeId: employee?.id,
+      phaseId: phase?.id, // NEW: Save phase ID
       startTime: startTime,
       endTime: stopTime,
       workDetails: workDetails,
@@ -619,58 +657,57 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
                   ),
                   const SizedBox(height: 8),
 
-                  // Row 3: Employee
-                  ValueListenableBuilder<List<app_models.Employee>>(
-                      valueListenable: _employeesNotifier,
-                      builder: (context, employees, child) {
-                        return DropdownButtonFormField<int?>(
-                          decoration: const InputDecoration(
-                            labelText: 'Employee',
-                            border: OutlineInputBorder(),
-                            isDense: true,
-                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          ),
-                          value: _selectedEmployeeId,
-                          items: [
-                            const DropdownMenuItem<int?>(value: null, child: Text('All Employees')),
-                            ...employees.map((employee) => DropdownMenuItem<int?>(
-                              value: employee.id,
-                              child: Text(employee.name),
-                            )),
-                          ],
-                          onChanged: (value) => setState(() => _selectedEmployeeId = value),
-                        );
-                      }),
-                  const SizedBox(height: 8),
-
-                  // Action Buttons
+                  // Row 3: Employee and Phase
                   Row(
                     children: [
                       Expanded(
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.add, size: 18),
-                          label: const Text('Add', style: TextStyle(fontSize: 12)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            minimumSize: const Size(0, 36),
-                          ),
-                          onPressed: _showAddRecordDialog,
+                        child: ValueListenableBuilder<List<app_models.Employee>>(
+                            valueListenable: _employeesNotifier,
+                            builder: (context, employees, child) {
+                              return DropdownButtonFormField<int?>(
+                                decoration: const InputDecoration(
+                                  labelText: 'Employee',
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                ),
+                                value: _selectedEmployeeId,
+                                items: [
+                                  const DropdownMenuItem<int?>(value: null, child: Text('All Employees')),
+                                  ...employees.map((employee) => DropdownMenuItem<int?>(
+                                    value: employee.id,
+                                    child: Text(employee.name),
+                                  )),
+                                ],
+                                onChanged: (value) => setState(() => _selectedEmployeeId = value),
+                              );
+                            }
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 16),
                       Expanded(
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.download, size: 18),
-                          label: const Text('Export', style: TextStyle(fontSize: 12)),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            minimumSize: const Size(0, 36),
-                          ),
-                          onPressed: _exportToCSV,
+                        child: ValueListenableBuilder<List<app_models.Phase>>(
+                            valueListenable: _phasesNotifier,
+                            builder: (context, phases, child) {
+                              return DropdownButtonFormField<int?>(
+                                decoration: const InputDecoration(
+                                  labelText: 'Phase',
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                ),
+                                value: _selectedPhaseId,
+                                items: [
+                                  const DropdownMenuItem<int?>(value: null, child: Text('All Phases')),
+                                  const DropdownMenuItem<int?>(value: -1, child: Text('No Phase')),
+                                  ...phases.map((phase) => DropdownMenuItem<int?>(
+                                    value: phase.id,
+                                    child: Text(phase.name),
+                                  )),
+                                ],
+                                onChanged: (value) => setState(() => _selectedPhaseId = value),
+                              );
+                            }
                         ),
                       ),
                     ],
@@ -745,7 +782,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     subtitle: Text(
-                      '${_getProjectName(entry.projectId)} - ${_getEmployeeName(entry.employeeId)}',
+                      '${_getProjectName(entry.projectId)} - ${_getEmployeeName(entry.employeeId)} - ${_getPhaseName(entry.phaseId)}',
                       style: const TextStyle(fontSize: 13),
                     ),
                     trailing: Row(
@@ -787,12 +824,14 @@ class _EditRecordDialog extends StatefulWidget {
   final app_models.TimeEntry entry;
   final ValueNotifier<List<app_models.Project>> projectsNotifier;
   final ValueNotifier<List<app_models.Employee>> employeesNotifier;
-  final Function(int, app_models.Project?, app_models.Employee?, String?, DateTime?, DateTime?) onUpdate;
+  final ValueNotifier<List<app_models.Phase>> phasesNotifier; // NEW: Phases notifier
+  final Function(int, app_models.Project?, app_models.Employee?, app_models.Phase?, String?, DateTime?, DateTime?) onUpdate; // UPDATED: Added phase
 
   const _EditRecordDialog({
     required this.entry,
     required this.projectsNotifier,
     required this.employeesNotifier,
+    required this.phasesNotifier, // NEW
     required this.onUpdate,
   });
 
@@ -816,7 +855,7 @@ class _EditRecordDialogState extends State<_EditRecordDialog> {
   Widget build(BuildContext context) {
     return Dialog(
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 600),
+        constraints: const BoxConstraints(maxWidth: 800, maxHeight: 600),
         padding: const EdgeInsets.all(16),
         child: SingleChildScrollView(
           child: Column(
@@ -840,15 +879,17 @@ class _EditRecordDialogState extends State<_EditRecordDialog> {
                 key: _formKey,
                 projectsNotifier: widget.projectsNotifier,
                 employeesNotifier: widget.employeesNotifier,
+                phasesNotifier: widget.phasesNotifier, // NEW: Pass phases
                 isLiveTimerForm: false,
-                onSubmit: (project, employee, workDetails, startTime, stopTime) async {
+                onSubmit: (project, employee, phase, workDetails, startTime, stopTime) async { // UPDATED: Added phase
                   // Should not be called in edit mode
                 },
-                onUpdate: (id, project, employee, workDetails, startTime, stopTime) async {
+                onUpdate: (id, project, employee, phase, workDetails, startTime, stopTime) async { // UPDATED: Added phase
                   widget.onUpdate(
                     int.parse(id),
                     project,
                     employee,
+                    phase, // NEW: Pass phase
                     workDetails,
                     startTime,
                     stopTime,

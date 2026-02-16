@@ -8,15 +8,17 @@ import 'package:time_tracker_pro/models.dart';
 class TimerAddForm extends StatefulWidget {
   final ValueNotifier<List<Project>> projectsNotifier;
   final ValueNotifier<List<Employee>> employeesNotifier;
+  final ValueNotifier<List<Phase>> phasesNotifier;
 
-  final Function(Project?, Employee?, String?, DateTime?, DateTime?) onSubmit;
+  final Function(Project?, Employee?, Phase?, String?, DateTime?, DateTime?) onSubmit;
   final bool isLiveTimerForm;
-  final Function(String, Project?, Employee?, String?, DateTime?, DateTime?) onUpdate;
+  final Function(String, Project?, Employee?, Phase?, String?, DateTime?, DateTime?) onUpdate;
 
   const TimerAddForm({
     super.key,
     required this.projectsNotifier,
     required this.employeesNotifier,
+    required this.phasesNotifier,
     required this.onSubmit,
     required this.onUpdate,
     this.isLiveTimerForm = true,
@@ -29,6 +31,7 @@ class TimerAddForm extends StatefulWidget {
 class TimerAddFormState extends State<TimerAddForm> {
   Project? _selectedProject;
   Employee? _selectedEmployee;
+  Phase? _selectedPhase;
   final TextEditingController _workDetailsController = TextEditingController();
   DateTime? _selectedStartTime;
   DateTime? _selectedStopTime;
@@ -46,6 +49,7 @@ class TimerAddFormState extends State<TimerAddForm> {
     setState(() {
       _selectedProject = null;
       _selectedEmployee = null;
+      _selectedPhase = null; // ADDED: Reset phase
       _workDetailsController.clear();
       _selectedStartTime = null;
       _selectedStopTime = null;
@@ -57,6 +61,7 @@ class TimerAddFormState extends State<TimerAddForm> {
   void clearEmployeeAndDetails() {
     setState(() {
       _selectedEmployee = null;
+      _selectedPhase = null; // ADDED: Reset phase
       _workDetailsController.clear();
       _selectedStartTime = null;
       _selectedStopTime = null;
@@ -76,6 +81,7 @@ class TimerAddFormState extends State<TimerAddForm> {
       _selectedStartTime = null;
       _selectedStopTime = null;
       _selectedDate = DateTime.now();
+      _selectedPhase = null; // ADDED: Reset phase
 
       // Then, set only the project and employee.
       _selectedProject = project;
@@ -88,6 +94,8 @@ class TimerAddFormState extends State<TimerAddForm> {
       _editingRecordId = record.id.toString();
       final currentProjects = widget.projectsNotifier.value;
       final currentEmployees = widget.employeesNotifier.value;
+      final currentPhases = widget.phasesNotifier.value; // ADDED: Get phases
+
       try {
         _selectedProject = currentProjects.firstWhere((p) => p.id == record.projectId);
       } catch (e) {
@@ -100,6 +108,15 @@ class TimerAddFormState extends State<TimerAddForm> {
       } catch (e) {
         _selectedEmployee = null;
       }
+      // ADDED: Load phase from record
+      try {
+        _selectedPhase = record.phaseId != null
+            ? currentPhases.firstWhere((p) => p.id == record.phaseId)
+            : null;
+      } catch (e) {
+        _selectedPhase = null;
+      }
+
       _workDetailsController.text = record.workDetails ?? '';
       _selectedStartTime = record.startTime;
       _selectedStopTime = record.endTime;
@@ -243,18 +260,22 @@ class TimerAddFormState extends State<TimerAddForm> {
       }
     }
     if (_editingRecordId != null) {
+      // UPDATED: Added _selectedPhase parameter
       widget.onUpdate(
         _editingRecordId!,
         _selectedProject,
         _selectedEmployee,
+        _selectedPhase,
         _workDetailsController.text,
         _selectedStartTime,
         _selectedStopTime,
       );
     } else {
+      // UPDATED: Added _selectedPhase parameter
       widget.onSubmit(
         _selectedProject,
         _selectedEmployee,
+        _selectedPhase,
         _workDetailsController.text,
         _selectedStartTime,
         _selectedStopTime,
@@ -287,6 +308,7 @@ class TimerAddFormState extends State<TimerAddForm> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
+            // Single row with Project, Employee, and Phase
             Row(
               children: [
                 Expanded(
@@ -304,7 +326,7 @@ class TimerAddFormState extends State<TimerAddForm> {
                         decoration: const InputDecoration(
                           border: inputBorder,
                           contentPadding: EdgeInsets.symmetric(horizontal: 12),
-                          labelText: 'Select Project',
+                          labelText: 'Project',
                         ),
                         value: _selectedProject != null && projects.any((p) => p.id == _selectedProject!.id)
                             ? projects.firstWhere((p) => p.id == _selectedProject!.id)
@@ -320,7 +342,7 @@ class TimerAddFormState extends State<TimerAddForm> {
                             _selectedProject = newValue;
                           });
                         },
-                        hint: const Text('Select a project'),
+                        hint: const Text('Select project'),
                       );
                     },
                   ),
@@ -341,13 +363,13 @@ class TimerAddFormState extends State<TimerAddForm> {
                         decoration: const InputDecoration(
                           border: inputBorder,
                           contentPadding: EdgeInsets.symmetric(horizontal: 12),
-                          labelText: 'Select Employee',
+                          labelText: 'Employee',
                         ),
                         initialValue: _selectedEmployee,
                         items: [
                           const DropdownMenuItem<Employee?>(
                             value: null,
-                            child: Text('None Selected'),
+                            child: Text('None'),
                           ),
                           ...employees.map((employee) {
                             return DropdownMenuItem<Employee?>(
@@ -361,7 +383,48 @@ class TimerAddFormState extends State<TimerAddForm> {
                             _selectedEmployee = newValue;
                           });
                         },
-                        hint: const Text('Select an employee'),
+                        hint: const Text('Select employee'),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ValueListenableBuilder<List<Phase>>(
+                    valueListenable: widget.phasesNotifier,
+                    builder: (context, phases, child) {
+                      if (_selectedPhase != null && !phases.any((p) => p.id == _selectedPhase!.id)) {
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          setState(() {
+                            _selectedPhase = null;
+                          });
+                        });
+                      }
+                      return DropdownButtonFormField<Phase?>(
+                        decoration: const InputDecoration(
+                          border: inputBorder,
+                          contentPadding: EdgeInsets.symmetric(horizontal: 12),
+                          labelText: 'Phase',
+                        ),
+                        value: _selectedPhase,
+                        items: [
+                          const DropdownMenuItem<Phase?>(
+                            value: null,
+                            child: Text('None'),
+                          ),
+                          ...phases.map((phase) {
+                            return DropdownMenuItem<Phase?>(
+                              value: phase,
+                              child: Text(phase.name),
+                            );
+                          }).toList(),
+                        ],
+                        onChanged: (Phase? newValue) {
+                          setState(() {
+                            _selectedPhase = newValue;
+                          });
+                        },
+                        hint: const Text('Select phase'),
                       );
                     },
                   ),
