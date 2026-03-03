@@ -7,7 +7,7 @@ import 'package:time_tracker_pro/project_repository.dart';
 import 'package:time_tracker_pro/employee_repository.dart';
 import 'package:time_tracker_pro/time_entry_repository.dart';
 import 'package:time_tracker_pro/client_repository.dart';
-import 'package:time_tracker_pro/phase_repository.dart'; // NEW: Import phase repository
+import 'package:time_tracker_pro/cost_code_repository.dart';
 import 'package:time_tracker_pro/timer_add_form.dart';
 import 'package:intl/intl.dart';
 import 'package:csv/csv.dart';
@@ -28,14 +28,14 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
   final ProjectRepository _projectRepo = ProjectRepository();
   final EmployeeRepository _employeeRepo = EmployeeRepository();
   final ClientRepository _clientRepo = ClientRepository();
-  PhaseRepository? _phaseRepo; // NEW: Phase repository
+  CostCodeRepository? _costCodeRepo; // NEW: Phase repository
   final dbHelper = DatabaseHelperV2.instance;
 
   final GlobalKey<TimerAddFormState> _dialogFormKey = GlobalKey<TimerAddFormState>();
 
   final ValueNotifier<List<app_models.Project>> _projectsNotifier = ValueNotifier([]);
   final ValueNotifier<List<app_models.Employee>> _employeesNotifier = ValueNotifier([]);
-  final ValueNotifier<List<app_models.Phase>> _phasesNotifier = ValueNotifier([]); // NEW: Phases notifier
+  final ValueNotifier<List<app_models.CostCode>> _costCodesNotifier = ValueNotifier([]); // NEW: Phases notifier
 
   List<app_models.TimeEntry> _allEntries = [];
   List<app_models.Client> _clients = [];
@@ -49,7 +49,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
   int? _selectedClientId;
   int? _selectedProjectId;
   int? _selectedEmployeeId;
-  int? _selectedPhaseId;
+  int? _selectedCostCodeId;
 
   @override
   void initState() {
@@ -81,7 +81,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
     dbHelper.databaseNotifier.removeListener(_loadData);
     _projectsNotifier.dispose();
     _employeesNotifier.dispose();
-    _phasesNotifier.dispose(); // NEW: Dispose phases notifier
+    _costCodesNotifier.dispose(); // NEW: Dispose phases notifier
     super.dispose();
   }
 
@@ -92,13 +92,13 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
 
     // Initialize phase repository
     final db = await dbHelper.database;
-    _phaseRepo ??= PhaseRepository(db);
+    _costCodeRepo ??= CostCodeRepository(db);
 
     final allRecords = await dbHelper.getAllRecordsV2();
     final projects = await _projectRepo.getProjects();
     final employees = await _employeeRepo.getEmployees();
     final clients = await _clientRepo.getClients();
-    final phases = await _phaseRepo!.getAllPhases(); // NEW: Load phases
+    final phases = await _costCodeRepo!.getAllCostCodes(); // NEW: Load phases
 
     // Load roles for employee rates
     final rolesData = await db.query('roles');
@@ -110,7 +110,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
 
     _projectsNotifier.value = projects.where((p) => !p.isCompleted).toList();
     _employeesNotifier.value = activeEmployees;
-    _phasesNotifier.value = phases; // NEW: Set phases
+    _costCodesNotifier.value = phases; // NEW: Set phases
     _allProjects = projects;
     _roles = roles;
 
@@ -178,13 +178,13 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
         return false;
       }
       // Phase filter
-      if (_selectedPhaseId != null) {
-        if (_selectedPhaseId == -1) {
-          // Filter for "No Phase" entries
-          if (entry.phaseId != null) return false;
+      if (_selectedCostCodeId != null) {
+        if (_selectedCostCodeId == -1) {
+          // Filter for "No Cost Code" entries
+          if (entry.costCodeId != null) return false;
         } else {
           // Filter for specific phase
-          if (entry.phaseId != _selectedPhaseId) return false;
+          if (entry.costCodeId != _selectedCostCodeId) return false;
         }
       }
 
@@ -216,10 +216,10 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
     }
   }
 
-  String _getPhaseName(int? phaseId) {
-    if (phaseId == null) return 'No Phase';
+  String _getCostCodeName(int? costCodeId) {
+    if (costCodeId == null) return 'No Cost Code';
     try {
-      return _phasesNotifier.value.firstWhere((p) => p.id == phaseId).name;
+      return _costCodesNotifier.value.firstWhere((c) => c.id == costCodeId).name;
     } catch (e) {
       return 'Unknown';
     }
@@ -387,25 +387,25 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
                     key: _dialogFormKey,
                     projectsNotifier: _projectsNotifier,
                     employeesNotifier: _employeesNotifier,
-                    phasesNotifier: _phasesNotifier, // NEW: Pass phases
+                    costCodesNotifier: _costCodesNotifier, // NEW: Pass phases
                     isLiveTimerForm: false,
-                    onSubmit: (project, employee, phase, workDetails, startTime, stopTime) async { // UPDATED: Added phase
+                    onSubmit: (project, employee, costCode, workDetails, startTime, stopTime) async { // UPDATED: Added phase
                       await _submitManualEntry(
                         project: project,
                         employee: employee,
-                        phase: phase, // NEW: Pass phase
+                        costCode: costCode, // NEW: Pass phase
                         workDetails: workDetails,
                         startTime: startTime,
                         stopTime: stopTime,
                       );
                       if (mounted) Navigator.of(context).pop();
                     },
-                    onUpdate: (id, project, employee, phase, workDetails, startTime, stopTime) async { // UPDATED: Added phase
+                    onUpdate: (id, project, employee, costCode, workDetails, startTime, stopTime) async {
                       await _updateManualEntry(
                         id: int.parse(id),
                         project: project,
                         employee: employee,
-                        phase: phase, // NEW: Pass phase
+                        costCode: costCode,
                         workDetails: workDetails,
                         startTime: startTime,
                         stopTime: stopTime,
@@ -430,13 +430,13 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
           entry: entry,
           projectsNotifier: _projectsNotifier,
           employeesNotifier: _employeesNotifier,
-          phasesNotifier: _phasesNotifier, // NEW: Pass phases
-          onUpdate: (id, project, employee, phase, workDetails, startTime, stopTime) async { // UPDATED: Added phase
+          costCodesNotifier: _costCodesNotifier,
+          onUpdate: (id, project, employee, costCode, workDetails, startTime, stopTime) async {
             await _updateManualEntry(
               id: id,
               project: project,
               employee: employee,
-              phase: phase, // NEW: Pass phase
+              costCode: costCode,
               workDetails: workDetails,
               startTime: startTime,
               stopTime: stopTime,
@@ -451,7 +451,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
   Future<void> _submitManualEntry({
     required app_models.Project? project,
     required app_models.Employee? employee,
-    required app_models.Phase? phase, // NEW: Phase parameter
+    required app_models.CostCode? costCode,
     required String? workDetails,
     required DateTime? startTime,
     required DateTime? stopTime,
@@ -474,7 +474,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
     final newEntry = app_models.TimeEntry(
       projectId: project.id!,
       employeeId: employee?.id,
-      phaseId: phase?.id, // NEW: Save phase ID
+      costCodeId: costCode?.id,
       startTime: startTime,
       endTime: stopTime,
       workDetails: workDetails,
@@ -493,7 +493,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
     required int id,
     required app_models.Project? project,
     required app_models.Employee? employee,
-    required app_models.Phase? phase, // NEW: Phase parameter
+    required app_models.CostCode? costCode,
     required String? workDetails,
     required DateTime? startTime,
     required DateTime? stopTime,
@@ -511,7 +511,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
       id: id,
       projectId: project.id!,
       employeeId: employee?.id,
-      phaseId: phase?.id, // NEW: Save phase ID
+      costCodeId: costCode?.id,
       startTime: startTime,
       endTime: stopTime,
       workDetails: workDetails,
@@ -686,26 +686,26 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
                       ),
                       const SizedBox(width: 16),
                       Expanded(
-                        child: ValueListenableBuilder<List<app_models.Phase>>(
-                            valueListenable: _phasesNotifier,
-                            builder: (context, phases, child) {
+                        child: ValueListenableBuilder<List<app_models.CostCode>>(
+                            valueListenable: _costCodesNotifier,
+                            builder: (context, costCodes, child) {
                               return DropdownButtonFormField<int?>(
                                 decoration: const InputDecoration(
-                                  labelText: 'Phase',
+                                  labelText: 'Cost Code',
                                   border: OutlineInputBorder(),
                                   isDense: true,
                                   contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                 ),
-                                value: _selectedPhaseId,
+                                value: _selectedCostCodeId,
                                 items: [
-                                  const DropdownMenuItem<int?>(value: null, child: Text('All Phases')),
-                                  const DropdownMenuItem<int?>(value: -1, child: Text('No Phase')),
-                                  ...phases.map((phase) => DropdownMenuItem<int?>(
-                                    value: phase.id,
-                                    child: Text(phase.name),
+                                  const DropdownMenuItem<int?>(value: null, child: Text('All Cost Codes')),
+                                  const DropdownMenuItem<int?>(value: -1, child: Text('No Cost Code')),
+                                  ...costCodes.map((costCode) => DropdownMenuItem<int?>(
+                                    value: costCode.id,
+                                    child: Text(costCode.name),
                                   )),
                                 ],
-                                onChanged: (value) => setState(() => _selectedPhaseId = value),
+                                onChanged: (value) => setState(() => _selectedCostCodeId = value),
                               );
                             }
                         ),
@@ -782,7 +782,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     subtitle: Text(
-                      '${_getProjectName(entry.projectId)} - ${_getEmployeeName(entry.employeeId)} - ${_getPhaseName(entry.phaseId)}',
+                      '${_getProjectName(entry.projectId)} - ${_getEmployeeName(entry.employeeId)} - ${_getCostCodeName(entry.costCodeId)}',
                       style: const TextStyle(fontSize: 13),
                     ),
                     trailing: Row(
@@ -824,14 +824,14 @@ class _EditRecordDialog extends StatefulWidget {
   final app_models.TimeEntry entry;
   final ValueNotifier<List<app_models.Project>> projectsNotifier;
   final ValueNotifier<List<app_models.Employee>> employeesNotifier;
-  final ValueNotifier<List<app_models.Phase>> phasesNotifier; // NEW: Phases notifier
-  final Function(int, app_models.Project?, app_models.Employee?, app_models.Phase?, String?, DateTime?, DateTime?) onUpdate; // UPDATED: Added phase
+  final ValueNotifier<List<app_models.CostCode>> costCodesNotifier;
+  final Function(int, app_models.Project?, app_models.Employee?, app_models.CostCode?, String?, DateTime?, DateTime?) onUpdate;
 
   const _EditRecordDialog({
     required this.entry,
     required this.projectsNotifier,
     required this.employeesNotifier,
-    required this.phasesNotifier, // NEW
+    required this.costCodesNotifier,
     required this.onUpdate,
   });
 
@@ -879,17 +879,17 @@ class _EditRecordDialogState extends State<_EditRecordDialog> {
                 key: _formKey,
                 projectsNotifier: widget.projectsNotifier,
                 employeesNotifier: widget.employeesNotifier,
-                phasesNotifier: widget.phasesNotifier, // NEW: Pass phases
+                costCodesNotifier: widget.costCodesNotifier,
                 isLiveTimerForm: false,
-                onSubmit: (project, employee, phase, workDetails, startTime, stopTime) async { // UPDATED: Added phase
+                onSubmit: (project, employee, costCode, workDetails, startTime, stopTime) async {
                   // Should not be called in edit mode
                 },
-                onUpdate: (id, project, employee, phase, workDetails, startTime, stopTime) async { // UPDATED: Added phase
+                onUpdate: (id, project, employee, costCode, workDetails, startTime, stopTime) async {
                   widget.onUpdate(
                     int.parse(id),
                     project,
                     employee,
-                    phase, // NEW: Pass phase
+                    costCode,
                     workDetails,
                     startTime,
                     stopTime,

@@ -21,8 +21,8 @@ class DatabaseHelperV2 {
   static Completer<Database>? _dbCompleter;
   static const String _dbName = 'time_tracker_pro.db';
 
-  // MODIFICATION: Bump version to 7 for phases support
-  static const int _dbVersion = 7;
+  // MODIFICATION: Bump version to 8 for cost_codes rename
+  static const int _dbVersion = 8;
 
   final ValueNotifier<int> databaseNotifier = ValueNotifier(0);
 
@@ -138,6 +138,82 @@ class DatabaseHelperV2 {
 
           debugPrint('[DB_V2] V7 Migration: Phase support migration complete.');
         }
+
+        // Migration for version 8: rename phases -> cost_codes, phase_id -> cost_code_id
+        if (oldVersion < 8) {
+          // Rename phases table to cost_codes
+          await db.execute('ALTER TABLE phases RENAME TO cost_codes');
+          debugPrint('[DB_V2] V8 Migration: Renamed phases table to cost_codes.');
+
+          // Recreate time_entries with cost_code_id instead of phase_id
+          await db.execute('''
+            CREATE TABLE time_entries_new (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              project_id INTEGER,
+              employee_id INTEGER,
+              start_time TEXT NOT NULL,
+              end_time TEXT,
+              paused_duration REAL DEFAULT 0.0,
+              final_billed_duration_seconds REAL,
+              hourly_rate REAL,
+              is_paused INTEGER DEFAULT 0,
+              pause_start_time TEXT,
+              is_deleted INTEGER DEFAULT 0,
+              work_details TEXT,
+              cost_code_id INTEGER,
+              FOREIGN KEY (project_id) REFERENCES projects(id),
+              FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE SET NULL,
+              FOREIGN KEY (cost_code_id) REFERENCES cost_codes(id)
+            )
+          ''');
+          await db.execute('''
+            INSERT INTO time_entries_new
+              SELECT id, project_id, employee_id, start_time, end_time,
+                     paused_duration, final_billed_duration_seconds, hourly_rate,
+                     is_paused, pause_start_time, is_deleted, work_details, phase_id
+              FROM time_entries
+          ''');
+          await db.execute('DROP TABLE time_entries');
+          await db.execute('ALTER TABLE time_entries_new RENAME TO time_entries');
+          debugPrint('[DB_V2] V8 Migration: Rebuilt time_entries with cost_code_id.');
+
+          // Recreate materials with cost_code_id instead of phase_id
+          await db.execute('''
+            CREATE TABLE materials_new (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              project_id INTEGER,
+              item_name TEXT NOT NULL,
+              cost REAL NOT NULL,
+              purchase_date TEXT,
+              description TEXT,
+              is_deleted INTEGER DEFAULT 0,
+              expense_category TEXT,
+              unit TEXT,
+              quantity REAL,
+              base_quantity REAL,
+              odometer_reading REAL,
+              is_company_expense INTEGER DEFAULT 0,
+              vehicle_designation TEXT,
+              vendor_or_subtrade TEXT,
+              cost_code_id INTEGER,
+              FOREIGN KEY (project_id) REFERENCES projects(id),
+              FOREIGN KEY (cost_code_id) REFERENCES cost_codes(id)
+            )
+          ''');
+          await db.execute('''
+            INSERT INTO materials_new
+              SELECT id, project_id, item_name, cost, purchase_date, description,
+                     is_deleted, expense_category, unit, quantity, base_quantity,
+                     odometer_reading, is_company_expense, vehicle_designation,
+                     vendor_or_subtrade, phase_id
+              FROM materials
+          ''');
+          await db.execute('DROP TABLE materials');
+          await db.execute('ALTER TABLE materials_new RENAME TO materials');
+          debugPrint('[DB_V2] V8 Migration: Rebuilt materials with cost_code_id.');
+
+          debugPrint('[DB_V2] V8 Migration: cost_codes rename complete.');
+        }
       },
 
       onDowngrade: onDatabaseDowngradeDelete,
@@ -179,12 +255,12 @@ class DatabaseHelperV2 {
         ''');
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS time_entries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, employee_id INTEGER, start_time TEXT NOT NULL, end_time TEXT, paused_duration REAL DEFAULT 0.0, final_billed_duration_seconds REAL, hourly_rate REAL, is_paused INTEGER DEFAULT 0, pause_start_time TEXT, is_deleted INTEGER DEFAULT 0, work_details TEXT, phase_id INTEGER, FOREIGN KEY (project_id) REFERENCES projects(id), FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE SET NULL, FOREIGN KEY (phase_id) REFERENCES phases(id)
+            id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, employee_id INTEGER, start_time TEXT NOT NULL, end_time TEXT, paused_duration REAL DEFAULT 0.0, final_billed_duration_seconds REAL, hourly_rate REAL, is_paused INTEGER DEFAULT 0, pause_start_time TEXT, is_deleted INTEGER DEFAULT 0, work_details TEXT, cost_code_id INTEGER, FOREIGN KEY (project_id) REFERENCES projects(id), FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE SET NULL, FOREIGN KEY (cost_code_id) REFERENCES cost_codes(id)
           )
         ''');
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS materials (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, item_name TEXT NOT NULL, cost REAL NOT NULL, purchase_date TEXT, description TEXT, is_deleted INTEGER DEFAULT 0, expense_category TEXT, unit TEXT, quantity REAL, base_quantity REAL, odometer_reading REAL, is_company_expense INTEGER DEFAULT 0, vehicle_designation TEXT, vendor_or_subtrade TEXT, phase_id INTEGER, FOREIGN KEY (project_id) REFERENCES projects(id), FOREIGN KEY (phase_id) REFERENCES phases(id)
+            id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, item_name TEXT NOT NULL, cost REAL NOT NULL, purchase_date TEXT, description TEXT, is_deleted INTEGER DEFAULT 0, expense_category TEXT, unit TEXT, quantity REAL, base_quantity REAL, odometer_reading REAL, is_company_expense INTEGER DEFAULT 0, vehicle_designation TEXT, vendor_or_subtrade TEXT, cost_code_id INTEGER, FOREIGN KEY (project_id) REFERENCES projects(id), FOREIGN KEY (cost_code_id) REFERENCES cost_codes(id)
           )
         ''');
       await txn.execute('''
@@ -192,9 +268,8 @@ class DatabaseHelperV2 {
             id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL
           )
         ''');
-      // NEW: Create phases table for fresh installs
       await txn.execute('''
-          CREATE TABLE IF NOT EXISTS phases (
+          CREATE TABLE IF NOT EXISTS cost_codes (
             id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE
           )
         ''');
@@ -267,11 +342,13 @@ class DatabaseHelperV2 {
     final timeQuery = '''
     SELECT 
       t.id, t.start_time, t.work_details, t.final_billed_duration_seconds, 
-      t.employee_id,
-      p.project_name, c.name as client_name
+      t.employee_id, t.cost_code_id,
+      p.project_name, c.name as client_name,
+      cc.name as cost_code_name
     FROM time_entries t
     JOIN projects p ON t.project_id = p.id
     JOIN clients c ON p.client_id = c.id
+    LEFT JOIN cost_codes cc ON t.cost_code_id = cc.id
     WHERE 
       t.is_deleted = 0 
       AND p.is_completed = 0
@@ -293,6 +370,8 @@ class DatabaseHelperV2 {
         value: (map['final_billed_duration_seconds'] as num? ?? 0.0) / 3600.0,
         categoryOrProject: '$clientName - $projectName',
         employeeId: map['employee_id'] as int?,
+        costCodeId: map['cost_code_id'] as int?,
+        costCodeName: map['cost_code_name'] as String?,
       ));
     }
 
@@ -438,7 +517,7 @@ class DatabaseHelperV2 {
       'time_entries',
       'materials',
       'expense_categories',
-      'phases' // NEW: Include phases table in export
+      'cost_codes'
     ];
 
     for (String tableName in tableNames) {
@@ -471,7 +550,7 @@ class DatabaseHelperV2 {
       'clients',
       'roles',
       'expense_categories',
-      'phases', // NEW: Include phases in import/deletion order
+      'cost_codes',
       'settings'
     ];
 
@@ -512,7 +591,7 @@ class DatabaseHelperV2 {
       'clients',
       'roles',
       'expense_categories',
-      'phases', // NEW: Include phases in deletion
+      'cost_codes',
       'settings'
     ];
 

@@ -8,17 +8,17 @@ import 'package:time_tracker_pro/models.dart';
 class TimerAddForm extends StatefulWidget {
   final ValueNotifier<List<Project>> projectsNotifier;
   final ValueNotifier<List<Employee>> employeesNotifier;
-  final ValueNotifier<List<Phase>> phasesNotifier;
+  final ValueNotifier<List<CostCode>> costCodesNotifier;
 
-  final Function(Project?, Employee?, Phase?, String?, DateTime?, DateTime?) onSubmit;
+  final Function(Project?, Employee?, CostCode?, String?, DateTime?, DateTime?) onSubmit;
   final bool isLiveTimerForm;
-  final Function(String, Project?, Employee?, Phase?, String?, DateTime?, DateTime?) onUpdate;
+  final Function(String, Project?, Employee?, CostCode?, String?, DateTime?, DateTime?) onUpdate;
 
   const TimerAddForm({
     super.key,
     required this.projectsNotifier,
     required this.employeesNotifier,
-    required this.phasesNotifier,
+    required this.costCodesNotifier,
     required this.onSubmit,
     required this.onUpdate,
     this.isLiveTimerForm = true,
@@ -31,7 +31,7 @@ class TimerAddForm extends StatefulWidget {
 class TimerAddFormState extends State<TimerAddForm> {
   Project? _selectedProject;
   Employee? _selectedEmployee;
-  Phase? _selectedPhase;
+  CostCode? _selectedCostCode;
   final TextEditingController _workDetailsController = TextEditingController();
   DateTime? _selectedStartTime;
   DateTime? _selectedStopTime;
@@ -49,7 +49,7 @@ class TimerAddFormState extends State<TimerAddForm> {
     setState(() {
       _selectedProject = null;
       _selectedEmployee = null;
-      _selectedPhase = null; // ADDED: Reset phase
+      _selectedCostCode = null;
       _workDetailsController.clear();
       _selectedStartTime = null;
       _selectedStopTime = null;
@@ -61,7 +61,7 @@ class TimerAddFormState extends State<TimerAddForm> {
   void clearEmployeeAndDetails() {
     setState(() {
       _selectedEmployee = null;
-      _selectedPhase = null; // ADDED: Reset phase
+      _selectedCostCode = null;
       _workDetailsController.clear();
       _selectedStartTime = null;
       _selectedStopTime = null;
@@ -81,7 +81,7 @@ class TimerAddFormState extends State<TimerAddForm> {
       _selectedStartTime = null;
       _selectedStopTime = null;
       _selectedDate = DateTime.now();
-      _selectedPhase = null; // ADDED: Reset phase
+      _selectedCostCode = null;
 
       // Then, set only the project and employee.
       _selectedProject = project;
@@ -94,7 +94,7 @@ class TimerAddFormState extends State<TimerAddForm> {
       _editingRecordId = record.id.toString();
       final currentProjects = widget.projectsNotifier.value;
       final currentEmployees = widget.employeesNotifier.value;
-      final currentPhases = widget.phasesNotifier.value; // ADDED: Get phases
+      final currentCostCodes = widget.costCodesNotifier.value;
 
       try {
         _selectedProject = currentProjects.firstWhere((p) => p.id == record.projectId);
@@ -108,13 +108,12 @@ class TimerAddFormState extends State<TimerAddForm> {
       } catch (e) {
         _selectedEmployee = null;
       }
-      // ADDED: Load phase from record
       try {
-        _selectedPhase = record.phaseId != null
-            ? currentPhases.firstWhere((p) => p.id == record.phaseId)
+        _selectedCostCode = record.costCodeId != null
+            ? currentCostCodes.firstWhere((c) => c.id == record.costCodeId)
             : null;
       } catch (e) {
-        _selectedPhase = null;
+        _selectedCostCode = null;
       }
 
       _workDetailsController.text = record.workDetails ?? '';
@@ -260,22 +259,20 @@ class TimerAddFormState extends State<TimerAddForm> {
       }
     }
     if (_editingRecordId != null) {
-      // UPDATED: Added _selectedPhase parameter
       widget.onUpdate(
         _editingRecordId!,
         _selectedProject,
         _selectedEmployee,
-        _selectedPhase,
+        _selectedCostCode,
         _workDetailsController.text,
         _selectedStartTime,
         _selectedStopTime,
       );
     } else {
-      // UPDATED: Added _selectedPhase parameter
       widget.onSubmit(
         _selectedProject,
         _selectedEmployee,
-        _selectedPhase,
+        _selectedCostCode,
         _workDetailsController.text,
         _selectedStartTime,
         _selectedStopTime,
@@ -390,41 +387,41 @@ class TimerAddFormState extends State<TimerAddForm> {
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: ValueListenableBuilder<List<Phase>>(
-                    valueListenable: widget.phasesNotifier,
-                    builder: (context, phases, child) {
-                      if (_selectedPhase != null && !phases.any((p) => p.id == _selectedPhase!.id)) {
+                  child: ValueListenableBuilder<List<CostCode>>(
+                    valueListenable: widget.costCodesNotifier,
+                    builder: (context, costCodes, child) {
+                      if (_selectedCostCode != null && !costCodes.any((c) => c.id == _selectedCostCode!.id)) {
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           setState(() {
-                            _selectedPhase = null;
+                            _selectedCostCode = null;
                           });
                         });
                       }
-                      return DropdownButtonFormField<Phase?>(
+                      return DropdownButtonFormField<CostCode?>(
                         decoration: const InputDecoration(
                           border: inputBorder,
                           contentPadding: EdgeInsets.symmetric(horizontal: 12),
-                          labelText: 'Phase',
+                          labelText: 'Cost Code',
                         ),
-                        value: _selectedPhase,
+                        value: _selectedCostCode,
                         items: [
-                          const DropdownMenuItem<Phase?>(
+                          const DropdownMenuItem<CostCode?>(
                             value: null,
                             child: Text('None'),
                           ),
-                          ...phases.map((phase) {
-                            return DropdownMenuItem<Phase?>(
-                              value: phase,
-                              child: Text(phase.name),
+                          ...costCodes.map((costCode) {
+                            return DropdownMenuItem<CostCode?>(
+                              value: costCode,
+                              child: Text(costCode.name),
                             );
                           }).toList(),
                         ],
-                        onChanged: (Phase? newValue) {
+                        onChanged: (CostCode? newValue) {
                           setState(() {
-                            _selectedPhase = newValue;
+                            _selectedCostCode = newValue;
                           });
                         },
-                        hint: const Text('Select phase'),
+                        hint: const Text('Select cost code'),
                       );
                     },
                   ),

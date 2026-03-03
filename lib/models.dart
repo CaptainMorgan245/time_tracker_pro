@@ -250,7 +250,7 @@ class TimeEntry {
   final DateTime? pauseStartTime;
   final bool isDeleted;
   final String? workDetails;
-  final int? phaseId; // NEW: Phase/tag for this time entry
+  final int? costCodeId;
 
   TimeEntry({
     this.id,
@@ -265,7 +265,7 @@ class TimeEntry {
     this.isDeleted = false,
     this.workDetails,
     this.hourlyRate,
-    this.phaseId, // NEW
+    this.costCodeId,
   });
 
   factory TimeEntry.fromMap(Map<String, dynamic> map) {
@@ -287,7 +287,7 @@ class TimeEntry {
       isDeleted: map['is_deleted'] == 1,
       workDetails: map['work_details'],
       hourlyRate: (map['hourly_rate'] as num?)?.toDouble(),
-      phaseId: map['phase_id'], // NEW
+      costCodeId: map['cost_code_id'],
     );
   }
 
@@ -306,7 +306,7 @@ class TimeEntry {
       'is_deleted': isDeleted ? 1 : 0,
       'work_details': workDetails,
       'hourly_rate': hourlyRate,
-      'phase_id': phaseId, // NEW
+      'cost_code_id': costCodeId,
     };
   }
 
@@ -323,7 +323,7 @@ class TimeEntry {
     DateTime? pauseStartTime,
     bool? isDeleted,
     String? workDetails,
-    int? phaseId, // NEW
+    int? costCodeId,
   }) {
     return TimeEntry(
       id: id ?? this.id,
@@ -338,7 +338,7 @@ class TimeEntry {
       pauseStartTime: pauseStartTime ?? this.pauseStartTime,
       isDeleted: isDeleted ?? this.isDeleted,
       workDetails: workDetails ?? this.workDetails,
-      phaseId: phaseId ?? this.phaseId, // NEW
+      costCodeId: costCodeId ?? this.costCodeId,
     );
   }
 }
@@ -359,7 +359,7 @@ class JobMaterials {
   final bool isCompanyExpense;
   final String? vehicleDesignation;
   final String? vendorOrSubtrade;
-  final int? phaseId; // NEW: Phase/tag for this expense
+  final int? costCodeId;
 
   JobMaterials({
     this.id,
@@ -377,7 +377,7 @@ class JobMaterials {
     this.isCompanyExpense = false,
     this.vehicleDesignation,
     this.vendorOrSubtrade,
-    this.phaseId, // NEW
+    this.costCodeId,
   });
 
   Map<String, dynamic> toMap() {
@@ -397,7 +397,7 @@ class JobMaterials {
       'is_company_expense': isCompanyExpense ? 1 : 0,
       'vehicle_designation': vehicleDesignation,
       'vendor_or_subtrade': vendorOrSubtrade,
-      'phase_id': phaseId, // NEW
+      'cost_code_id': costCodeId,
     };
   }
 
@@ -418,17 +418,16 @@ class JobMaterials {
       isCompanyExpense: map['is_company_expense'] == 1,
       vehicleDesignation: map['vehicle_designation'],
       vendorOrSubtrade: map['vendor_or_subtrade'],
-      phaseId: map['phase_id'], // NEW
+      costCodeId: map['cost_code_id'],
     );
   }
 }
 
-// NEW: Phase model for tagging time entries and materials
-class Phase {
+class CostCode {
   final int? id;
   final String name;
 
-  Phase({
+  CostCode({
     this.id,
     required this.name,
   });
@@ -440,18 +439,18 @@ class Phase {
     };
   }
 
-  factory Phase.fromMap(Map<String, dynamic> map) {
-    return Phase(
+  factory CostCode.fromMap(Map<String, dynamic> map) {
+    return CostCode(
       id: map['id'],
       name: map['name'],
     );
   }
 
-  Phase copyWith({
+  CostCode copyWith({
     int? id,
     String? name,
   }) {
-    return Phase(
+    return CostCode(
       id: id ?? this.id,
       name: name ?? this.name,
     );
@@ -459,7 +458,7 @@ class Phase {
 
   @override
   String toString() {
-    return 'Phase(id: $id, name: $name)';
+    return 'CostCode(id: $id, name: $name)';
   }
 }
 
@@ -522,9 +521,11 @@ class AllRecordViewModel {
   final RecordType type;
   final DateTime date;
   final String description;
-  final double value; // Can be hours for time, or amount for cost/payment
+  final double value;
   final String categoryOrProject;
   final int? employeeId;
+  final int? costCodeId;
+  final String? costCodeName;
 
   AllRecordViewModel({
     required this.id,
@@ -534,6 +535,8 @@ class AllRecordViewModel {
     required this.value,
     required this.categoryOrProject,
     this.employeeId,
+    this.costCodeId,
+    this.costCodeName,
   });
 
   @override

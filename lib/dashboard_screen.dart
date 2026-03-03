@@ -17,8 +17,8 @@ import 'package:time_tracker_pro/cost_entry_screen.dart';
 import 'package:time_tracker_pro/app_bottom_nav_bar.dart';
 import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/data_management_screen.dart';
-import 'package:time_tracker_pro/phase_repository.dart';
-import 'package:time_tracker_pro/manage_phases_page.dart';
+import 'package:time_tracker_pro/cost_code_repository.dart';
+import 'package:time_tracker_pro/manage_cost_codes_page.dart';
 
 // START REUSABLE DRAWER WIDGET
 class AppDrawer extends StatelessWidget {
@@ -76,11 +76,11 @@ class AppDrawer extends StatelessWidget {
           ),
           ListTile(
             leading: const Icon(Icons.label_outline),
-            title: const Text('Manage Phases'),
+            title: const Text('Manage Cost Codes'),
             onTap: () {
               Navigator.pop(context);
               Navigator.of(context).push(
-                MaterialPageRoute(builder: (context) => const ManagePhasesPage()),
+                MaterialPageRoute(builder: (context) => const ManageCostCodesPage()),
               );
             },
           ),
@@ -126,12 +126,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final ProjectRepository _projectRepo = ProjectRepository();
   final EmployeeRepository _employeeRepo = EmployeeRepository();
   final TimeEntryRepository _timeEntryRepo = TimeEntryRepository();
-  PhaseRepository? _phaseRepo;
+  CostCodeRepository? _costCodeRepo;
   final dbHelper = DatabaseHelperV2.instance;
 
   final ValueNotifier<List<app_models.Project>> _projectsNotifier = ValueNotifier([]);
   final ValueNotifier<List<app_models.Employee>> _employeesNotifier = ValueNotifier([]);
-  final ValueNotifier<List<app_models.Phase>> _phasesNotifier = ValueNotifier([]);
+  final ValueNotifier<List<app_models.CostCode>> _costCodesNotifier = ValueNotifier([]);
 
   List<app_models.AllRecordViewModel> _recentActivities = [];
 
@@ -157,7 +157,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     dbHelper.databaseNotifier.removeListener(_reloadData);
     _projectsNotifier.dispose();
     _employeesNotifier.dispose();
-    _phasesNotifier.dispose();
+    _costCodesNotifier.dispose();
     for (final timer in _activeTimers.values) {
       timer.cancel();
     }
@@ -178,11 +178,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _loadData() async {
     try {
       final db = await DatabaseHelperV2.instance.database;
-      _phaseRepo ??= PhaseRepository(db);
+      _costCodeRepo ??= CostCodeRepository(db);
       final projects = await _projectRepo.getProjects();
       final employees = await _employeeRepo.getEmployees();
-      final phases = await _phaseRepo!.getAllPhases();
-      _phasesNotifier.value = phases;
+      final costCodes = await _costCodeRepo!.getAllCostCodes();
+      _costCodesNotifier.value = costCodes;
 
       // 💥 CRITICAL REFACTOR: Use the dedicated query
       final recentTimeActivities = await dbHelper.getDashboardTimeEntries();
@@ -321,9 +321,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             key: _timerFormKey,
             projectsNotifier: _projectsNotifier,
             employeesNotifier: _employeesNotifier,
-            phasesNotifier: _phasesNotifier,
+            costCodesNotifier: _costCodesNotifier,
             isLiveTimerForm: true,
-            onSubmit: (project, employee,phase, workDetails, startTime, stopTime) {
+            onSubmit: (project, employee, costCode, workDetails, startTime, stopTime) {
               _startTimer(
                 project: project,
                 employee: employee,
@@ -331,8 +331,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 startTime: startTime,
               );
             },
-            onUpdate: (id, project, employee, phase, workDetails, startTime, stopTime) {
-              _updateLiveEntry(id, project, employee, phase, workDetails, startTime, stopTime);
+            onUpdate: (id, project, employee, costCode, workDetails, startTime, stopTime) {
+              _updateLiveEntry(id, project, employee, costCode, workDetails, startTime, stopTime);
             },
           ),
         ),
@@ -497,7 +497,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _startTimer({
     app_models.Project? project,
     app_models.Employee? employee,
-    app_models.Phase? phase,
+    app_models.CostCode? costCode,
     String? workDetails,
     DateTime? startTime,
   }) async {
@@ -511,12 +511,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final newEntry = app_models.TimeEntry(
       projectId: project.id!,
       employeeId: employee?.id,
-      phaseId: phase?.id,
+      costCodeId: costCode?.id,
       startTime: startTime ?? DateTime.now(),
       workDetails: workDetails,
-      // START FIX: Use Duration.zero instead of 0.0
       pausedDuration: Duration.zero,
-      // END FIX
     );
 
     try {
@@ -541,7 +539,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       String id,
       app_models.Project? project,
       app_models.Employee? employee,
-      app_models.Phase? phase,
+      app_models.CostCode? costCode,
       String? workDetails,
       DateTime? startTime,
       DateTime? stopTime,
@@ -560,7 +558,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final updatedEntry = existingEntry.copyWith(
         projectId: project?.id,
         employeeId: employee?.id,
-        phaseId: phase?.id,
+        costCodeId: costCode?.id,
         workDetails: workDetails,
       );
 
@@ -577,7 +575,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _startTimer(
         project: project,
         employee: employee,
-        phase: phase,
+        costCode: costCode,
         workDetails: workDetails,
         startTime: startTime,
       );

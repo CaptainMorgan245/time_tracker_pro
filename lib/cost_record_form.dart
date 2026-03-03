@@ -1,4 +1,4 @@
-// lib/cost_record_form.dart (COMPLETE FILE - With Phase Support)
+// lib/cost_record_form.dart
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -10,7 +10,7 @@ class CostRecordForm extends StatefulWidget {
   final ValueNotifier<List<String>> expenseCategoriesNotifier;
   final ValueNotifier<List<String>> vendorsNotifier;
   final ValueNotifier<List<String>> vehicleDesignationsNotifier;
-  final ValueNotifier<List<Phase>> phasesNotifier; // NEW: Phases
+  final ValueNotifier<List<CostCode>> costCodesNotifier;
   final Function(JobMaterials expense, bool isEditing) onAddExpense;
   final Function(bool showCompleted) onProjectFilterToggle;
   final VoidCallback onClearForm;
@@ -23,7 +23,7 @@ class CostRecordForm extends StatefulWidget {
     required this.expenseCategoriesNotifier,
     required this.vendorsNotifier,
     required this.vehicleDesignationsNotifier,
-    required this.phasesNotifier, // NEW
+    required this.costCodesNotifier,
     required this.onAddExpense,
     required this.onProjectFilterToggle,
     required this.onClearForm,
@@ -51,7 +51,7 @@ class CostRecordFormState extends State<CostRecordForm> {
   String? selectedExpenseCategory;
   String? _selectedVendorOrSubtrade;
   String? _selectedVehicleDesignation;
-  Phase? _selectedPhase; // NEW: Selected phase
+  CostCode? _selectedCostCode;
   bool isFuelCategory = false;
 
   static const int _internalProjectId = 0;
@@ -119,13 +119,12 @@ class CostRecordFormState extends State<CostRecordForm> {
         _selectedVendorOrSubtrade = null;
       }
 
-      // NEW: Load phase from expense
       try {
-        _selectedPhase = expense.phaseId != null
-            ? widget.phasesNotifier.value.firstWhere((p) => p.id == expense.phaseId)
+        _selectedCostCode = expense.costCodeId != null
+            ? widget.costCodesNotifier.value.firstWhere((c) => c.id == expense.costCodeId)
             : null;
       } catch (e) {
-        _selectedPhase = null;
+        _selectedCostCode = null;
       }
 
       selectedProjectId = expense.projectId;
@@ -144,7 +143,7 @@ class CostRecordFormState extends State<CostRecordForm> {
       isFuelCategory = false;
       selectedExpenseCategory = null;
       _selectedVendorOrSubtrade = null;
-      _selectedPhase = null; // NEW: Reset phase
+      _selectedCostCode = null;
       selectedProjectId = widget.availableProjectsNotifier.value
           .firstWhere((p) => !p.isInternal, orElse: () => widget.availableProjectsNotifier.value.first)
           .id;
@@ -193,7 +192,7 @@ class CostRecordFormState extends State<CostRecordForm> {
         isCompanyExpense: isCompanyExpenseFromParent,
         vehicleDesignation: isCompanyExpenseFromParent ? _selectedVehicleDesignation : null,
         vendorOrSubtrade: _selectedVendorOrSubtrade,
-        phaseId: _selectedPhase?.id, // NEW: Save phase ID
+        costCodeId: _selectedCostCode?.id,
         unit: isFuelCategory ? 'Liters' : null,
         quantity: isCompanyExpenseFromParent ? (_quantityController.text.isNotEmpty ? double.tryParse(_quantityController.text) : null) : null,
         odometerReading: isCompanyExpenseFromParent ? (_odometerReadingController.text.isNotEmpty ? double.tryParse(_odometerReadingController.text) : null) : null,
@@ -355,36 +354,36 @@ class CostRecordFormState extends State<CostRecordForm> {
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: ValueListenableBuilder<List<Phase>>(
-                    valueListenable: widget.phasesNotifier,
-                    builder: (context, phases, child) {
-                      if (_selectedPhase != null && !phases.any((p) => p.id == _selectedPhase!.id)) {
+                  child: ValueListenableBuilder<List<CostCode>>(
+                    valueListenable: widget.costCodesNotifier,
+                    builder: (context, costCodes, child) {
+                      if (_selectedCostCode != null && !costCodes.any((c) => c.id == _selectedCostCode!.id)) {
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           setState(() {
-                            _selectedPhase = null;
+                            _selectedCostCode = null;
                           });
                         });
                       }
-                      return DropdownButtonFormField<Phase?>(
+                      return DropdownButtonFormField<CostCode?>(
                         decoration: const InputDecoration(
-                          labelText: 'Phase',
+                          labelText: 'Cost Code',
                         ),
-                        value: _selectedPhase,
+                        value: _selectedCostCode,
                         items: [
-                          const DropdownMenuItem<Phase?>(
+                          const DropdownMenuItem<CostCode?>(
                             value: null,
                             child: Text('None'),
                           ),
-                          ...phases.map((phase) {
-                            return DropdownMenuItem<Phase?>(
-                              value: phase,
-                              child: Text(phase.name),
+                          ...costCodes.map((costCode) {
+                            return DropdownMenuItem<CostCode?>(
+                              value: costCode,
+                              child: Text(costCode.name),
                             );
                           }).toList(),
                         ],
-                        onChanged: (Phase? newValue) {
+                        onChanged: (CostCode? newValue) {
                           setState(() {
-                            _selectedPhase = newValue;
+                            _selectedCostCode = newValue;
                           });
                         },
                       );
