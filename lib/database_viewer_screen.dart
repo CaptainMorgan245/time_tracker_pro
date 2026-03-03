@@ -18,10 +18,161 @@ class _DatabaseViewerScreenState extends State<DatabaseViewerScreen> {
   String _recordFilter = 'all'; // 'all', 'time', 'expense'
   String _sortBy = 'date_desc'; // 'date_desc', 'date_asc', 'id_desc'
 
-  // **** NEW METHOD TO SHOW THE SCHEMA ****
-  // This contains all the logic, without touching the database_helper.dart file.
+  // **** NEW: SQL Query Runner ****
+  final TextEditingController _sqlController = TextEditingController();
+  List<Map<String, dynamic>>? _queryResults;
+  String? _queryError;
+
+  @override
+  void dispose() {
+    _sqlController.dispose();
+    super.dispose();
+  }
+
+  // **** NEW: Execute Custom SQL Query ****
+  Future<void> _executeQuery() async {
+    final query = _sqlController.text.trim();
+
+    if (query.isEmpty) {
+      setState(() {
+        _queryError = 'Please enter a SQL query';
+        _queryResults = null;
+      });
+      return;
+    }
+
+    // Safety check: Only allow SELECT queries
+    if (!query.toUpperCase().startsWith('SELECT')) {
+      setState(() {
+        _queryError = 'Only SELECT queries are allowed for safety';
+        _queryResults = null;
+      });
+      return;
+    }
+
+    try {
+      final db = await DatabaseHelperV2.instance.database;
+      final results = await db.rawQuery(query);
+
+      setState(() {
+        _queryResults = results;
+        _queryError = null;
+      });
+    } catch (e) {
+      setState(() {
+        _queryError = e.toString();
+        _queryResults = null;
+      });
+    }
+  }
+
+  // **** NEW: Show SQL Query Dialog ****
+  void _showQueryRunner() {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.9,
+          height: MediaQuery.of(context).size.height * 0.8,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('SQL Query Runner', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _sqlController,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  hintText: 'SELECT * FROM time_entries ORDER BY id DESC LIMIT 10',
+                  labelText: 'SQL Query (SELECT only)',
+                ),
+                style: const TextStyle(fontFamily: 'monospace'),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _executeQuery,
+                      icon: const Icon(Icons.play_arrow),
+                      label: const Text('Execute'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _sqlController.clear();
+                        _queryResults = null;
+                        _queryError = null;
+                      });
+                    },
+                    child: const Text('Clear'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (_queryError != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  color: Colors.red.shade100,
+                  child: SelectableText(
+                    'Error: $_queryError',
+                    style: const TextStyle(color: Colors.red, fontFamily: 'monospace', fontSize: 12),
+                  ),
+                ),
+                const SizedBox(height: 8),
+              ],
+              if (_queryResults != null) ...[
+                Text('Results: ${_queryResults!.length} rows', style: const TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Expanded(
+                  child: _queryResults!.isEmpty
+                      ? const Center(child: Text('No results'))
+                      : Scrollbar(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: SingleChildScrollView(
+                        child: DataTable(
+                          headingRowColor: WidgetStateProperty.all(Colors.blue.shade100),
+                          border: TableBorder.all(color: Colors.grey),
+                          columns: _queryResults!.first.keys.map((key) {
+                            return DataColumn(label: Text(key, style: const TextStyle(fontWeight: FontWeight.bold)));
+                          }).toList(),
+                          rows: _queryResults!.map((row) {
+                            return DataRow(
+                              cells: row.values.map((value) {
+                                return DataCell(SelectableText(value?.toString() ?? 'NULL', style: const TextStyle(fontSize: 12)));
+                              }).toList(),
+                            );
+                          }).toList(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ] else if (_queryError == null)
+                const Expanded(child: Center(child: Text('Enter a SELECT query and press Execute'))),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // **** SHOW DATABASE SCHEMA ****
   Future<void> _showDatabaseSchema() async {
-    // Show a loading indicator so the user knows something is happening
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -29,18 +180,13 @@ class _DatabaseViewerScreenState extends State<DatabaseViewerScreen> {
     );
 
     try {
-      // 1. Get a direct reference to the database instance from our helper.
       final db = await DatabaseHelperV2.instance.database;
-
-      // 2. Query the special 'sqlite_master' table to get schema info.
-      // This is a standard SQLite command.
       final List<Map<String, dynamic>> tables = await db.query(
         'sqlite_master',
         columns: ['name', 'sql'],
         where: "type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE 'android_%'",
       );
 
-      // 3. Build a readable string from the query results.
       String schema;
       if (tables.isEmpty) {
         schema = 'No user-created tables found in the database.';
@@ -50,7 +196,6 @@ class _DatabaseViewerScreenState extends State<DatabaseViewerScreen> {
 
         for (final table in tables) {
           final tableName = table['name'];
-          // This makes the output more readable by adding newlines
           final creationSql = table['sql']?.toString().replaceAll(', ', ',\n  ') ?? 'Could not retrieve schema.';
 
           schemaBuffer.writeln('--- TABLE: $tableName ---');
@@ -60,18 +205,15 @@ class _DatabaseViewerScreenState extends State<DatabaseViewerScreen> {
       }
 
       if (!mounted) return;
-      Navigator.pop(context); // Close the loading indicator
+      Navigator.pop(context);
 
-      // 4. Show the final schema string in a scrollable dialog.
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Database Schema'),
-          // **** THIS IS THE ONLY CHANGE ****
-          // Using SelectableText allows you to long-press and copy the content.
           content: Scrollbar(
             child: SingleChildScrollView(
-              child: SelectableText( // CHANGED FROM Text to SelectableText
+              child: SelectableText(
                 schema,
                 style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
               ),
@@ -87,8 +229,7 @@ class _DatabaseViewerScreenState extends State<DatabaseViewerScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      Navigator.pop(context); // Close loading indicator on error too
-      // If something goes wrong (e.g., table doesn't exist), show an error.
+      Navigator.pop(context);
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -106,7 +247,6 @@ class _DatabaseViewerScreenState extends State<DatabaseViewerScreen> {
   }
 
   List<AllRecordViewModel> _filterAndSortRecords(List<AllRecordViewModel> records) {
-    // Apply filter
     List<AllRecordViewModel> filtered = records;
     if (_recordFilter == 'time') {
       filtered = records.where((r) => r.type == RecordType.time).toList();
@@ -114,7 +254,6 @@ class _DatabaseViewerScreenState extends State<DatabaseViewerScreen> {
       filtered = records.where((r) => r.type == RecordType.expense).toList();
     }
 
-    // Apply sort
     switch (_sortBy) {
       case 'date_desc':
         filtered.sort((a, b) => b.date.compareTo(a.date));
@@ -136,6 +275,11 @@ class _DatabaseViewerScreenState extends State<DatabaseViewerScreen> {
       appBar: AppBar(
         title: const Text('Database Viewer (V2)'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.code),
+            tooltip: 'Run SQL Query',
+            onPressed: _showQueryRunner,
+          ),
           IconButton(
             icon: const Icon(Icons.info_outline),
             tooltip: 'View Database Schema',
@@ -251,7 +395,7 @@ class _DatabaseViewerScreenState extends State<DatabaseViewerScreen> {
     final itemName = 'Test Item ${Random().nextInt(1000)}';
 
     final newMaterial = JobMaterials(
-      projectId: 1, // IMPORTANT: Ensure a project with ID 1 exists!
+      projectId: 1,
       itemName: itemName,
       cost: randomCost,
       purchaseDate: DateTime.now(),
@@ -265,8 +409,6 @@ class _DatabaseViewerScreenState extends State<DatabaseViewerScreen> {
 
     await DatabaseHelperV2.instance.addMaterialV2(newMaterial);
   }
-
-  // --- WIDGET BUILDERS ---
 
   Widget _buildV2Indicator(int version, {bool isLoading = false}) {
     return Container(
