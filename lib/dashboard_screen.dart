@@ -253,9 +253,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final filteredEntries = activeEntries.where((entry) {
         final project = projects.firstWhere(
               (p) => p.id == entry.projectId,
-          // START FIX: Provide required 'pricingModel' parameter
           orElse: () => const app_models.Project(projectName: 'Unknown', clientId: 0, isCompleted: true, pricingModel: 'unknown'),
-          // END FIX
         );
         return !entry.isDeleted && !project.isCompleted;
       }).toList();
@@ -270,9 +268,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (!_activeTimers.containsKey(entry.id)) {
           final now = DateTime.now();
           final elapsed = now.difference(entry.startTime);
-          // START FIX: Use .inSeconds instead of .toInt()
           final initialDuration = elapsed - entry.pausedDuration;
-          // END FIX
           _currentDurations[entry.id!] = initialDuration;
           _startTimerUpdate(entry);
         }
@@ -327,6 +323,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _startTimer(
                 project: project,
                 employee: employee,
+                costCode: costCode,  // FIX: was silently dropped before
                 workDetails: workDetails,
                 startTime: startTime,
               );
@@ -485,9 +482,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final elapsed = DateTime.now().difference(entry.startTime);
         if(mounted){
           setState(() {
-            // START FIX: Use .inSeconds instead of .toInt()
             _currentDurations[entry.id!] = elapsed - entry.pausedDuration;
-            // END FIX
           });
         }
       }
@@ -586,9 +581,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _stopTimer(int entryId) async {
     try {
       final entry = _activeEntries.firstWhere((e) => e.id == entryId);
-      // START FIX: Use .inSeconds instead of .toInt()
       final duration = DateTime.now().difference(entry.startTime) - entry.pausedDuration;
-      // END FIX
 
       final stoppedEntry = entry.copyWith(
         endTime: DateTime.now(),
@@ -640,15 +633,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!entry.isPaused || entry.pauseStartTime == null) return;
 
       final now = DateTime.now();
-      // This is correct, pauseDuration is a Duration object.
       final pauseDuration = now.difference(entry.pauseStartTime!);
 
       final resumedEntry = entry.copyWith(
         isPaused: false,
-        // START FIX: Correctly add two Durations together.
         pausedDuration: entry.pausedDuration + pauseDuration,
-        // END FIX
-        pauseStartTime: null, // Clear the pause start time
+        pauseStartTime: null,
       );
 
       await _timeEntryRepo.updateTimeEntry(resumedEntry);
