@@ -34,6 +34,11 @@ class Invoice {
   final String? deletedNotes;
   final int? supersededByInvoiceId;
   final String? notes;
+  final bool isSent;
+
+  // Display-only fields (non-persisted)
+  final String? projectName;
+  final String? clientName;
 
   Invoice({
     this.id,
@@ -71,6 +76,9 @@ class Invoice {
     this.deletedNotes,
     this.supersededByInvoiceId,
     this.notes,
+    this.isSent = false,
+    this.projectName,
+    this.clientName,
   });
 
   Map<String, dynamic> toMap() {
@@ -110,6 +118,7 @@ class Invoice {
       'deleted_notes': deletedNotes,
       'superseded_by_invoice_id': supersededByInvoiceId,
       'notes': notes,
+      'is_sent': isSent ? 1 : 0,
     };
   }
 
@@ -150,6 +159,9 @@ class Invoice {
       deletedNotes: map['deleted_notes'] as String?,
       supersededByInvoiceId: map['superseded_by_invoice_id'] as int?,
       notes: map['notes'] as String?,
+      isSent: (map['is_sent'] as int?) == 1,
+      projectName: map['project_name'] as String?,
+      clientName: map['client_name'] as String?,
     );
   }
 
@@ -189,6 +201,9 @@ class Invoice {
     String? deletedNotes,
     int? supersededByInvoiceId,
     String? notes,
+    bool? isSent,
+    String? projectName,
+    String? clientName,
   }) {
     return Invoice(
       id: id ?? this.id,
@@ -226,6 +241,9 @@ class Invoice {
       deletedNotes: deletedNotes ?? this.deletedNotes,
       supersededByInvoiceId: supersededByInvoiceId ?? this.supersededByInvoiceId,
       notes: notes ?? this.notes,
+      isSent: isSent ?? this.isSent,
+      projectName: projectName ?? this.projectName,
+      clientName: clientName ?? this.clientName,
     );
   }
 }

@@ -30,6 +30,10 @@ class AppBottomNavBar extends StatelessWidget {
           icon: Icon(Icons.analytics),
           label: 'Analytics',
         ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.receipt_long),
+          label: 'Inv/Est',
+        ),
       ],
       currentIndex: currentIndex,
       onTap: onTap,

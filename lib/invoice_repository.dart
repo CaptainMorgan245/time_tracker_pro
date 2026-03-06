@@ -26,11 +26,14 @@ class InvoiceRepository {
 
   Future<Invoice?> getInvoiceById(int id) async {
     final db = await _databaseHelper.database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'invoices',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT i.*, p.project_name, c.name as client_name
+      FROM invoices i
+      LEFT JOIN projects p ON i.project_id = p.id
+      LEFT JOIN clients c ON i.client_id = c.id
+      WHERE i.id = ?
+    ''', [id]);
+    
     if (maps.isNotEmpty) {
       return Invoice.fromMap(maps.first);
     }
@@ -39,33 +42,48 @@ class InvoiceRepository {
 
   Future<List<Invoice>> getInvoicesByProject(int projectId) async {
     final db = await _databaseHelper.database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'invoices',
-      where: 'project_id = ? AND is_deleted = 0',
-      whereArgs: [projectId],
-      orderBy: 'invoice_date DESC',
-    );
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT i.*, p.project_name, c.name as client_name
+      FROM invoices i
+      LEFT JOIN projects p ON i.project_id = p.id
+      LEFT JOIN clients c ON i.client_id = c.id
+      WHERE i.project_id = ? AND i.is_deleted = 0
+      ORDER BY i.invoice_date DESC
+    ''', [projectId]);
+    
     return List.generate(maps.length, (i) => Invoice.fromMap(maps[i]));
   }
 
   Future<List<Invoice>> getInvoicesByClient(int clientId) async {
     final db = await _databaseHelper.database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'invoices',
-      where: 'client_id = ? AND is_deleted = 0',
-      whereArgs: [clientId],
-      orderBy: 'invoice_date DESC',
-    );
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT i.*, p.project_name, c.name as client_name
+      FROM invoices i
+      LEFT JOIN projects p ON i.project_id = p.id
+      LEFT JOIN clients c ON i.client_id = c.id
+      WHERE i.client_id = ? AND i.is_deleted = 0
+      ORDER BY i.invoice_date DESC
+    ''', [clientId]);
+    
     return List.generate(maps.length, (i) => Invoice.fromMap(maps[i]));
   }
 
   Future<List<Invoice>> getAllInvoices({bool includeDeleted = false}) async {
     final db = await _databaseHelper.database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'invoices',
-      where: includeDeleted ? null : 'is_deleted = 0',
-      orderBy: 'invoice_date DESC',
-    );
+    String query = '''
+      SELECT i.*, p.project_name, c.name as client_name
+      FROM invoices i
+      LEFT JOIN projects p ON i.project_id = p.id
+      LEFT JOIN clients c ON i.client_id = c.id
+    ''';
+    
+    if (!includeDeleted) {
+      query += ' WHERE i.is_deleted = 0';
+    }
+    
+    query += ' ORDER BY i.invoice_date DESC';
+    
+    final List<Map<String, dynamic>> maps = await db.rawQuery(query);
     return List.generate(maps.length, (i) => Invoice.fromMap(maps[i]));
   }
 

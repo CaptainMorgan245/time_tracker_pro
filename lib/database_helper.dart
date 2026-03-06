@@ -21,8 +21,8 @@ class DatabaseHelperV2 {
   static Completer<Database>? _dbCompleter;
   static const String _dbName = 'time_tracker_pro.db';
 
-  // MODIFICATION: Bump version to 9 for invoicing/billing support
-  static const int _dbVersion = 9;
+  // MODIFICATION: Bump version to 10 for is_sent column in invoices
+  static const int _dbVersion = 10;
 
   final ValueNotifier<int> databaseNotifier = ValueNotifier(0);
 
@@ -363,6 +363,11 @@ class DatabaseHelperV2 {
 
           debugPrint('[DB_V2] V9 Migration complete.');
         }
+
+        if (oldVersion < 10) {
+          await db.execute('ALTER TABLE invoices ADD COLUMN is_sent INTEGER NOT NULL DEFAULT 0');
+          debugPrint('[DB_V2] V10 Migration: Added is_sent column to invoices table.');
+        }
       },
 
       onDowngrade: onDatabaseDowngradeDelete,
@@ -422,7 +427,7 @@ class DatabaseHelperV2 {
             id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE
           )
         ''');
-      // Fresh install V9 support
+      // Fresh install V10 support
       await txn.execute('''
         CREATE TABLE IF NOT EXISTS invoices (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -460,6 +465,7 @@ class DatabaseHelperV2 {
           deleted_notes TEXT,
           superseded_by_invoice_id INTEGER,
           notes TEXT,
+          is_sent INTEGER NOT NULL DEFAULT 0,
           FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
           FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
           FOREIGN KEY (superseded_by_invoice_id) REFERENCES invoices(id) ON DELETE SET NULL

@@ -19,6 +19,7 @@ import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/data_management_screen.dart';
 import 'package:time_tracker_pro/cost_code_repository.dart';
 import 'package:time_tracker_pro/manage_cost_codes_page.dart';
+import 'package:time_tracker_pro/invoice_list_screen.dart';
 
 // START REUSABLE DRAWER WIDGET
 class AppDrawer extends StatelessWidget {
@@ -458,6 +459,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _buildDashboardContent(),
       const CostEntryScreen(),
       const AnalyticsScreen(),
+      const InvoiceListScreen(),
     ];
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
