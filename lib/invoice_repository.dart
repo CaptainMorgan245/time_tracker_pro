@@ -143,4 +143,27 @@ class InvoiceRepository {
     );
     _databaseHelper.notifyDatabaseChanged();
   }
+
+  Future<List<Project>> getActiveProjects() async {
+    final db = await _databaseHelper.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'projects',
+      where: 'is_completed = 0',
+      orderBy: 'project_name ASC',
+    );
+    return List.generate(maps.length, (i) => Project.fromMap(maps[i]));
+  }
+
+  Future<Client?> getClientById(int clientId) async {
+    final db = await _databaseHelper.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'clients',
+      where: 'id = ?',
+      whereArgs: [clientId],
+    );
+    if (maps.isNotEmpty) {
+      return Client.fromMap(maps.first);
+    }
+    return null;
+  }
 }

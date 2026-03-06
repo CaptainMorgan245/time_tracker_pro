@@ -35,6 +35,7 @@ class Invoice {
   final int? supersededByInvoiceId;
   final String? notes;
   final bool isSent;
+  final String invoiceType;
 
   // Display-only fields (non-persisted)
   final String? projectName;
@@ -77,6 +78,7 @@ class Invoice {
     this.supersededByInvoiceId,
     this.notes,
     this.isSent = false,
+    this.invoiceType = 'progress',
     this.projectName,
     this.clientName,
   });
@@ -119,6 +121,7 @@ class Invoice {
       'superseded_by_invoice_id': supersededByInvoiceId,
       'notes': notes,
       'is_sent': isSent ? 1 : 0,
+      'invoice_type': invoiceType,
     };
   }
 
@@ -160,6 +163,7 @@ class Invoice {
       supersededByInvoiceId: map['superseded_by_invoice_id'] as int?,
       notes: map['notes'] as String?,
       isSent: (map['is_sent'] as int?) == 1,
+      invoiceType: map['invoice_type'] as String? ?? 'progress',
       projectName: map['project_name'] as String?,
       clientName: map['client_name'] as String?,
     );
@@ -202,6 +206,7 @@ class Invoice {
     int? supersededByInvoiceId,
     String? notes,
     bool? isSent,
+    String? invoiceType,
     String? projectName,
     String? clientName,
   }) {
@@ -242,6 +247,7 @@ class Invoice {
       supersededByInvoiceId: supersededByInvoiceId ?? this.supersededByInvoiceId,
       notes: notes ?? this.notes,
       isSent: isSent ?? this.isSent,
+      invoiceType: invoiceType ?? this.invoiceType,
       projectName: projectName ?? this.projectName,
       clientName: clientName ?? this.clientName,
     );

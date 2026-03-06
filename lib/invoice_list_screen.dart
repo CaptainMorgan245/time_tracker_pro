@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/invoice_repository.dart';
 import 'package:time_tracker_pro/invoice_service.dart';
+import 'package:time_tracker_pro/create_invoice_screen.dart';
 
 // start class: InvoiceListScreen
 class InvoiceListScreen extends StatefulWidget {
@@ -22,18 +23,25 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
   final InvoiceRepository _invoiceRepository = InvoiceRepository();
   final InvoiceService _invoiceService = InvoiceService.instance;
   final NumberFormat _currencyFormat =
-  NumberFormat.currency(locale: 'en_US', symbol: '\$');
+      NumberFormat.currency(locale: 'en_US', symbol: '\$');
 
-  List<Invoice> _invoices = [];
+  // Tab indices
+  static const int _tabInvoices = 0;
+  static const int _tabPaid = 1;
+  static const int _tabEstimates = 2;
+
+  List<Invoice> _activeInvoices = [];
+  List<Invoice> _paidInvoices = [];
   bool _isLoading = true;
   String? _errorMessage;
 
-  Map<String, List<Invoice>> _groupedInvoices = {};
+  Map<String, List<Invoice>> _groupedActive = {};
+  Map<String, List<Invoice>> _groupedPaid = {};
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
@@ -52,18 +60,19 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
       _errorMessage = null;
     });
     try {
-      final invoices = await _invoiceRepository.getAllInvoices();
-      final grouped = <String, List<Invoice>>{};
-      for (final inv in invoices) {
-        final key = inv.projectName ?? 'No Project';
-        grouped.putIfAbsent(key, () => []).add(inv);
-      }
-      for (final list in grouped.values) {
-        list.sort((a, b) => b.invoiceDate.compareTo(a.invoiceDate));
-      }
+      final all = await _invoiceRepository.getAllInvoices();
+
+      final active = all.where((i) => !i.isPaid && !i.isDeleted).toList();
+      final paid = all.where((i) => i.isPaid && !i.isDeleted).toList();
+
+      active.sort((a, b) => b.invoiceDate.compareTo(a.invoiceDate));
+      paid.sort((a, b) => b.invoiceDate.compareTo(a.invoiceDate));
+
       setState(() {
-        _invoices = invoices;
-        _groupedInvoices = grouped;
+        _activeInvoices = active;
+        _paidInvoices = paid;
+        _groupedActive = _groupByProject(active);
+        _groupedPaid = _groupByProject(paid);
         _isLoading = false;
       });
     } catch (e) {
@@ -74,7 +83,29 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
     }
   }
 
-  // ── Fixed header with tab selector ───────────────────────────────────────
+  Map<String, List<Invoice>> _groupByProject(List<Invoice> invoices) {
+    final grouped = <String, List<Invoice>>{};
+    for (final inv in invoices) {
+      final key = inv.projectName ?? 'No Project';
+      grouped.putIfAbsent(key, () => []).add(inv);
+    }
+    return grouped;
+  }
+
+  // ── Page title ────────────────────────────────────────────────────────────
+
+  String get _pageTitle {
+    switch (_tabController.index) {
+      case _tabPaid:
+        return 'Paid Invoices';
+      case _tabEstimates:
+        return 'Estimates';
+      default:
+        return 'Invoices';
+    }
+  }
+
+  // ── Fixed header ──────────────────────────────────────────────────────────
 
   Widget _buildFixedHeader() {
     return Column(
@@ -84,7 +115,7 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              _tabController.index == 0 ? 'Invoices' : 'Estimates',
+              _pageTitle,
               style: Theme.of(context)
                   .textTheme
                   .headlineSmall
@@ -98,46 +129,59 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
           ],
         ),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () => _tabController.animateTo(0),
-                icon: const Icon(Icons.receipt_long),
-                label: const Text('Invoices'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _tabController.index == 0
-                      ? Theme.of(context).primaryColor
-                      : Colors.grey.shade300,
-                  foregroundColor:
-                  _tabController.index == 0 ? Colors.white : Colors.black54,
-                  elevation: _tabController.index == 0 ? 3 : 0,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () => _tabController.animateTo(1),
-                icon: const Icon(Icons.calculate_outlined),
-                label: const Text('Estimates'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _tabController.index == 1
-                      ? Theme.of(context).primaryColor
-                      : Colors.grey.shade300,
-                  foregroundColor:
-                  _tabController.index == 1 ? Colors.white : Colors.black54,
-                  elevation: _tabController.index == 1 ? 3 : 0,
-                ),
-              ),
-            ),
-          ],
-        ),
+        _buildNavButtons(),
       ],
     );
   }
 
-  // ── Status chip ──────────────────────────────────────────────────────────
+  // ── Nav buttons — context sensitive ──────────────────────────────────────
+
+  Widget _buildNavButtons() {
+    final int current = _tabController.index;
+
+    if (current == _tabInvoices) {
+      return Row(
+        children: [
+          Expanded(child: _navButton('Paid Invoices', Icons.check_circle_outline, _tabPaid)),
+          const SizedBox(width: 8),
+          Expanded(child: _navButton('Estimates', Icons.calculate_outlined, _tabEstimates)),
+        ],
+      );
+    }
+
+    if (current == _tabPaid) {
+      return Row(
+        children: [
+          Expanded(child: _navButton('Invoices', Icons.receipt_long, _tabInvoices)),
+          const SizedBox(width: 8),
+          Expanded(child: _navButton('Estimates', Icons.calculate_outlined, _tabEstimates)),
+        ],
+      );
+    }
+
+    return Row(
+      children: [
+        Expanded(child: _navButton('Invoices', Icons.receipt_long, _tabInvoices)),
+        const SizedBox(width: 8),
+        Expanded(child: _navButton('Paid Invoices', Icons.check_circle_outline, _tabPaid)),
+      ],
+    );
+  }
+
+  Widget _navButton(String label, IconData icon, int targetTab) {
+    return ElevatedButton.icon(
+      onPressed: () => _tabController.animateTo(targetTab),
+      icon: Icon(icon),
+      label: Text(label),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: Colors.grey.shade300,
+        foregroundColor: Colors.black54,
+        elevation: 0,
+      ),
+    );
+  }
+
+  // ── Status chip ───────────────────────────────────────────────────────────
 
   Widget _buildStatusChip(Invoice invoice) {
     String label;
@@ -160,9 +204,9 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.5)),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
       child: Text(
         label,
@@ -175,7 +219,7 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
     );
   }
 
-  // ── Invoice card ─────────────────────────────────────────────────────────
+  // ── Invoice card ──────────────────────────────────────────────────────────
 
   Widget _buildInvoiceCard(Invoice invoice) {
     return Card(
@@ -267,13 +311,11 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
     );
   }
 
-  // ── Project group header ─────────────────────────────────────────────────
+  // ── Project group ─────────────────────────────────────────────────────────
 
   Widget _buildProjectGroup(String projectName, List<Invoice> invoices) {
-    final totalBilled =
-    invoices.fold<double>(0, (sum, inv) => sum + inv.totalAmount);
-    final unpaidCount =
-        invoices.where((i) => !i.isPaid && !i.isDeleted).length;
+    final totalAmount =
+        invoices.fold<double>(0, (sum, inv) => sum + inv.totalAmount);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -282,37 +324,27 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
           margin: const EdgeInsets.only(top: 16, bottom: 4),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: Theme.of(context).primaryColor.withOpacity(0.08),
+            color: Theme.of(context).primaryColor.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-                color: Theme.of(context).primaryColor.withOpacity(0.25)),
+                color: Theme.of(context).primaryColor.withValues(alpha: 0.25)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 projectName,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              Text(
+                _currencyFormat.format(totalAmount),
+                style: TextStyle(
+                  color: Theme.of(context).primaryColor,
                   fontWeight: FontWeight.bold,
                 ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    _currencyFormat.format(totalBilled),
-                    style: TextStyle(
-                      color: Theme.of(context).primaryColor,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  if (unpaidCount > 0)
-                    Text(
-                      '$unpaidCount unpaid',
-                      style: const TextStyle(
-                          fontSize: 11, color: Colors.orangeAccent),
-                    ),
-                ],
               ),
             ],
           ),
@@ -322,7 +354,7 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
     );
   }
 
-  // ── Empty state ──────────────────────────────────────────────────────────
+  // ── Empty states ──────────────────────────────────────────────────────────
 
   Widget _buildEmptyInvoices() {
     return Center(
@@ -335,14 +367,15 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
                 size: 72, color: Colors.grey.shade400),
             const SizedBox(height: 20),
             Text(
-              'No invoices yet',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: Colors.grey.shade600,
-              ),
+              'No active invoices',
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(color: Colors.grey.shade600),
             ),
             const SizedBox(height: 8),
             Text(
-              'Tap New Invoice below to get started.',
+              'Tap New Invoice to create your first invoice.',
               style: TextStyle(color: Colors.grey.shade500),
               textAlign: TextAlign.center,
             ),
@@ -352,7 +385,34 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
     );
   }
 
-  // ── Estimates coming soon ────────────────────────────────────────────────
+  Widget _buildEmptyPaid() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(40.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.check_circle_outline,
+                size: 72, color: Colors.grey.shade400),
+            const SizedBox(height: 20),
+            Text(
+              'No paid invoices yet',
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(color: Colors.grey.shade600),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Paid invoices will appear here.',
+              style: TextStyle(color: Colors.grey.shade500),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   Widget _buildEstimatesComingSoon() {
     return Center(
@@ -366,19 +426,22 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
             const SizedBox(height: 20),
             Text(
               'Estimates',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: Colors.grey.shade600,
-              ),
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(color: Colors.grey.shade600),
             ),
             const SizedBox(height: 12),
             Container(
               padding:
-              const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               decoration: BoxDecoration(
-                color: Theme.of(context).primaryColor.withOpacity(0.08),
+                color: Theme.of(context).primaryColor.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                    color: Theme.of(context).primaryColor.withOpacity(0.25)),
+                    color: Theme.of(context)
+                        .primaryColor
+                        .withValues(alpha: 0.25)),
               ),
               child: Text(
                 'Coming Soon',
@@ -401,37 +464,43 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
     );
   }
 
-  // ── Invoice list body ────────────────────────────────────────────────────
+  // ── Tab content ───────────────────────────────────────────────────────────
 
-  Widget _buildInvoiceContent() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
-    }
+  Widget _buildActiveInvoices() {
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
     if (_errorMessage != null) {
       return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
           child: Text(_errorMessage!,
               style: const TextStyle(color: Colors.red),
-              textAlign: TextAlign.center),
-        ),
-      );
+              textAlign: TextAlign.center));
     }
-    if (_invoices.isEmpty) {
-      return _buildEmptyInvoices();
-    }
+    if (_activeInvoices.isEmpty) return _buildEmptyInvoices();
 
-    final projectNames = _groupedInvoices.keys.toList()..sort();
+    final projectNames = _groupedActive.keys.toList()..sort();
     return ListView.builder(
       itemCount: projectNames.length,
       itemBuilder: (context, index) {
         final name = projectNames[index];
-        return _buildProjectGroup(name, _groupedInvoices[name]!);
+        return _buildProjectGroup(name, _groupedActive[name]!);
       },
     );
   }
 
-  // ── Actions ──────────────────────────────────────────────────────────────
+  Widget _buildPaidInvoices() {
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    if (_paidInvoices.isEmpty) return _buildEmptyPaid();
+
+    final projectNames = _groupedPaid.keys.toList()..sort();
+    return ListView.builder(
+      itemCount: projectNames.length,
+      itemBuilder: (context, index) {
+        final name = projectNames[index];
+        return _buildProjectGroup(name, _groupedPaid[name]!);
+      },
+    );
+  }
+
+  // ── Actions ───────────────────────────────────────────────────────────────
 
   void _onInvoiceTap(Invoice invoice) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -440,13 +509,14 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
     );
   }
 
-  void _onCreateInvoice() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Create invoice — coming next')),
+  Future<void> _onCreateInvoice() async {
+    final result = await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const CreateInvoiceScreen()),
     );
+    if (result == true) _loadInvoices();
   }
 
-  // ── Build ────────────────────────────────────────────────────────────────
+  // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -461,7 +531,8 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  _buildInvoiceContent(),
+                  _buildActiveInvoices(),
+                  _buildPaidInvoices(),
                   _buildEstimatesComingSoon(),
                 ],
               ),
@@ -469,12 +540,12 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
           ],
         ),
       ),
-      floatingActionButton: _tabController.index == 0
+      floatingActionButton: _tabController.index == _tabInvoices
           ? FloatingActionButton.extended(
-        onPressed: _onCreateInvoice,
-        icon: const Icon(Icons.add),
-        label: const Text('New Invoice'),
-      )
+              onPressed: _onCreateInvoice,
+              icon: const Icon(Icons.add),
+              label: const Text('New Invoice'),
+            )
           : null,
     );
   }
