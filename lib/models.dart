@@ -1,5 +1,8 @@
 // lib/models.dart
 
+export 'models/invoice.dart';
+export 'models/company_settings.dart';
+
 // ============================================================================
 // |                         DATA MODELS (WITH copyWith)                      |
 // ============================================================================

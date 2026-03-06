@@ -21,8 +21,8 @@ class DatabaseHelperV2 {
   static Completer<Database>? _dbCompleter;
   static const String _dbName = 'time_tracker_pro.db';
 
-  // MODIFICATION: Bump version to 8 for cost_codes rename
-  static const int _dbVersion = 8;
+  // MODIFICATION: Bump version to 9 for invoicing/billing support
+  static const int _dbVersion = 9;
 
   final ValueNotifier<int> databaseNotifier = ValueNotifier(0);
 
@@ -214,6 +214,155 @@ class DatabaseHelperV2 {
 
           debugPrint('[DB_V2] V8 Migration: cost_codes rename complete.');
         }
+
+        if (oldVersion < 9) {
+          debugPrint('[DB_V2] V9 Migration: Adding invoicing and billing support...');
+
+          // Create invoices table
+          await db.execute('''
+            CREATE TABLE invoices (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              invoice_number TEXT NOT NULL UNIQUE,
+              invoice_date TEXT NOT NULL,
+              client_id INTEGER NOT NULL,
+              project_id INTEGER NOT NULL,
+              project_address TEXT,
+              labour_subtotal REAL DEFAULT 0,
+              materials_subtotal REAL DEFAULT 0,
+              materials_pickup_cost REAL DEFAULT 0,
+              other_costs REAL DEFAULT 0,
+              other_costs_description TEXT,
+              discount_amount REAL DEFAULT 0,
+              discount_percent REAL DEFAULT 0,
+              tax1_name TEXT,
+              tax1_rate REAL,
+              tax1_amount REAL DEFAULT 0,
+              tax1_registration_number TEXT,
+              tax2_name TEXT,
+              tax2_rate REAL,
+              tax2_amount REAL DEFAULT 0,
+              tax2_registration_number TEXT,
+              subtotal REAL DEFAULT 0,
+              total_amount REAL DEFAULT 0,
+              terms TEXT DEFAULT 'Payable on Receipt',
+              po_number TEXT,
+              is_paid INTEGER DEFAULT 0,
+              amount_paid REAL,
+              payment_date TEXT,
+              payment_method TEXT,
+              is_deleted INTEGER DEFAULT 0,
+              deleted_reason_code TEXT,
+              deleted_date TEXT,
+              deleted_notes TEXT,
+              superseded_by_invoice_id INTEGER,
+              notes TEXT,
+              FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
+              FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+              FOREIGN KEY (superseded_by_invoice_id) REFERENCES invoices(id) ON DELETE SET NULL
+            )
+          ''');
+          debugPrint('[DB_V2] V9 Migration: Created invoices table.');
+
+          // Create company_settings table
+          await db.execute('''
+            CREATE TABLE company_settings (
+              id INTEGER PRIMARY KEY CHECK (id = 1),
+              company_name TEXT,
+              company_address TEXT,
+              company_city TEXT,
+              company_province TEXT,
+              company_postal_code TEXT,
+              company_phone TEXT,
+              company_email TEXT,
+              default_tax1_name TEXT DEFAULT 'GST',
+              default_tax1_rate REAL DEFAULT 0.05,
+              default_tax1_registration_number TEXT,
+              default_tax2_name TEXT,
+              default_tax2_rate REAL,
+              default_tax2_registration_number TEXT,
+              default_terms TEXT DEFAULT 'Payable on Receipt'
+            )
+          ''');
+          await db.insert('company_settings', {'id': 1});
+          debugPrint('[DB_V2] V9 Migration: Created company_settings table.');
+
+          // Add billing columns to time_entries
+          await db.execute('''
+            CREATE TABLE time_entries_new (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              project_id INTEGER,
+              employee_id INTEGER,
+              start_time TEXT NOT NULL,
+              end_time TEXT,
+              paused_duration REAL DEFAULT 0.0,
+              final_billed_duration_seconds REAL,
+              hourly_rate REAL,
+              is_paused INTEGER DEFAULT 0,
+              pause_start_time TEXT,
+              is_deleted INTEGER DEFAULT 0,
+              work_details TEXT,
+              cost_code_id INTEGER,
+              is_billed INTEGER DEFAULT 0,
+              invoice_id INTEGER,
+              FOREIGN KEY (project_id) REFERENCES projects(id),
+              FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE SET NULL,
+              FOREIGN KEY (cost_code_id) REFERENCES cost_codes(id),
+              FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL
+            )
+          ''');
+          await db.execute('''
+            INSERT INTO time_entries_new
+              SELECT id, project_id, employee_id, start_time, end_time,
+                     paused_duration, final_billed_duration_seconds, hourly_rate,
+                     is_paused, pause_start_time, is_deleted, work_details, cost_code_id,
+                     0, NULL
+              FROM time_entries
+          ''');
+          await db.execute('DROP TABLE time_entries');
+          await db.execute('ALTER TABLE time_entries_new RENAME TO time_entries');
+          debugPrint('[DB_V2] V9 Migration: Added is_billed and invoice_id to time_entries.');
+
+          // Add billing columns to materials
+          await db.execute('''
+            CREATE TABLE materials_new (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              project_id INTEGER,
+              item_name TEXT NOT NULL,
+              cost REAL NOT NULL,
+              purchase_date TEXT,
+              description TEXT,
+              is_deleted INTEGER DEFAULT 0,
+              expense_category TEXT,
+              unit TEXT,
+              quantity REAL,
+              base_quantity REAL,
+              odometer_reading REAL,
+              is_company_expense INTEGER DEFAULT 0,
+              vehicle_designation TEXT,
+              vendor_or_subtrade TEXT,
+              cost_code_id INTEGER,
+              is_billed INTEGER DEFAULT 0,
+              invoice_id INTEGER,
+              FOREIGN KEY (project_id) REFERENCES projects(id),
+              FOREIGN KEY (cost_code_id) REFERENCES cost_codes(id),
+              FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL
+            )
+          ''');
+          await db.execute('''
+            INSERT INTO materials_new
+              SELECT id, project_id, item_name, cost, purchase_date, description,
+                     is_deleted, expense_category, unit, quantity, base_quantity,
+                     odometer_reading, is_company_expense, vehicle_designation,
+                     vendor_or_subtrade, cost_code_id,
+                     0, NULL
+              FROM materials
+          ''');
+          await db.execute('DROP TABLE materials');
+          await db.execute('ALTER TABLE materials_new RENAME TO materials');
+          debugPrint('[DB_V2] V9 Migration: Added is_billed and invoice_id to materials.');
+
+          debugPrint('[DB_V2] V9 Migration complete.');
+        }
       },
 
       onDowngrade: onDatabaseDowngradeDelete,
@@ -255,12 +404,12 @@ class DatabaseHelperV2 {
         ''');
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS time_entries (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, employee_id INTEGER, start_time TEXT NOT NULL, end_time TEXT, paused_duration REAL DEFAULT 0.0, final_billed_duration_seconds REAL, hourly_rate REAL, is_paused INTEGER DEFAULT 0, pause_start_time TEXT, is_deleted INTEGER DEFAULT 0, work_details TEXT, cost_code_id INTEGER, FOREIGN KEY (project_id) REFERENCES projects(id), FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE SET NULL, FOREIGN KEY (cost_code_id) REFERENCES cost_codes(id)
+            id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, employee_id INTEGER, start_time TEXT NOT NULL, end_time TEXT, paused_duration REAL DEFAULT 0.0, final_billed_duration_seconds REAL, hourly_rate REAL, is_paused INTEGER DEFAULT 0, pause_start_time TEXT, is_deleted INTEGER DEFAULT 0, work_details TEXT, cost_code_id INTEGER, is_billed INTEGER DEFAULT 0, invoice_id INTEGER, FOREIGN KEY (project_id) REFERENCES projects(id), FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE SET NULL, FOREIGN KEY (cost_code_id) REFERENCES cost_codes(id), FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL
           )
         ''');
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS materials (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, item_name TEXT NOT NULL, cost REAL NOT NULL, purchase_date TEXT, description TEXT, is_deleted INTEGER DEFAULT 0, expense_category TEXT, unit TEXT, quantity REAL, base_quantity REAL, odometer_reading REAL, is_company_expense INTEGER DEFAULT 0, vehicle_designation TEXT, vendor_or_subtrade TEXT, cost_code_id INTEGER, FOREIGN KEY (project_id) REFERENCES projects(id), FOREIGN KEY (cost_code_id) REFERENCES cost_codes(id)
+            id INTEGER PRIMARY KEY AUTOINCREMENT, project_id INTEGER, item_name TEXT NOT NULL, cost REAL NOT NULL, purchase_date TEXT, description TEXT, is_deleted INTEGER DEFAULT 0, expense_category TEXT, unit TEXT, quantity REAL, base_quantity REAL, odometer_reading REAL, is_company_expense INTEGER DEFAULT 0, vehicle_designation TEXT, vendor_or_subtrade TEXT, cost_code_id INTEGER, is_billed INTEGER DEFAULT 0, invoice_id INTEGER, FOREIGN KEY (project_id) REFERENCES projects(id), FOREIGN KEY (cost_code_id) REFERENCES cost_codes(id), FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE SET NULL
           )
         ''');
       await txn.execute('''
@@ -273,6 +422,69 @@ class DatabaseHelperV2 {
             id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE
           )
         ''');
+      // Fresh install V9 support
+      await txn.execute('''
+        CREATE TABLE IF NOT EXISTS invoices (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          invoice_number TEXT NOT NULL UNIQUE,
+          invoice_date TEXT NOT NULL,
+          client_id INTEGER NOT NULL,
+          project_id INTEGER NOT NULL,
+          project_address TEXT,
+          labour_subtotal REAL DEFAULT 0,
+          materials_subtotal REAL DEFAULT 0,
+          materials_pickup_cost REAL DEFAULT 0,
+          other_costs REAL DEFAULT 0,
+          other_costs_description TEXT,
+          discount_amount REAL DEFAULT 0,
+          discount_percent REAL DEFAULT 0,
+          tax1_name TEXT,
+          tax1_rate REAL,
+          tax1_amount REAL DEFAULT 0,
+          tax1_registration_number TEXT,
+          tax2_name TEXT,
+          tax2_rate REAL,
+          tax2_amount REAL DEFAULT 0,
+          tax2_registration_number TEXT,
+          subtotal REAL DEFAULT 0,
+          total_amount REAL DEFAULT 0,
+          terms TEXT DEFAULT 'Payable on Receipt',
+          po_number TEXT,
+          is_paid INTEGER DEFAULT 0,
+          amount_paid REAL,
+          payment_date TEXT,
+          payment_method TEXT,
+          is_deleted INTEGER DEFAULT 0,
+          deleted_reason_code TEXT,
+          deleted_date TEXT,
+          deleted_notes TEXT,
+          superseded_by_invoice_id INTEGER,
+          notes TEXT,
+          FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
+          FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+          FOREIGN KEY (superseded_by_invoice_id) REFERENCES invoices(id) ON DELETE SET NULL
+        )
+      ''');
+      await txn.execute('''
+        CREATE TABLE IF NOT EXISTS company_settings (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          company_name TEXT,
+          company_address TEXT,
+          company_city TEXT,
+          company_province TEXT,
+          company_postal_code TEXT,
+          company_phone TEXT,
+          company_email TEXT,
+          default_tax1_name TEXT DEFAULT 'GST',
+          default_tax1_rate REAL DEFAULT 0.05,
+          default_tax1_registration_number TEXT,
+          default_tax2_name TEXT,
+          default_tax2_rate REAL,
+          default_tax2_registration_number TEXT,
+          default_terms TEXT DEFAULT 'Payable on Receipt'
+        )
+      ''');
+      await txn.insert('company_settings', {'id': 1});
     });
     debugPrint('[DB_V2] All tables created and default settings inserted successfully.');
   }
@@ -517,7 +729,9 @@ class DatabaseHelperV2 {
       'time_entries',
       'materials',
       'expense_categories',
-      'cost_codes'
+      'cost_codes',
+      'invoices',
+      'company_settings'
     ];
 
     for (String tableName in tableNames) {
@@ -551,6 +765,8 @@ class DatabaseHelperV2 {
       'roles',
       'expense_categories',
       'cost_codes',
+      'invoices',
+      'company_settings',
       'settings'
     ];
 
@@ -592,6 +808,8 @@ class DatabaseHelperV2 {
       'roles',
       'expense_categories',
       'cost_codes',
+      'invoices',
+      'company_settings',
       'settings'
     ];
 
