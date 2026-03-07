@@ -76,6 +76,7 @@ class Project {
   final double? billedHourlyRate;
   final double? fixedPrice;
   final double expenseMarkupPercentage;
+  final double taxRate;
 
   const Project({
     this.id,
@@ -89,6 +90,7 @@ class Project {
     this.billedHourlyRate,
     this.fixedPrice,
     this.expenseMarkupPercentage = 15.0,
+    this.taxRate = 5.0,
   });
 
   Map<String, dynamic> toMap() {
@@ -104,6 +106,7 @@ class Project {
       'billed_hourly_rate': billedHourlyRate,
       'project_price': fixedPrice,
       'expense_markup_percentage': expenseMarkupPercentage,
+      'tax_rate': taxRate,
     };
   }
 
@@ -120,6 +123,7 @@ class Project {
       billedHourlyRate: (map['billed_hourly_rate'] as num?)?.toDouble(),
       fixedPrice: (map['project_price'] as num?)?.toDouble(),
       expenseMarkupPercentage: (map['expense_markup_percentage'] as num?)?.toDouble() ?? 15.0,
+      taxRate: (map['tax_rate'] as num?)?.toDouble() ?? 5.0,
     );
   }
 
@@ -135,6 +139,7 @@ class Project {
     double? billedHourlyRate,
     double? fixedPrice,
     double? expenseMarkupPercentage,
+    double? taxRate,
   }) {
     return Project(
       id: id ?? this.id,
@@ -148,12 +153,13 @@ class Project {
       billedHourlyRate: billedHourlyRate ?? this.billedHourlyRate,
       fixedPrice: fixedPrice ?? this.fixedPrice,
       expenseMarkupPercentage: expenseMarkupPercentage ?? this.expenseMarkupPercentage,
+      taxRate: taxRate ?? this.taxRate,
     );
   }
 
   @override
   String toString() {
-    return 'Project(id: $id, name: $projectName, clientId: $clientId, pricingModel: $pricingModel, fixedPrice: $fixedPrice)';
+    return 'Project(id: $id, name: $projectName, clientId: $clientId, pricingModel: $pricingModel, fixedPrice: $fixedPrice, taxRate: $taxRate)';
   }
 }
 

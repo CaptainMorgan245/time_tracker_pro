@@ -21,8 +21,8 @@ class DatabaseHelperV2 {
   static Completer<Database>? _dbCompleter;
   static const String _dbName = 'time_tracker_pro.db';
 
-  // MODIFICATION: Bump version to 11 for invoice_type column in invoices
-  static const int _dbVersion = 11;
+  // MODIFICATION: Bump version to 12 for tax_rate column in company_settings and projects
+  static const int _dbVersion = 12;
 
   final ValueNotifier<int> databaseNotifier = ValueNotifier(0);
 
@@ -373,6 +373,12 @@ class DatabaseHelperV2 {
           await db.execute("ALTER TABLE invoices ADD COLUMN invoice_type TEXT NOT NULL DEFAULT 'progress'");
           debugPrint('[DB_V2] V11 Migration: Added invoice_type column to invoices table.');
         }
+
+        if (oldVersion < 12) {
+          await db.execute("ALTER TABLE company_settings ADD COLUMN tax_rate REAL NOT NULL DEFAULT 5.0");
+          await db.execute("ALTER TABLE projects ADD COLUMN tax_rate REAL NOT NULL DEFAULT 5.0");
+          debugPrint('[DB_V2] V12 Migration: Added tax_rate to company_settings and projects.');
+        }
       },
 
       onDowngrade: onDatabaseDowngradeDelete,
@@ -396,10 +402,10 @@ class DatabaseHelperV2 {
             id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, is_active INTEGER NOT NULL DEFAULT 1, contact_person TEXT, phone_number TEXT
           )
         ''');
-      // NOTE: Added the new 'project_price' column to the fresh creation schema
+      // NOTE: Added the new 'project_price' and 'tax_rate' columns to the fresh creation schema
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS projects (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, project_name TEXT NOT NULL, client_id INTEGER NOT NULL, location TEXT, pricing_model TEXT DEFAULT 'hourly', is_completed INTEGER NOT NULL DEFAULT 0, completion_date TEXT, is_internal INTEGER NOT NULL DEFAULT 0, billed_hourly_rate REAL, project_price REAL, expense_markup_percentage REAL DEFAULT 15.0, FOREIGN KEY (client_id) REFERENCES clients(id), UNIQUE(project_name, client_id)
+            id INTEGER PRIMARY KEY AUTOINCREMENT, project_name TEXT NOT NULL, client_id INTEGER NOT NULL, location TEXT, pricing_model TEXT DEFAULT 'hourly', is_completed INTEGER NOT NULL DEFAULT 0, completion_date TEXT, is_internal INTEGER NOT NULL DEFAULT 0, billed_hourly_rate REAL, project_price REAL, expense_markup_percentage REAL DEFAULT 15.0, tax_rate REAL NOT NULL DEFAULT 5.0, FOREIGN KEY (client_id) REFERENCES clients(id), UNIQUE(project_name, client_id)
           )
         ''');
       await txn.execute('''
@@ -493,7 +499,8 @@ class DatabaseHelperV2 {
           default_tax2_name TEXT,
           default_tax2_rate REAL,
           default_tax2_registration_number TEXT,
-          default_terms TEXT DEFAULT 'Payable on Receipt'
+          default_terms TEXT DEFAULT 'Payable on Receipt',
+          tax_rate REAL NOT NULL DEFAULT 5.0
         )
       ''');
       await txn.insert('company_settings', {'id': 1});

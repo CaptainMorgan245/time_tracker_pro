@@ -219,7 +219,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
           : await _invoiceService.generateInvoiceNumber();
 
       final invoice = Invoice(
-        id: _isEditMode ? widget.existingInvoice!.id : 0,
+        id: _isEditMode ? widget.existingInvoice!.id : null,
         invoiceNumber: invoiceNumber,
         invoiceDate: _invoiceDate,
         clientId: _selectedProject!.clientId,
