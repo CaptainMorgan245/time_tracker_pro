@@ -6,6 +6,7 @@ import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/invoice_repository.dart';
 import 'package:time_tracker_pro/invoice_service.dart';
 import 'package:time_tracker_pro/create_invoice_screen.dart';
+import 'package:time_tracker_pro/invoice_detail_screen.dart';
 
 // start class: InvoiceListScreen
 class InvoiceListScreen extends StatefulWidget {
@@ -503,9 +504,10 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
   // ── Actions ───────────────────────────────────────────────────────────────
 
   void _onInvoiceTap(Invoice invoice) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-          content: Text('Invoice detail coming — ${invoice.invoiceNumber}')),
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => InvoiceDetailScreen(invoiceId: invoice.id!),
+      ),
     );
   }
 

@@ -9,7 +9,9 @@ import 'package:time_tracker_pro/invoice_service.dart';
 
 // start class: CreateInvoiceScreen
 class CreateInvoiceScreen extends StatefulWidget {
-  const CreateInvoiceScreen({super.key});
+  final Invoice? existingInvoice; // null = create, non-null = edit
+
+  const CreateInvoiceScreen({super.key, this.existingInvoice});
 
   @override
   State<CreateInvoiceScreen> createState() => _CreateInvoiceScreenState();
@@ -22,7 +24,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   final InvoiceRepository _invoiceRepository = InvoiceRepository();
   final InvoiceService _invoiceService = InvoiceService.instance;
   final NumberFormat _currencyFormat =
-  NumberFormat.currency(locale: 'en_US', symbol: '\$');
+      NumberFormat.currency(locale: 'en_US', symbol: '\$');
 
   // Form controllers
   final _amountController = TextEditingController();
@@ -36,27 +38,70 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   Client? _selectedProjectClient;
   String _invoiceType = 'progress';
   DateTime _invoiceDate = DateTime.now();
+  bool _isFinalInvoice = false;
   bool _isLoading = true;
   bool _isSaving = false;
   String? _errorMessage;
 
-  // Derived
-  double get _subtotal =>
-      double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0.0;
-  double get _gstAmount => _subtotal * 0.05;
-  double get _total => _subtotal + _gstAmount;
+  // Contract summary for fixed price projects
+  double _totalPreviouslyBilled = 0;
+  double _totalGstCollected = 0;
+  bool _loadingBillingSummary = false;
+
+  bool get _isEditMode => widget.existingInvoice != null;
+  bool get _isFixedPrice =>
+      _selectedProject?.pricingModel == 'fixed' &&
+      (_selectedProject?.fixedPrice ?? 0) > 0;
 
   static const Map<String, String> _invoiceTypeLabels = {
     'progress': 'Progress Draw',
     'chargeable': 'Chargeable Extra',
     'addendum': 'Addendum',
+    'deposit': 'Deposit',
   };
+
+  // ── Calculated fields ─────────────────────────────────────────────────────
+
+  double get _enteredAmount =>
+      double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0.0;
+
+  double get _gstAmount {
+    if (_isFixedPrice && _isFinalInvoice) {
+      // Reconciliation: GST on full contract minus previously collected
+      final contractGst = (_selectedProject!.fixedPrice ?? 0) * 0.05;
+      return (contractGst - _totalGstCollected).clamp(0, double.infinity);
+    }
+    return _enteredAmount * 0.05;
+  }
+
+  double get _finalAmount {
+    if (_isFixedPrice && _isFinalInvoice) {
+      // Remaining balance = contract total - previously billed
+      return ((_selectedProject!.fixedPrice ?? 0) - _totalPreviouslyBilled)
+          .clamp(0, double.infinity);
+    }
+    return _enteredAmount;
+  }
+
+  double get _total => _finalAmount + _gstAmount;
 
   @override
   void initState() {
     super.initState();
     _amountController.addListener(() => setState(() {}));
     _loadProjects();
+
+    // Pre-populate if editing
+    if (_isEditMode) {
+      final inv = widget.existingInvoice!;
+      _invoiceDate = inv.invoiceDate;
+      _invoiceType = inv.invoiceType;
+      _notesController.text = inv.notes ?? '';
+      _poNumberController.text = inv.poNumber ?? '';
+      _descriptionController.text = inv.otherCostsDescription ?? '';
+      // Amount is the subtotal
+      _amountController.text = inv.subtotal.toStringAsFixed(2);
+    }
   }
 
   @override
@@ -76,6 +121,15 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         _projects = projects;
         _isLoading = false;
       });
+
+      // If editing, find and select the existing project
+      if (_isEditMode) {
+        final match = projects.where(
+            (p) => p.id == widget.existingInvoice!.projectId).toList();
+        if (match.isNotEmpty) {
+          await _onProjectSelected(match.first, silent: true);
+        }
+      }
     } catch (e) {
       setState(() {
         _errorMessage = 'Failed to load projects: $e';
@@ -84,23 +138,52 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     }
   }
 
-  void _onProjectSelected(Project? project) async {
+  Future<void> _onProjectSelected(Project? project,
+      {bool silent = false}) async {
     if (project == null) return;
-    setState(() => _selectedProject = project);
+    setState(() {
+      _selectedProject = project;
+      _loadingBillingSummary = true;
+      if (!silent) {
+        // Auto-select invoice type based on pricing model
+        _invoiceType =
+            project.pricingModel == 'fixed' ? 'progress' : 'chargeable';
+        _isFinalInvoice = false;
+      }
+    });
 
-    // Auto-select invoice type based on pricing model
-    if (project.pricingModel == 'hourly') {
-      setState(() => _invoiceType = 'chargeable');
-    } else {
-      setState(() => _invoiceType = 'progress');
+    // Load client
+    try {
+      final client =
+          await _invoiceRepository.getClientById(project.clientId);
+      setState(() => _selectedProjectClient = client);
+    } catch (_) {
+      setState(() => _selectedProjectClient = null);
     }
 
-    // Load client for this project
-    try {
-      final client = await _invoiceRepository.getClientById(project.clientId);
-      setState(() => _selectedProjectClient = client);
-    } catch (e) {
-      setState(() => _selectedProjectClient = null);
+    // Load billing summary for fixed price projects
+    if (project.pricingModel == 'fixed' &&
+        (project.fixedPrice ?? 0) > 0) {
+      try {
+        final summary =
+            await _invoiceRepository.getProjectBillingSummary(project.id!);
+        // Exclude current invoice if editing
+        double billed = summary['total_billed'] ?? 0;
+        double gst = summary['total_gst'] ?? 0;
+        if (_isEditMode) {
+          billed -= widget.existingInvoice!.subtotal;
+          gst -= widget.existingInvoice!.tax1Amount ?? 0;
+        }
+        setState(() {
+          _totalPreviouslyBilled = billed;
+          _totalGstCollected = gst;
+          _loadingBillingSummary = false;
+        });
+      } catch (_) {
+        setState(() => _loadingBillingSummary = false);
+      }
+    } else {
+      setState(() => _loadingBillingSummary = false);
     }
   }
 
@@ -111,9 +194,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       firstDate: DateTime(2020),
       lastDate: DateTime(2030),
     );
-    if (picked != null) {
-      setState(() => _invoiceDate = picked);
-    }
+    if (picked != null) setState(() => _invoiceDate = picked);
   }
 
   Future<void> _saveInvoice() async {
@@ -129,15 +210,16 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     });
 
     try {
-      final invoiceNumber =
-      await _invoiceService.generateInvoiceNumber();
+      final subtotal = _finalAmount;
+      final gst = _gstAmount;
+      final total = subtotal + gst;
 
-      final subtotal = _subtotal;
-      final gstAmount = subtotal * 0.05;
-      final total = subtotal + gstAmount;
+      String invoiceNumber = _isEditMode
+          ? widget.existingInvoice!.invoiceNumber
+          : await _invoiceService.generateInvoiceNumber();
 
       final invoice = Invoice(
-        id: 0,
+        id: _isEditMode ? widget.existingInvoice!.id : 0,
         invoiceNumber: invoiceNumber,
         invoiceDate: _invoiceDate,
         clientId: _selectedProject!.clientId,
@@ -146,9 +228,10 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         labourSubtotal: _invoiceType == 'chargeable' ? subtotal : 0,
         materialsSubtotal: 0,
         materialsPickupCost: 0,
-        otherCosts: _invoiceType == 'progress' || _invoiceType == 'addendum'
-            ? subtotal
-            : 0,
+        otherCosts:
+            _invoiceType == 'progress' || _invoiceType == 'addendum'
+                ? subtotal
+                : 0,
         otherCostsDescription: _descriptionController.text.trim().isEmpty
             ? _invoiceTypeLabels[_invoiceType]
             : _descriptionController.text.trim(),
@@ -156,7 +239,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         discountPercent: 0,
         tax1Name: 'GST',
         tax1Rate: 5.0,
-        tax1Amount: gstAmount,
+        tax1Amount: gst,
         tax1RegistrationNumber: null,
         tax2Name: null,
         tax2Rate: null,
@@ -168,10 +251,12 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         poNumber: _poNumberController.text.trim().isEmpty
             ? null
             : _poNumberController.text.trim(),
-        isPaid: false,
-        amountPaid: null,
-        paymentDate: null,
-        paymentMethod: null,
+        isPaid: _isEditMode ? widget.existingInvoice!.isPaid : false,
+        amountPaid: _isEditMode ? widget.existingInvoice!.amountPaid : null,
+        paymentDate:
+            _isEditMode ? widget.existingInvoice!.paymentDate : null,
+        paymentMethod:
+            _isEditMode ? widget.existingInvoice!.paymentMethod : null,
         isDeleted: false,
         deletedReasonCode: null,
         deletedDate: null,
@@ -180,20 +265,26 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         notes: _notesController.text.trim().isEmpty
             ? null
             : _notesController.text.trim(),
-        isSent: false,
+        isSent: _isEditMode ? widget.existingInvoice!.isSent : false,
         invoiceType: _invoiceType,
       );
 
-      await _invoiceService.createInvoice(invoice);
+      if (_isEditMode) {
+        await _invoiceRepository.updateInvoice(invoice);
+      } else {
+        await _invoiceService.createInvoice(invoice);
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Invoice $invoiceNumber created as draft.'),
+            content: Text(_isEditMode
+                ? 'Invoice updated.'
+                : 'Invoice $invoiceNumber created as draft.'),
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.of(context).pop(true); // return true to trigger list refresh
+        Navigator.of(context).pop(true);
       }
     } catch (e) {
       setState(() {
@@ -211,9 +302,9 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       child: Text(
         title,
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.bold,
-          color: Theme.of(context).primaryColor,
-        ),
+              fontWeight: FontWeight.bold,
+              color: Theme.of(context).primaryColor,
+            ),
       ),
     );
   }
@@ -232,8 +323,9 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
           child: Text(p.projectName),
         );
       }).toList(),
-      onChanged: _onProjectSelected,
-      validator: (value) => value == null ? 'Please select a project' : null,
+      onChanged: (p) => _onProjectSelected(p),
+      validator: (value) =>
+          value == null ? 'Please select a project' : null,
     );
   }
 
@@ -248,6 +340,100 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       ),
       controller: TextEditingController(
           text: _selectedProjectClient?.name ?? '—'),
+    );
+  }
+
+  // ── Contract summary panel ────────────────────────────────────────────────
+
+  Widget _buildContractSummary() {
+    if (!_isFixedPrice) return const SizedBox.shrink();
+    if (_loadingBillingSummary) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 8),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final contractValue = _selectedProject!.fixedPrice ?? 0;
+    final remaining = contractValue - _totalPreviouslyBilled;
+
+    return Card(
+      elevation: 2,
+      color: Theme.of(context).primaryColor.withValues(alpha: 0.06),
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Contract Summary',
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).primaryColor,
+                    )),
+            const SizedBox(height: 10),
+            _summaryRow('Contract Value',
+                _currencyFormat.format(contractValue)),
+            _summaryRow('Previously Billed',
+                _currencyFormat.format(_totalPreviouslyBilled)),
+            _summaryRow('GST Collected',
+                _currencyFormat.format(_totalGstCollected)),
+            const Divider(height: 16),
+            _summaryRow(
+              'Remaining Balance',
+              _currencyFormat.format(remaining),
+              bold: true,
+              color: remaining > 0
+                  ? Theme.of(context).primaryColor
+                  : Colors.green,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _summaryRow(String label, String value,
+      {bool bold = false, Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: TextStyle(
+                  fontWeight:
+                      bold ? FontWeight.bold : FontWeight.normal)),
+          Text(value,
+              style: TextStyle(
+                fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+                color: color,
+              )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFinalInvoiceToggle() {
+    if (!_isFixedPrice) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(
+        children: [
+          Checkbox(
+            value: _isFinalInvoice,
+            onChanged: (val) =>
+                setState(() => _isFinalInvoice = val ?? false),
+          ),
+          const Expanded(
+            child: Text(
+              'This is the final invoice — calculate reconciled GST',
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -279,12 +465,25 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
           border: OutlineInputBorder(),
           suffixIcon: Icon(Icons.calendar_today),
         ),
-        child: Text(DateFormat('MMMM d, yyyy').format(_invoiceDate)),
+        child: Text(
+            DateFormat('MMMM d, yyyy').format(_invoiceDate)),
       ),
     );
   }
 
   Widget _buildAmountField() {
+    if (_isFixedPrice && _isFinalInvoice) {
+      // Final invoice — amount is calculated, show read only
+      return InputDecorator(
+        decoration: InputDecoration(
+          labelText: 'Amount (calculated)',
+          border: const OutlineInputBorder(),
+          filled: true,
+          fillColor: Colors.grey.shade100,
+        ),
+        child: Text(_currencyFormat.format(_finalAmount)),
+      );
+    }
     return TextFormField(
       controller: _amountController,
       decoration: const InputDecoration(
@@ -292,16 +491,55 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         border: OutlineInputBorder(),
         prefixText: '\$ ',
       ),
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      keyboardType:
+          const TextInputType.numberWithOptions(decimal: true),
       inputFormatters: [
         FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
       ],
       validator: (value) {
-        if (value == null || value.isEmpty) return 'Please enter an amount';
+        if (_isFixedPrice && _isFinalInvoice) return null;
+        if (value == null || value.isEmpty)
+          return 'Please enter an amount';
         final amount = double.tryParse(value);
-        if (amount == null || amount <= 0) return 'Please enter a valid amount';
+        if (amount == null || amount <= 0)
+          return 'Please enter a valid amount';
         return null;
       },
+    );
+  }
+
+  Widget _buildGstSummary() {
+    final showAmount =
+        (_isFixedPrice && _isFinalInvoice) || _enteredAmount > 0;
+    if (!showAmount) return const SizedBox.shrink();
+
+    return Card(
+      elevation: 4,
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            _summaryRow('Subtotal',
+                _currencyFormat.format(_finalAmount)),
+            const SizedBox(height: 6),
+            _summaryRow(
+              _isFinalInvoice
+                  ? 'GST (reconciled)'
+                  : 'GST (5%)',
+              _currencyFormat.format(_gstAmount),
+            ),
+            const Divider(height: 20, thickness: 1.5),
+            _summaryRow(
+              'Total Due',
+              _currencyFormat.format(_total),
+              bold: true,
+              color: Theme.of(context).primaryColor,
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -314,57 +552,6 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         border: const OutlineInputBorder(),
       ),
       maxLines: 2,
-    );
-  }
-
-  Widget _buildGstSummary() {
-    if (_subtotal <= 0) return const SizedBox.shrink();
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Subtotal:',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                Text(_currencyFormat.format(_subtotal)),
-              ],
-            ),
-            const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('GST (5%):',
-                    style: TextStyle(fontWeight: FontWeight.bold)),
-                Text(_currencyFormat.format(_gstAmount)),
-              ],
-            ),
-            const Divider(height: 20, thickness: 1.5),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Total Due:',
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold)),
-                Text(
-                  _currencyFormat.format(_total),
-                  style: TextStyle(
-                    color: Theme.of(context).primaryColor,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -395,8 +582,14 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('New Invoice'),
+        title: Text(_isEditMode ? 'Edit Invoice' : 'New Invoice'),
         actions: [
+          if (!_isSaving)
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel',
+                  style: TextStyle(color: Colors.white)),
+            ),
           if (_isSaving)
             const Padding(
               padding: EdgeInsets.all(16),
@@ -410,60 +603,71 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
           else
             TextButton(
               onPressed: _saveInvoice,
-              child: const Text('Save Draft',
-                  style: TextStyle(color: Colors.white)),
+              child: Text(
+                _isEditMode ? 'Update' : 'Save Draft',
+                style: const TextStyle(color: Colors.white),
+              ),
             ),
         ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (_errorMessage != null)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Text(_errorMessage!,
-                      style: const TextStyle(color: Colors.red)),
-                ),
-              _buildSectionHeader('Project'),
-              _buildProjectDropdown(),
-              const SizedBox(height: 12),
-              _buildClientField(),
-              _buildSectionHeader('Invoice Details'),
-              _buildInvoiceTypeDropdown(),
-              const SizedBox(height: 12),
-              _buildDateField(),
-              const SizedBox(height: 12),
-              _buildDescriptionField(),
-              _buildSectionHeader('Amount'),
-              _buildAmountField(),
-              const SizedBox(height: 16),
-              _buildGstSummary(),
-              _buildSectionHeader('Additional'),
-              _buildPoField(),
-              const SizedBox(height: 12),
-              _buildNotesField(),
-              const SizedBox(height: 32),
-              ElevatedButton.icon(
-                onPressed: _isSaving ? null : _saveInvoice,
-                icon: const Icon(Icons.save),
-                label: const Text('Save as Draft'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).primaryColor,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+              key: _formKey,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_errorMessage != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(_errorMessage!,
+                            style:
+                                const TextStyle(color: Colors.red)),
+                      ),
+                    _buildSectionHeader('Project'),
+                    _buildProjectDropdown(),
+                    const SizedBox(height: 12),
+                    _buildClientField(),
+                    const SizedBox(height: 12),
+                    _buildContractSummary(),
+                    _buildSectionHeader('Invoice Details'),
+                    _buildInvoiceTypeDropdown(),
+                    const SizedBox(height: 12),
+                    _buildDateField(),
+                    const SizedBox(height: 12),
+                    _buildDescriptionField(),
+                    _buildSectionHeader('Amount'),
+                    _buildFinalInvoiceToggle(),
+                    const SizedBox(height: 8),
+                    _buildAmountField(),
+                    const SizedBox(height: 16),
+                    _buildGstSummary(),
+                    _buildSectionHeader('Additional'),
+                    _buildPoField(),
+                    const SizedBox(height: 12),
+                    _buildNotesField(),
+                    const SizedBox(height: 32),
+                    ElevatedButton.icon(
+                      onPressed: _isSaving ? null : _saveInvoice,
+                      icon: const Icon(Icons.save),
+                      label: Text(_isEditMode
+                          ? 'Update Invoice'
+                          : 'Save as Draft'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor:
+                            Theme.of(context).primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 16),
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                  ],
                 ),
               ),
-              const SizedBox(height: 32),
-            ],
-          ),
-        ),
-      ),
+            ),
     );
   }
 }

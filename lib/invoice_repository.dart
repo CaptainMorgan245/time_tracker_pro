@@ -166,4 +166,63 @@ class InvoiceRepository {
     }
     return null;
   }
+
+  Future<void> markSent(int invoiceId) async {
+    final db = await _databaseHelper.database;
+    await db.update(
+      'invoices',
+      {'is_sent': 1},
+      where: 'id = ?',
+      whereArgs: [invoiceId],
+    );
+    _databaseHelper.notifyDatabaseChanged();
+  }
+
+  Future<void> markPaid(int invoiceId, double amountPaid, DateTime paymentDate, String? paymentMethod) async {
+    final db = await _databaseHelper.database;
+    await db.update(
+      'invoices',
+      {
+        'is_paid': 1,
+        'amount_paid': amountPaid,
+        'payment_date': paymentDate.toIso8601String(),
+        'payment_method': paymentMethod,
+      },
+      where: 'id = ?',
+      whereArgs: [invoiceId],
+    );
+    _databaseHelper.notifyDatabaseChanged();
+  }
+
+  Future<void> softDelete(int invoiceId, String reasonCode, String? notes) async {
+    final db = await _databaseHelper.database;
+    await db.update(
+      'invoices',
+      {
+        'is_deleted': 1,
+        'deleted_reason_code': reasonCode,
+        'deleted_date': DateTime.now().toIso8601String(),
+        'deleted_notes': notes,
+      },
+      where: 'id = ?',
+      whereArgs: [invoiceId],
+    );
+    _databaseHelper.notifyDatabaseChanged();
+  }
+
+  Future<Map<String, double>> getProjectBillingSummary(int projectId) async {
+    final db = await _databaseHelper.database;
+    final result = await db.rawQuery('''
+      SELECT 
+        COALESCE(SUM(subtotal), 0) as total_billed,
+        COALESCE(SUM(tax1_amount), 0) as total_gst
+      FROM invoices
+      WHERE project_id = ? AND is_deleted = 0
+    ''', [projectId]);
+    
+    return {
+      'total_billed': (result.first['total_billed'] as num).toDouble(),
+      'total_gst': (result.first['total_gst'] as num).toDouble(),
+    };
+  }
 }
