@@ -34,6 +34,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     'progress': 'Progress Draw',
     'chargeable': 'Chargeable Extra',
     'addendum': 'Addendum',
+    'extras': 'Extras Invoice',
   };
 
   @override
@@ -183,7 +184,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                   _buildAmountRow('Subtotal', inv.subtotal),
                   if (inv.tax1Amount > 0)
                     _buildAmountRow(
-                      '${inv.tax1Name ?? 'GST'} (${inv.tax1Rate?.toStringAsFixed(0) ?? '5'}%)',
+                      '${inv.tax1Name ?? 'GST'} (${inv.tax1Rate?.toStringAsFixed(1) ?? '5.0'}%)',
                       inv.tax1Amount,
                     ),
                   const Divider(height: 20, thickness: 1.5),
@@ -476,44 +477,79 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
 
   Future<void> _onMarkPaid() async {
     final paymentMethodController = TextEditingController();
+    DateTime selectedDate = DateTime.now();
+
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Mark as Paid?'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('This cannot be undone. The invoice will be locked.'),
-            const SizedBox(height: 12),
-            TextField(
-              controller: paymentMethodController,
-              decoration: const InputDecoration(
-                labelText: 'Payment Method (optional)',
-                hintText: 'e.g. E-transfer, Cheque, Cash',
-                border: OutlineInputBorder(),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Mark as Paid?'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('The invoice will be locked and cannot be edited.'),
+                const SizedBox(height: 20),
+                
+                // Date Picker
+                InkWell(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: selectedDate,
+                      firstDate: DateTime(2020),
+                      lastDate: DateTime.now(),
+                    );
+                    if (picked != null) {
+                      setDialogState(() => selectedDate = picked);
+                    }
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Payment Date',
+                      border: OutlineInputBorder(),
+                      suffixIcon: Icon(Icons.calendar_today),
+                    ),
+                    child: Text(_dateFormat.format(selectedDate)),
+                  ),
+                ),
+                
+                const SizedBox(height: 16),
+                
+                TextField(
+                  controller: paymentMethodController,
+                  decoration: const InputDecoration(
+                    labelText: 'Payment Method (optional)',
+                    hintText: 'e.g. E-transfer, Cheque, Cash',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
               ),
+              child: const Text('Mark Paid'),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.green,
-                foregroundColor: Colors.white),
-            child: const Text('Mark Paid'),
-          ),
-        ],
       ),
     );
+
     if (confirm != true) return;
     try {
       await _invoiceRepository.markPaid(
         _invoice!.id!,
         _invoice!.totalAmount,
-        DateTime.now(),
+        selectedDate,
         paymentMethodController.text.trim().isEmpty
             ? null
             : paymentMethodController.text.trim(),

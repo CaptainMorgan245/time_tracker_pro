@@ -21,8 +21,8 @@ class DatabaseHelperV2 {
   static Completer<Database>? _dbCompleter;
   static const String _dbName = 'time_tracker_pro.db';
 
-  // MODIFICATION: Bump version to 12 for tax_rate column in company_settings and projects
-  static const int _dbVersion = 12;
+  // Increment version to 14 for discount fields
+  static const int _dbVersion = 14;
 
   final ValueNotifier<int> databaseNotifier = ValueNotifier(0);
 
@@ -379,8 +379,43 @@ class DatabaseHelperV2 {
           await db.execute("ALTER TABLE projects ADD COLUMN tax_rate REAL NOT NULL DEFAULT 5.0");
           debugPrint('[DB_V2] V12 Migration: Added tax_rate to company_settings and projects.');
         }
-      },
 
+        if (oldVersion < 13) {
+          debugPrint('[DB_V2] V13 Migration: Updating cost_codes and projects...');
+          // 1. Add is_billable flag to cost_codes
+          await db.execute("ALTER TABLE cost_codes ADD COLUMN is_billable INTEGER DEFAULT 0");
+          
+          // 2. Set billable flag on Addendum and TBC
+          // Assuming typical ID assignments, but targeting specific names is safer if IDs vary. 
+          // User specified IDs 2 and 3.
+          await db.execute("UPDATE cost_codes SET is_billable = 1 WHERE id IN (2, 3)");
+          
+          // 3. Rename Original Scope to Contract Work
+          await db.execute("UPDATE cost_codes SET name = 'Contract Work' WHERE id = 1");
+          
+          // 4. Add parent_project_id to projects
+          await db.execute("ALTER TABLE projects ADD COLUMN parent_project_id INTEGER REFERENCES projects(id)");
+          
+          debugPrint('[DB_V2] V13 Migration complete.');
+        }
+
+        if (oldVersion < 14) {
+          debugPrint('[DB_V2] V14 Migration: Adding discount columns to invoices...');
+          // Note: discount_amount already existed in V9 creation, but user wants to ensure it's there
+          // and add discount_description.
+          
+          // Check if discount_amount exists first to avoid crash if V9 migration already added it.
+          var tableInfo = await db.rawQuery("PRAGMA table_info(invoices)");
+          bool hasAmount = tableInfo.any((col) => col['name'] == 'discount_amount');
+          
+          if (!hasAmount) {
+            await db.execute("ALTER TABLE invoices ADD COLUMN discount_amount REAL NOT NULL DEFAULT 0.0");
+          }
+          await db.execute("ALTER TABLE invoices ADD COLUMN discount_description TEXT");
+          
+          debugPrint('[DB_V2] V14 Migration complete.');
+        }
+      },
       onDowngrade: onDatabaseDowngradeDelete,
     );
   }
@@ -402,10 +437,10 @@ class DatabaseHelperV2 {
             id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL, is_active INTEGER NOT NULL DEFAULT 1, contact_person TEXT, phone_number TEXT
           )
         ''');
-      // NOTE: Added the new 'project_price' and 'tax_rate' columns to the fresh creation schema
+      // Updated projects table for V13
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS projects (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, project_name TEXT NOT NULL, client_id INTEGER NOT NULL, location TEXT, pricing_model TEXT DEFAULT 'hourly', is_completed INTEGER NOT NULL DEFAULT 0, completion_date TEXT, is_internal INTEGER NOT NULL DEFAULT 0, billed_hourly_rate REAL, project_price REAL, expense_markup_percentage REAL DEFAULT 15.0, tax_rate REAL NOT NULL DEFAULT 5.0, FOREIGN KEY (client_id) REFERENCES clients(id), UNIQUE(project_name, client_id)
+            id INTEGER PRIMARY KEY AUTOINCREMENT, project_name TEXT NOT NULL, client_id INTEGER NOT NULL, location TEXT, pricing_model TEXT DEFAULT 'hourly', is_completed INTEGER NOT NULL DEFAULT 0, completion_date TEXT, is_internal INTEGER NOT NULL DEFAULT 0, billed_hourly_rate REAL, project_price REAL, expense_markup_percentage REAL DEFAULT 15.0, tax_rate REAL NOT NULL DEFAULT 5.0, parent_project_id INTEGER REFERENCES projects(id), FOREIGN KEY (client_id) REFERENCES clients(id), UNIQUE(project_name, client_id)
           )
         ''');
       await txn.execute('''
@@ -433,12 +468,13 @@ class DatabaseHelperV2 {
             id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT UNIQUE NOT NULL
           )
         ''');
+      // Updated cost_codes table for V13
       await txn.execute('''
           CREATE TABLE IF NOT EXISTS cost_codes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE
+            id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, is_billable INTEGER DEFAULT 0
           )
         ''');
-      // Fresh install V11 support
+      // Fresh install V14 support
       await txn.execute('''
         CREATE TABLE IF NOT EXISTS invoices (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -453,6 +489,7 @@ class DatabaseHelperV2 {
           other_costs REAL DEFAULT 0,
           other_costs_description TEXT,
           discount_amount REAL DEFAULT 0,
+          discount_description TEXT,
           discount_percent REAL DEFAULT 0,
           tax1_name TEXT,
           tax1_rate REAL,
@@ -845,4 +882,23 @@ class DatabaseHelperV2 {
     debugPrint('[DB_V2] ===== ALL DATA DELETED =====');
   }
 // END: ADDED MISSING FUNCTION
+
+  Future<CompanySettings> getCompanySettings() async {
+    final db = await database;
+    final maps = await db.query('company_settings', where: 'id = ?', whereArgs: [1]);
+    return maps.isNotEmpty
+        ? CompanySettings.fromMap(maps.first)
+        : CompanySettings();
+  }
+
+  Future<void> updateCompanySettings(CompanySettings settings) async {
+    final db = await database;
+    await db.update(
+      'company_settings',
+      settings.toMap(),
+      where: 'id = ?',
+      whereArgs: [1],
+    );
+    notifyDatabaseChanged();
+  }
 }

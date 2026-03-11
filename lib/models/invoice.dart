@@ -11,6 +11,7 @@ class Invoice {
   final double otherCosts;
   final String? otherCostsDescription;
   final double discountAmount;
+  final String? discountDescription;
   final double discountPercent;
   final String? tax1Name;
   final double? tax1Rate;
@@ -54,6 +55,7 @@ class Invoice {
     this.otherCosts = 0,
     this.otherCostsDescription,
     this.discountAmount = 0,
+    this.discountDescription,
     this.discountPercent = 0,
     this.tax1Name,
     this.tax1Rate,
@@ -97,6 +99,7 @@ class Invoice {
       'other_costs': otherCosts,
       'other_costs_description': otherCostsDescription,
       'discount_amount': discountAmount,
+      'discount_description': discountDescription,
       'discount_percent': discountPercent,
       'tax1_name': tax1Name,
       'tax1_rate': tax1Rate,
@@ -139,6 +142,7 @@ class Invoice {
       otherCosts: (map['other_costs'] as num?)?.toDouble() ?? 0,
       otherCostsDescription: map['other_costs_description'] as String?,
       discountAmount: (map['discount_amount'] as num?)?.toDouble() ?? 0,
+      discountDescription: map['discount_description'] as String?,
       discountPercent: (map['discount_percent'] as num?)?.toDouble() ?? 0,
       tax1Name: map['tax1_name'] as String?,
       tax1Rate: (map['tax1_rate'] as num?)?.toDouble(),
@@ -182,6 +186,7 @@ class Invoice {
     double? otherCosts,
     String? otherCostsDescription,
     double? discountAmount,
+    String? discountDescription,
     double? discountPercent,
     String? tax1Name,
     double? tax1Rate,
@@ -223,6 +228,7 @@ class Invoice {
       otherCosts: otherCosts ?? this.otherCosts,
       otherCostsDescription: otherCostsDescription ?? this.otherCostsDescription,
       discountAmount: discountAmount ?? this.discountAmount,
+      discountDescription: discountDescription ?? this.discountDescription,
       discountPercent: discountPercent ?? this.discountPercent,
       tax1Name: tax1Name ?? this.tax1Name,
       tax1Rate: tax1Rate ?? this.tax1Rate,

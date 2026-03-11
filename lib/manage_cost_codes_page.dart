@@ -51,74 +51,96 @@ class _ManageCostCodesPageState extends State<ManageCostCodesPage> {
   Future<void> _showEditDialog(CostCode? costCode) async {
     final isNew = costCode == null;
     final nameController = TextEditingController(text: costCode?.name ?? '');
+    bool isBillable = costCode?.isBillable ?? false;
 
     await showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: Text(isNew ? 'Add New Cost Code' : 'Edit Cost Code'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Cost Code Name',
-                  hintText: 'e.g., Original Scope, Addendum, TBC',
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              child: const Text('Cancel'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            if (!isNew)
-              TextButton(
-                child: const Text('Delete', style: TextStyle(color: Colors.red)),
-                onPressed: () async {
-                  final confirm = await showDialog<bool>(
-                    context: context,
-                    builder: (context) => AlertDialog(
-                      title: const Text('Delete Cost Code'),
-                      content: Text('Are you sure you want to delete "${costCode.name}"?'),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(context, false),
-                          child: const Text('Cancel'),
-                        ),
-                        ElevatedButton(
-                          onPressed: () => Navigator.pop(context, true),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                          child: const Text('Delete'),
-                        ),
-                      ],
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text(isNew ? 'Add New Cost Code' : 'Edit Cost Code'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameController,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Cost Code Name',
+                      hintText: 'e.g., Contract Work, Addendum, TBC',
                     ),
-                  );
-                  if (confirm == true) {
-                    await _costCodeRepo.deleteCostCode(costCode.id!);
-                    await _loadCostCodes();
-                    Navigator.of(context).pop();
-                  }
-                },
+                  ),
+                  const SizedBox(height: 16),
+                  SwitchListTile(
+                    title: const Text('Billable as Extra'),
+                    subtitle: const Text('Include in extras invoice selection'),
+                    value: isBillable,
+                    onChanged: (value) {
+                      setDialogState(() {
+                        isBillable = value;
+                      });
+                    },
+                  ),
+                ],
               ),
-            ElevatedButton(
-              child: Text(isNew ? 'Add' : 'Save'),
-              onPressed: () async {
-                if (nameController.text.trim().isNotEmpty) {
-                  if (isNew) {
-                    await _costCodeRepo.insertCostCode(CostCode(name: nameController.text.trim()));
-                  } else {
-                    await _costCodeRepo.updateCostCode(costCode.copyWith(name: nameController.text.trim()));
-                  }
-                  await _loadCostCodes();
-                  Navigator.of(context).pop();
-                }
-              },
-            ),
-          ],
+              actions: [
+                TextButton(
+                  child: const Text('Cancel'),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+                if (!isNew)
+                  TextButton(
+                    child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                    onPressed: () async {
+                      final confirm = await showDialog<bool>(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Delete Cost Code'),
+                          content: Text('Are you sure you want to delete "${costCode.name}"?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context, false),
+                              child: const Text('Cancel'),
+                            ),
+                            ElevatedButton(
+                              onPressed: () => Navigator.pop(context, true),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                              child: const Text('Delete'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirm == true) {
+                        await _costCodeRepo.deleteCostCode(costCode.id!);
+                        await _loadCostCodes();
+                        if (mounted) Navigator.of(context).pop();
+                      }
+                    },
+                  ),
+                ElevatedButton(
+                  child: Text(isNew ? 'Add' : 'Save'),
+                  onPressed: () async {
+                    if (nameController.text.trim().isNotEmpty) {
+                      if (isNew) {
+                        await _costCodeRepo.insertCostCode(CostCode(
+                          name: nameController.text.trim(),
+                          isBillable: isBillable,
+                        ));
+                      } else {
+                        await _costCodeRepo.updateCostCode(costCode.copyWith(
+                          name: nameController.text.trim(),
+                          isBillable: isBillable,
+                        ));
+                      }
+                      await _loadCostCodes();
+                      if (mounted) Navigator.of(context).pop();
+                    }
+                  },
+                ),
+              ],
+            );
+          }
         );
       },
     );
@@ -155,8 +177,12 @@ class _ManageCostCodesPageState extends State<ManageCostCodesPage> {
                   itemBuilder: (context, index) {
                     final costCode = _costCodes[index];
                     return ListTile(
-                      leading: const Icon(Icons.label),
+                      leading: Icon(
+                        costCode.isBillable ? Icons.receipt_long : Icons.label,
+                        color: costCode.isBillable ? Colors.green : Colors.blueGrey,
+                      ),
                       title: Text(costCode.name),
+                      subtitle: costCode.isBillable ? const Text('Billable Extra', style: TextStyle(fontSize: 12)) : null,
                       trailing: IconButton(
                         icon: const Icon(Icons.edit, color: Colors.blue),
                         onPressed: () => _showEditDialog(costCode),
@@ -195,6 +221,7 @@ class _AddCostCodeFormState extends State<AddCostCodeForm> {
   late CostCodeRepository _costCodeRepo;
   final TextEditingController _nameController = TextEditingController();
   bool _isSubmitting = false;
+  bool _isNewCodeBillable = false;
 
   // start method: initState
   @override
@@ -233,8 +260,14 @@ class _AddCostCodeFormState extends State<AddCostCodeForm> {
     setState(() => _isSubmitting = true);
 
     try {
-      await _costCodeRepo.insertCostCode(CostCode(name: name));
+      await _costCodeRepo.insertCostCode(CostCode(
+        name: name,
+        isBillable: _isNewCodeBillable,
+      ));
       _nameController.clear();
+      setState(() {
+        _isNewCodeBillable = false;
+      });
       widget.onCostCodeAdded();
     } catch (e) {
       debugPrint('Error adding cost code: $e');
@@ -273,7 +306,7 @@ class _AddCostCodeFormState extends State<AddCostCodeForm> {
                         content: const Text(
                             'Cost codes classify work against contract buckets.\n\n'
                                 'Examples:\n'
-                                '• Original Scope - Initial contracted work\n'
+                                '• Contract Work - Initial contracted work\n'
                                 '• Addendum - Secondary contracts\n'
                                 '• TBC - Billable extras to be charged\n'
                                 '• No Charge - Warranty or goodwill work\n'
@@ -302,7 +335,7 @@ class _AddCostCodeFormState extends State<AddCostCodeForm> {
                     textCapitalization: TextCapitalization.words,
                     decoration: const InputDecoration(
                       labelText: 'Cost Code Name',
-                      hintText: 'e.g., Original Scope, Addendum, TBC',
+                      hintText: 'e.g., Contract Work, Addendum, TBC',
                     ),
                   ),
                 ),
@@ -325,6 +358,14 @@ class _AddCostCodeFormState extends State<AddCostCodeForm> {
                       : const Text('Add Cost Code'),
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              title: const Text('Billable as Extra'),
+              subtitle: const Text('Include in extras invoice selection'),
+              value: _isNewCodeBillable,
+              onChanged: (value) => setState(() => _isNewCodeBillable = value),
+              contentPadding: EdgeInsets.zero,
             ),
           ],
         ),

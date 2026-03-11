@@ -51,7 +51,7 @@ class CostRecordFormState extends State<CostRecordForm> {
   String? selectedExpenseCategory;
   String? _selectedVendorOrSubtrade;
   String? _selectedVehicleDesignation;
-  CostCode? _selectedCostCode;
+  int? _selectedCostCodeId;
   bool isFuelCategory = false;
 
   static const int _internalProjectId = 0;
@@ -119,14 +119,7 @@ class CostRecordFormState extends State<CostRecordForm> {
         _selectedVendorOrSubtrade = null;
       }
 
-      try {
-        _selectedCostCode = expense.costCodeId != null
-            ? widget.costCodesNotifier.value.firstWhere((c) => c.id == expense.costCodeId)
-            : null;
-      } catch (e) {
-        _selectedCostCode = null;
-      }
-
+      _selectedCostCodeId = expense.costCodeId;
       selectedProjectId = expense.projectId;
     });
   }
@@ -143,7 +136,7 @@ class CostRecordFormState extends State<CostRecordForm> {
       isFuelCategory = false;
       selectedExpenseCategory = null;
       _selectedVendorOrSubtrade = null;
-      _selectedCostCode = null;
+      _selectedCostCodeId = null;
       selectedProjectId = widget.availableProjectsNotifier.value
           .firstWhere((p) => !p.isInternal, orElse: () => widget.availableProjectsNotifier.value.first)
           .id;
@@ -192,7 +185,7 @@ class CostRecordFormState extends State<CostRecordForm> {
         isCompanyExpense: isCompanyExpenseFromParent,
         vehicleDesignation: isCompanyExpenseFromParent ? _selectedVehicleDesignation : null,
         vendorOrSubtrade: _selectedVendorOrSubtrade,
-        costCodeId: _selectedCostCode?.id,
+        costCodeId: _selectedCostCodeId,
         unit: isFuelCategory ? 'Liters' : null,
         quantity: isCompanyExpenseFromParent ? (_quantityController.text.isNotEmpty ? double.tryParse(_quantityController.text) : null) : null,
         odometerReading: isCompanyExpenseFromParent ? (_odometerReadingController.text.isNotEmpty ? double.tryParse(_odometerReadingController.text) : null) : null,
@@ -357,33 +350,34 @@ class CostRecordFormState extends State<CostRecordForm> {
                   child: ValueListenableBuilder<List<CostCode>>(
                     valueListenable: widget.costCodesNotifier,
                     builder: (context, costCodes, child) {
-                      if (_selectedCostCode != null && !costCodes.any((c) => c.id == _selectedCostCode!.id)) {
+                      // Check if the current ID is still valid in the new list
+                      if (_selectedCostCodeId != null && !costCodes.any((c) => c.id == _selectedCostCodeId)) {
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           setState(() {
-                            _selectedCostCode = null;
+                            _selectedCostCodeId = null;
                           });
                         });
                       }
-                      return DropdownButtonFormField<CostCode?>(
+                      return DropdownButtonFormField<int?>(
                         decoration: const InputDecoration(
                           labelText: 'Cost Code',
                         ),
-                        value: _selectedCostCode,
+                        value: _selectedCostCodeId,
                         items: [
-                          const DropdownMenuItem<CostCode?>(
+                          const DropdownMenuItem<int?>(
                             value: null,
                             child: Text('None'),
                           ),
                           ...costCodes.map((costCode) {
-                            return DropdownMenuItem<CostCode?>(
-                              value: costCode,
+                            return DropdownMenuItem<int?>(
+                              value: costCode.id,
                               child: Text(costCode.name),
                             );
                           }).toList(),
                         ],
-                        onChanged: (CostCode? newValue) {
+                        onChanged: (int? newValue) {
                           setState(() {
-                            _selectedCostCode = newValue;
+                            _selectedCostCodeId = newValue;
                           });
                         },
                       );

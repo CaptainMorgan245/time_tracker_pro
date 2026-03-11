@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/invoice_repository.dart';
 import 'package:time_tracker_pro/invoice_service.dart';
+import 'package:time_tracker_pro/database_helper.dart';
 
 // start class: CreateInvoiceScreen
 class CreateInvoiceScreen extends StatefulWidget {
@@ -23,6 +24,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   final _formKey = GlobalKey<FormState>();
   final InvoiceRepository _invoiceRepository = InvoiceRepository();
   final InvoiceService _invoiceService = InvoiceService.instance;
+  final _dbHelper = DatabaseHelperV2.instance;
   final NumberFormat _currencyFormat =
       NumberFormat.currency(locale: 'en_US', symbol: '\$');
 
@@ -43,6 +45,10 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   bool _isSaving = false;
   String? _errorMessage;
 
+  String _defaultTaxName = 'GST';
+  double _defaultTaxRate = 0.05; // stored as decimal, e.g. 0.05 = 5%
+  String? _companyTaxRegNumber;
+
   // Contract summary for fixed price projects
   double _totalPreviouslyBilled = 0;
   double _totalGstCollected = 0;
@@ -58,9 +64,17 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     'chargeable': 'Chargeable Extra',
     'addendum': 'Addendum',
     'deposit': 'Deposit',
+    'extras': 'Extras Invoice',
   };
 
   // ── Calculated fields ─────────────────────────────────────────────────────
+
+  double get _activeTaxRate {
+    if (_selectedProject?.taxRate != null) {
+      return _selectedProject!.taxRate / 100.0;
+    }
+    return _defaultTaxRate;
+  }
 
   double get _enteredAmount =>
       double.tryParse(_amountController.text.replaceAll(',', '')) ?? 0.0;
@@ -68,10 +82,10 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   double get _gstAmount {
     if (_isFixedPrice && _isFinalInvoice) {
       // Reconciliation: GST on full contract minus previously collected
-      final contractGst = (_selectedProject!.fixedPrice ?? 0) * 0.05;
+      final contractGst = (_selectedProject!.fixedPrice ?? 0) * _activeTaxRate;
       return (contractGst - _totalGstCollected).clamp(0, double.infinity);
     }
-    return _enteredAmount * 0.05;
+    return _enteredAmount * _activeTaxRate;
   }
 
   double get _finalAmount {
@@ -116,9 +130,33 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   Future<void> _loadProjects() async {
     setState(() => _isLoading = true);
     try {
-      final projects = await _invoiceRepository.getActiveProjects();
+      // Fetch active projects
+      var projects = await _invoiceRepository.getActiveProjects();
+      final cs = await _dbHelper.getCompanySettings();
+
+      // If editing, ensure the current invoice's project is in the list
+      if (_isEditMode) {
+        final int targetId = widget.existingInvoice!.projectId;
+        final bool exists = projects.any((p) => p.id == targetId);
+        
+        if (!exists) {
+          final db = await _dbHelper.database;
+          final List<Map<String, dynamic>> maps = await db.query(
+            'projects',
+            where: 'id = ?',
+            whereArgs: [targetId],
+          );
+          if (maps.isNotEmpty) {
+            projects.add(Project.fromMap(maps.first));
+          }
+        }
+      }
+
       setState(() {
         _projects = projects;
+        _defaultTaxName = cs.defaultTax1Name;
+        _defaultTaxRate = cs.defaultTax1Rate;
+        _companyTaxRegNumber = cs.defaultTax1RegistrationNumber;
         _isLoading = false;
       });
 
@@ -132,7 +170,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       }
     } catch (e) {
       setState(() {
-        _errorMessage = 'Failed to load projects: $e';
+        _errorMessage = 'Failed to load data: $e';
         _isLoading = false;
       });
     }
@@ -237,10 +275,10 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
             : _descriptionController.text.trim(),
         discountAmount: 0,
         discountPercent: 0,
-        tax1Name: 'GST',
-        tax1Rate: 5.0,
+        tax1Name: _defaultTaxName,
+        tax1Rate: _activeTaxRate * 100,
         tax1Amount: gst,
-        tax1RegistrationNumber: null,
+        tax1RegistrationNumber: _companyTaxRegNumber,
         tax2Name: null,
         tax2Rate: null,
         tax2Amount: 0,
@@ -310,20 +348,24 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   }
 
   Widget _buildProjectDropdown() {
-    return DropdownButtonFormField<Project>(
-      value: _selectedProject,
+    return DropdownButtonFormField<int>(
+      value: _selectedProject?.id,
       decoration: const InputDecoration(
         labelText: 'Project *',
         border: OutlineInputBorder(),
       ),
       hint: const Text('Select a project'),
       items: _projects.map((p) {
-        return DropdownMenuItem<Project>(
-          value: p,
+        return DropdownMenuItem<int>(
+          value: p.id,
           child: Text(p.projectName),
         );
       }).toList(),
-      onChanged: (p) => _onProjectSelected(p),
+      onChanged: (id) {
+        if (id == null) return;
+        final project = _projects.firstWhere((p) => p.id == id);
+        _onProjectSelected(project);
+      },
       validator: (value) =>
           value == null ? 'Please select a project' : null,
     );
@@ -377,7 +419,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                 _currencyFormat.format(contractValue)),
             _summaryRow('Previously Billed',
                 _currencyFormat.format(_totalPreviouslyBilled)),
-            _summaryRow('GST Collected',
+            _summaryRow('$_defaultTaxName Collected',
                 _currencyFormat.format(_totalGstCollected)),
             const Divider(height: 16),
             _summaryRow(
@@ -426,10 +468,10 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
             onChanged: (val) =>
                 setState(() => _isFinalInvoice = val ?? false),
           ),
-          const Expanded(
+          Expanded(
             child: Text(
-              'This is the final invoice — calculate reconciled GST',
-              style: TextStyle(fontWeight: FontWeight.w500),
+              'This is the final invoice — calculate reconciled $_defaultTaxName',
+              style: const TextStyle(fontWeight: FontWeight.w500),
             ),
           ),
         ],
@@ -486,9 +528,9 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     }
     return TextFormField(
       controller: _amountController,
-      decoration: const InputDecoration(
-        labelText: 'Amount (before GST) *',
-        border: OutlineInputBorder(),
+      decoration: InputDecoration(
+        labelText: 'Amount (before $_defaultTaxName) *',
+        border: const OutlineInputBorder(),
         prefixText: '\$ ',
       ),
       keyboardType:
@@ -526,8 +568,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
             const SizedBox(height: 6),
             _summaryRow(
               _isFinalInvoice
-                  ? 'GST (reconciled)'
-                  : 'GST (5%)',
+                  ? '$_defaultTaxName (reconciled)'
+                  : '$_defaultTaxName (${(_activeTaxRate * 100).toStringAsFixed(1)}%)',
               _currencyFormat.format(_gstAmount),
             ),
             const Divider(height: 20, thickness: 1.5),

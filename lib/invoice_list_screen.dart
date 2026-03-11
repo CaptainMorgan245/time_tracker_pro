@@ -2,11 +2,12 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/invoice_repository.dart';
-import 'package:time_tracker_pro/invoice_service.dart';
 import 'package:time_tracker_pro/create_invoice_screen.dart';
 import 'package:time_tracker_pro/invoice_detail_screen.dart';
+import 'extras_invoice_screen.dart';
 
 // start class: InvoiceListScreen
 class InvoiceListScreen extends StatefulWidget {
@@ -22,7 +23,7 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final InvoiceRepository _invoiceRepository = InvoiceRepository();
-  final InvoiceService _invoiceService = InvoiceService.instance;
+  final DatabaseHelperV2 _dbHelper = DatabaseHelperV2.instance;
   final NumberFormat _currencyFormat =
       NumberFormat.currency(locale: 'en_US', symbol: '\$');
 
@@ -33,54 +34,72 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
 
   List<Invoice> _activeInvoices = [];
   List<Invoice> _paidInvoices = [];
+  List<Invoice> _voidedInvoices = [];
   bool _isLoading = true;
   String? _errorMessage;
+  bool _showVoided = false;
 
   Map<String, List<Invoice>> _groupedActive = {};
   Map<String, List<Invoice>> _groupedPaid = {};
+  Map<String, List<Invoice>> _groupedVoided = {};
 
   @override
   void initState() {
     super.initState();
+    _showVoided = false; // Reset on entry
     _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
+    
+    // Listen for database changes
+    _dbHelper.databaseNotifier.addListener(_loadInvoices);
+    
     _loadInvoices();
   }
 
   @override
   void dispose() {
+    _dbHelper.databaseNotifier.removeListener(_loadInvoices);
     _tabController.dispose();
     super.dispose();
   }
 
   Future<void> _loadInvoices() async {
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
     try {
-      final all = await _invoiceRepository.getAllInvoices();
+      final all = await _invoiceRepository.getAllInvoices(includeDeleted: _showVoided);
 
       final active = all.where((i) => !i.isPaid && !i.isDeleted).toList();
       final paid = all.where((i) => i.isPaid && !i.isDeleted).toList();
+      final voided = all.where((i) => i.isDeleted).toList();
 
       active.sort((a, b) => b.invoiceDate.compareTo(a.invoiceDate));
       paid.sort((a, b) => b.invoiceDate.compareTo(a.invoiceDate));
+      voided.sort((a, b) => b.invoiceDate.compareTo(a.invoiceDate));
 
-      setState(() {
-        _activeInvoices = active;
-        _paidInvoices = paid;
-        _groupedActive = _groupByProject(active);
-        _groupedPaid = _groupByProject(paid);
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _activeInvoices = active;
+          _paidInvoices = paid;
+          _voidedInvoices = voided;
+          _groupedActive = _groupByProject(active);
+          _groupedPaid = _groupByProject(paid);
+          _groupedVoided = _groupByProject(voided);
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Failed to load invoices: $e';
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Failed to load invoices: $e';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -116,21 +135,40 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              _pageTitle,
+              _showVoided ? 'Voided Invoices' : _pageTitle,
               style: Theme.of(context)
                   .textTheme
                   .headlineSmall
                   ?.copyWith(fontWeight: FontWeight.bold),
             ),
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              tooltip: 'Refresh',
-              onPressed: _loadInvoices,
+            Row(
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Show Voided', style: TextStyle(fontSize: 12)),
+                    Switch(
+                      value: _showVoided,
+                      onChanged: (val) {
+                        setState(() => _showVoided = val);
+                        _loadInvoices();
+                      },
+                    ),
+                  ],
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  tooltip: 'Refresh',
+                  onPressed: _loadInvoices,
+                ),
+              ],
             ),
           ],
         ),
-        const SizedBox(height: 12),
-        _buildNavButtons(),
+        if (!_showVoided) ...[
+          const SizedBox(height: 12),
+          _buildNavButtons(),
+        ],
       ],
     );
   }
@@ -143,9 +181,13 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
     if (current == _tabInvoices) {
       return Row(
         children: [
-          Expanded(child: _navButton('Paid Invoices', Icons.check_circle_outline, _tabPaid)),
+          Expanded(child: _actionButton('Paid Invoices', Icons.check_circle_outline, () => _tabController.animateTo(_tabPaid), Colors.green[700]!)),
           const SizedBox(width: 8),
-          Expanded(child: _navButton('Estimates', Icons.calculate_outlined, _tabEstimates)),
+          Expanded(child: _actionButton('Estimates', Icons.calculate_outlined, () => _tabController.animateTo(_tabEstimates), Colors.purple[700]!)),
+          const SizedBox(width: 8),
+          Expanded(child: _actionButton('Fixed Price Invoice', Icons.add, _onCreateInvoice, Colors.blue[700]!)),
+          const SizedBox(width: 8),
+          Expanded(child: _actionButton('Extras Invoice', Icons.checklist, _onCreateExtrasInvoice, Colors.orange[700]!)),
         ],
       );
     }
@@ -153,31 +195,33 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
     if (current == _tabPaid) {
       return Row(
         children: [
-          Expanded(child: _navButton('Invoices', Icons.receipt_long, _tabInvoices)),
+          Expanded(child: _actionButton('Invoices', Icons.receipt_long, () => _tabController.animateTo(_tabInvoices), Colors.blue[700]!)),
           const SizedBox(width: 8),
-          Expanded(child: _navButton('Estimates', Icons.calculate_outlined, _tabEstimates)),
+          Expanded(child: _actionButton('Estimates', Icons.calculate_outlined, () => _tabController.animateTo(_tabEstimates), Colors.purple[700]!)),
         ],
       );
     }
 
     return Row(
       children: [
-        Expanded(child: _navButton('Invoices', Icons.receipt_long, _tabInvoices)),
+        Expanded(child: _actionButton('Invoices', Icons.receipt_long, () => _tabController.animateTo(_tabInvoices), Colors.blue[700]!)),
         const SizedBox(width: 8),
-        Expanded(child: _navButton('Paid Invoices', Icons.check_circle_outline, _tabPaid)),
+        Expanded(child: _actionButton('Paid Invoices', Icons.check_circle_outline, () => _tabController.animateTo(_tabPaid), Colors.green[700]!)),
       ],
     );
   }
 
-  Widget _navButton(String label, IconData icon, int targetTab) {
+  Widget _actionButton(String label, IconData icon, VoidCallback onPressed, Color color) {
     return ElevatedButton.icon(
-      onPressed: () => _tabController.animateTo(targetTab),
-      icon: Icon(icon),
-      label: Text(label),
+      onPressed: onPressed,
+      icon: Icon(icon, size: 16),
+      label: Text(label, style: const TextStyle(fontSize: 12)),
       style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.grey.shade300,
-        foregroundColor: Colors.black54,
+        backgroundColor: color,
+        foregroundColor: Colors.white,
         elevation: 0,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       ),
     );
   }
@@ -269,6 +313,13 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
                   ])),
                 ],
               ),
+              if (invoice.isDeleted && invoice.deletedReasonCode != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Reason: ${invoice.deletedReasonCode}',
+                  style: const TextStyle(color: Colors.red, fontStyle: FontStyle.italic),
+                ),
+              ],
               const Divider(height: 24, thickness: 1.5),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -283,9 +334,9 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
                   Text(
                     _currencyFormat.format(invoice.totalAmount),
                     style: TextStyle(
-                      color: invoice.isPaid
-                          ? Colors.green
-                          : Theme.of(context).primaryColor,
+                      color: invoice.isDeleted 
+                          ? Colors.red 
+                          : (invoice.isPaid ? Colors.green : Theme.of(context).primaryColor),
                       fontWeight: FontWeight.bold,
                       fontSize: 18,
                     ),
@@ -314,7 +365,7 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
 
   // ── Project group ─────────────────────────────────────────────────────────
 
-  Widget _buildProjectGroup(String projectName, List<Invoice> invoices) {
+  Widget _buildProjectGroup(String projectName, List<Invoice> invoices, {Color? headerColor}) {
     final totalAmount =
         invoices.fold<double>(0, (sum, inv) => sum + inv.totalAmount);
 
@@ -325,10 +376,10 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
           margin: const EdgeInsets.only(top: 16, bottom: 4),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: Theme.of(context).primaryColor.withValues(alpha: 0.08),
+            color: (headerColor ?? Theme.of(context).primaryColor).withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-                color: Theme.of(context).primaryColor.withValues(alpha: 0.25)),
+                color: (headerColor ?? Theme.of(context).primaryColor).withValues(alpha: 0.25)),
           ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -343,7 +394,7 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
               Text(
                 _currencyFormat.format(totalAmount),
                 style: TextStyle(
-                  color: Theme.of(context).primaryColor,
+                  color: headerColor ?? Theme.of(context).primaryColor,
                   fontWeight: FontWeight.bold,
                 ),
               ),
@@ -475,10 +526,12 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
               style: const TextStyle(color: Colors.red),
               textAlign: TextAlign.center));
     }
+    
     if (_activeInvoices.isEmpty) return _buildEmptyInvoices();
 
     final projectNames = _groupedActive.keys.toList()..sort();
     return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 100),
       itemCount: projectNames.length,
       itemBuilder: (context, index) {
         final name = projectNames[index];
@@ -493,10 +546,50 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
 
     final projectNames = _groupedPaid.keys.toList()..sort();
     return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 100),
       itemCount: projectNames.length,
       itemBuilder: (context, index) {
         final name = projectNames[index];
         return _buildProjectGroup(name, _groupedPaid[name]!);
+      },
+    );
+  }
+
+  Widget _buildVoidedInvoices() {
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    if (_errorMessage != null) {
+      return Center(
+          child: Text(_errorMessage!,
+              style: const TextStyle(color: Colors.red),
+              textAlign: TextAlign.center));
+    }
+    
+    if (_voidedInvoices.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.block_flipped, size: 72, color: Colors.grey.shade400),
+            const SizedBox(height: 20),
+            Text(
+              'No voided invoices',
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(color: Colors.grey.shade600),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final voidedNames = _groupedVoided.keys.toList()..sort();
+    return ListView.builder(
+      padding: const EdgeInsets.only(bottom: 100),
+      itemCount: voidedNames.length,
+      itemBuilder: (context, index) {
+        final name = voidedNames[index];
+        return _buildProjectGroup(name, _groupedVoided[name]!, headerColor: Colors.red);
       },
     );
   }
@@ -518,6 +611,14 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
     if (result == true) _loadInvoices();
   }
 
+  void _onCreateExtrasInvoice() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ExtrasInvoiceScreen()),
+    ).then((result) {
+      if (result == true) _loadInvoices();
+    });
+  }
+
   // ── Build ─────────────────────────────────────────────────────────────────
 
   @override
@@ -530,25 +631,20 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
             _buildFixedHeader(),
             const SizedBox(height: 16),
             Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildActiveInvoices(),
-                  _buildPaidInvoices(),
-                  _buildEstimatesComingSoon(),
-                ],
-              ),
+              child: _showVoided 
+                ? _buildVoidedInvoices()
+                : TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildActiveInvoices(),
+                      _buildPaidInvoices(),
+                      _buildEstimatesComingSoon(),
+                    ],
+                  ),
             ),
           ],
         ),
       ),
-      floatingActionButton: _tabController.index == _tabInvoices
-          ? FloatingActionButton.extended(
-              onPressed: _onCreateInvoice,
-              icon: const Icon(Icons.add),
-              label: const Text('New Invoice'),
-            )
-          : null,
     );
   }
 }

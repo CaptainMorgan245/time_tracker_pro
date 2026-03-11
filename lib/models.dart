@@ -435,16 +435,19 @@ class JobMaterials {
 class CostCode {
   final int? id;
   final String name;
+  final bool isBillable;
 
   CostCode({
     this.id,
     required this.name,
+    this.isBillable = false,
   });
 
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'name': name,
+      'is_billable': isBillable ? 1 : 0,
     };
   }
 
@@ -452,22 +455,25 @@ class CostCode {
     return CostCode(
       id: map['id'],
       name: map['name'],
+      isBillable: (map['is_billable'] as int? ?? 0) == 1,
     );
   }
 
   CostCode copyWith({
     int? id,
     String? name,
+    bool? isBillable,
   }) {
     return CostCode(
       id: id ?? this.id,
       name: name ?? this.name,
+      isBillable: isBillable ?? this.isBillable,
     );
   }
 
   @override
   String toString() {
-    return 'CostCode(id: $id, name: $name)';
+    return 'CostCode(id: $id, name: $name, isBillable: $isBillable)';
   }
 }
 

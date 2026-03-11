@@ -225,4 +225,58 @@ class InvoiceRepository {
       'total_gst': (result.first['total_gst'] as num).toDouble(),
     };
   }
+
+  Future<Map<String, dynamic>> fetchUnbilledBillableRecords(int projectId) async {
+    final db = await _databaseHelper.database;
+
+    final timeEntries = await db.rawQuery("""
+      SELECT te.*, cc.name as cost_code_name, e.name as employee_name
+      FROM time_entries te
+      LEFT JOIN cost_codes cc ON te.cost_code_id = cc.id
+      LEFT JOIN employees e ON te.employee_id = e.id
+      WHERE te.project_id = ?
+        AND te.is_billed = 0
+        AND te.is_deleted = 0
+        AND cc.is_billable = 1
+      ORDER BY cc.name, te.start_time ASC
+    """, [projectId]);
+
+    final materials = await db.rawQuery("""
+      SELECT m.*, cc.name as cost_code_name
+      FROM materials m
+      LEFT JOIN cost_codes cc ON m.cost_code_id = cc.id
+      WHERE m.project_id = ?
+        AND m.is_billed = 0
+        AND m.is_deleted = 0
+        AND cc.is_billable = 1
+      ORDER BY cc.name, m.purchase_date ASC
+    """, [projectId]);
+
+    return {
+      'timeEntries': timeEntries,
+      'materials': materials,
+    };
+  }
+
+  Future<void> markRecordsAsBilled({
+    required int invoiceId,
+    required List<int> timeEntryIds,
+    required List<int> materialIds,
+  }) async {
+    final db = await _databaseHelper.database;
+    final batch = db.batch();
+
+    for (final id in timeEntryIds) {
+      batch.update('time_entries',
+        {'is_billed': 1, 'invoice_id': invoiceId},
+        where: 'id = ?', whereArgs: [id]);
+    }
+    for (final id in materialIds) {
+      batch.update('materials',
+        {'is_billed': 1, 'invoice_id': invoiceId},
+        where: 'id = ?', whereArgs: [id]);
+    }
+    await batch.commit(noResult: true);
+    _databaseHelper.notifyDatabaseChanged();
+  }
 }
