@@ -31,6 +31,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   // Form controllers
   final _amountController = TextEditingController();
   final _notesController = TextEditingController();
+  final _internalNotesController = TextEditingController();
   final _poNumberController = TextEditingController();
   final _descriptionController = TextEditingController();
 
@@ -111,6 +112,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       _invoiceDate = inv.invoiceDate;
       _invoiceType = inv.invoiceType;
       _notesController.text = inv.notes ?? '';
+      _internalNotesController.text = inv.internalNotes ?? '';
       _poNumberController.text = inv.poNumber ?? '';
       _descriptionController.text = inv.otherCostsDescription ?? '';
       // Amount is the subtotal
@@ -122,6 +124,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   void dispose() {
     _amountController.dispose();
     _notesController.dispose();
+    _internalNotesController.dispose();
     _poNumberController.dispose();
     _descriptionController.dispose();
     super.dispose();
@@ -303,6 +306,9 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         notes: _notesController.text.trim().isEmpty
             ? null
             : _notesController.text.trim(),
+        internalNotes: _internalNotesController.text.trim().isEmpty
+            ? null
+            : _internalNotesController.text.trim(),
         isSent: _isEditMode ? widget.existingInvoice!.isSent : false,
         invoiceType: _invoiceType,
       );
@@ -601,8 +607,23 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     return TextFormField(
       controller: _notesController,
       decoration: const InputDecoration(
-        labelText: 'Notes',
+        labelText: 'Notes (Printed on Invoice)',
         border: OutlineInputBorder(),
+      ),
+      maxLines: 3,
+    );
+  }
+
+  Widget _buildInternalNotesField() {
+    return TextFormField(
+      controller: _internalNotesController,
+      decoration: InputDecoration(
+        labelText: 'Internal Notes',
+        hintText: 'Not printed on invoice',
+        border: const OutlineInputBorder(),
+        filled: true,
+        fillColor: Colors.amber.shade50,
+        prefixIcon: const Icon(Icons.lock_outline, color: Colors.amber),
       ),
       maxLines: 3,
     );
@@ -690,6 +711,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                     _buildPoField(),
                     const SizedBox(height: 12),
                     _buildNotesField(),
+                    const SizedBox(height: 12),
+                    _buildInternalNotesField(),
                     const SizedBox(height: 32),
                     ElevatedButton.icon(
                       onPressed: _isSaving ? null : _saveInvoice,

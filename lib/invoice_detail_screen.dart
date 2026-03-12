@@ -26,8 +26,10 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
   NumberFormat.currency(locale: 'en_US', symbol: '\$');
   final DateFormat _dateFormat = DateFormat('MMMM d, yyyy');
 
+  final TextEditingController _internalNotesController = TextEditingController();
   Invoice? _invoice;
   bool _isLoading = true;
+  bool _isSavingInternalNotes = false;
   String? _errorMessage;
 
   static const Map<String, String> _invoiceTypeLabels = {
@@ -43,12 +45,19 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     _loadInvoice();
   }
 
+  @override
+  void dispose() {
+    _internalNotesController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadInvoice() async {
     setState(() => _isLoading = true);
     try {
       final invoice = await _invoiceRepository.getInvoiceById(widget.invoiceId);
       setState(() {
         _invoice = invoice;
+        _internalNotesController.text = invoice?.internalNotes ?? '';
         _isLoading = false;
       });
     } catch (e) {
@@ -56,6 +65,31 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
         _errorMessage = 'Failed to load invoice: $e';
         _isLoading = false;
       });
+    }
+  }
+
+  Future<void> _saveInternalNotes() async {
+    if (_invoice == null) return;
+    setState(() => _isSavingInternalNotes = true);
+    try {
+      final updated = _invoice!.copyWith(
+        internalNotes: _internalNotesController.text.trim(),
+      );
+      await _invoiceRepository.updateInvoice(updated);
+      _invoice = updated;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Internal notes saved.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving notes: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingInternalNotes = false);
     }
   }
 
@@ -213,6 +247,54 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
             ),
           ),
 
+          // Internal notes (VISUALLY DISTINCT)
+          const SizedBox(height: 12),
+          Card(
+            elevation: 4,
+            color: Colors.amber.shade50,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.amber.shade200)),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.lock_outline, size: 18, color: Colors.amber),
+                      const SizedBox(width: 8),
+                      Text('Internal Notes',
+                          style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold, color: Colors.amber.shade900)),
+                      const Spacer(),
+                      const Text('Not printed on invoice', style: TextStyle(fontSize: 10, fontStyle: FontStyle.italic, color: Colors.amber)),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _internalNotesController,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      hintText: 'Add private notes here...',
+                      border: InputBorder.none,
+                      filled: false,
+                    ),
+                    style: TextStyle(color: Colors.amber.shade900, fontSize: 14),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: _isSavingInternalNotes ? null : _saveInternalNotes,
+                      icon: _isSavingInternalNotes 
+                        ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.amber))
+                        : const Icon(Icons.save, size: 16),
+                      label: const Text('Save Notes', style: TextStyle(fontSize: 12)),
+                      style: TextButton.styleFrom(foregroundColor: Colors.amber.shade900),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
           // Terms / notes card
           if ((inv.terms != null && inv.terms!.isNotEmpty) ||
               (inv.notes != null && inv.notes!.isNotEmpty)) ...[
@@ -238,7 +320,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                     ],
                     if (inv.notes != null && inv.notes!.isNotEmpty) ...[
                       const SizedBox(height: 12),
-                      Text('Notes',
+                      Text('Notes (Printed on Invoice)',
                           style: Theme.of(context)
                               .textTheme
                               .titleSmall

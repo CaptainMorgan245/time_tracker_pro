@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/database_helper.dart';
 import 'package:time_tracker_pro/cost_record_form.dart';
 import 'package:time_tracker_pro/project_repository.dart';
+import 'package:time_tracker_pro/client_repository.dart';
 import 'package:time_tracker_pro/cost_code_repository.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/settings_model.dart';
@@ -17,6 +18,9 @@ class CostRecordFormTopRow extends StatelessWidget {
   final bool showCompletedProjects;
   final Function(bool showCompleted) onProjectFilterToggle;
   final String currentItemName;
+  final List<Client> clients;
+  final int? selectedClientId;
+  final Function(int?) onClientChanged;
 
   const CostRecordFormTopRow({
     super.key,
@@ -27,176 +31,213 @@ class CostRecordFormTopRow extends StatelessWidget {
     required this.showCompletedProjects,
     required this.onProjectFilterToggle,
     required this.currentItemName,
+    required this.clients,
+    required this.selectedClientId,
+    required this.onClientChanged,
   });
+
+  String _getProjectDisplayName(Project project) {
+    if (project.isInternal) return 'Internal Company Project';
+    
+    final name = project.projectName;
+    final sameNameCount = filteredProjectsNotifier.value.where((p) => p.projectName == name).length;
+    
+    if (sameNameCount > 1) {
+      final client = clients.firstWhere((c) => c.id == project.clientId, orElse: () => Client(name: 'Unknown'));
+      return '$name (${client.name})';
+    }
+    return name;
+  }
 
   @override
   Widget build(BuildContext context) {
-    const EdgeInsets consistentContentPadding = EdgeInsets.fromLTRB(12, 20, 8, 10);
+    const EdgeInsets consistentContentPadding = EdgeInsets.fromLTRB(10, 14, 8, 8);
 
     return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+      child: Column(
         children: [
-          Flexible(
-            flex: 4,
-            child: ValueListenableBuilder<bool>(
-              valueListenable: isCompanyExpenseNotifier,
-              builder: (context, isCompanyExpense, _) {
-                return ValueListenableBuilder<List<Project>>(
-                  valueListenable: filteredProjectsNotifier,
-                  builder: (context, projects, _) {
-                    final isProjectDropdownEnabled = !isCompanyExpense;
-                    final currentProjectId = isCompanyExpense
-                        ? 0
-                        : formStateKey.currentState?.selectedProjectId;
-
-                    return DropdownButtonFormField<int?>(
-                      decoration: InputDecoration(
-                        labelText: 'Select Project',
-                        suffixIcon: isProjectDropdownEnabled ? const Text('*') : null,
-                        contentPadding: consistentContentPadding,
-                      ),
-                      isDense: true,
-                      value: currentProjectId,
-                      onChanged: isProjectDropdownEnabled
-                          ? (int? newValue) {
-                        if (newValue != null) {
-                          formStateKey.currentState?.setSelectedProjectId(newValue);
-                        }
-                      }
-                          : null,
-                      items: [
-                        const DropdownMenuItem<int?>(
-                          value: null,
-                          child: Text('-- Select Project --', style: TextStyle(fontStyle: FontStyle.italic)),
-                        ),
-                        ...projects.map((project) {
-                          final displayName = project.isInternal
-                              ? 'Internal Company Project'
-                              : project.projectName;
-                          return DropdownMenuItem<int?>(
-                            value: project.id,
-                            child: Text(displayName, overflow: TextOverflow.ellipsis),
-                          );
-                        }).toList(),
-                      ],
-                    );
-                  },
-                );
-              },
-            ),
-          ),
-          const SizedBox(width: 16),
-          Flexible(
-            flex: 5,
-            child: TextFormField(
-              key: ValueKey('itemName_${currentItemName}_${formStateKey.hashCode}'),
-              initialValue: currentItemName,
-              decoration: InputDecoration(
-                labelText: 'Item Names',
-                contentPadding: consistentContentPadding,
-                isDense: true,
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 40,
+                  child: DropdownButtonFormField<int?>(
+                    decoration: InputDecoration(
+                      labelText: 'Client',
+                      labelStyle: const TextStyle(fontSize: 12),
+                      contentPadding: consistentContentPadding,
+                    ),
+                    style: const TextStyle(fontSize: 13, color: Colors.black),
+                    value: selectedClientId,
+                    items: [
+                      const DropdownMenuItem<int?>(value: null, child: Text('All Clients')),
+                      ...clients.map((client) => DropdownMenuItem<int?>(
+                        value: client.id,
+                        child: Text(client.name),
+                      )),
+                    ],
+                    onChanged: onClientChanged,
+                  ),
+                ),
               ),
-              onChanged: (value) {
-                formStateKey.currentState?.setItemName(value);
-              },
-            ),
-          ),
-          const SizedBox(width: 16),
-          Flexible(
-            flex: 3,
-            child: ValueListenableBuilder<List<String>>(
-              valueListenable: expenseCategoriesNotifier,
-              builder: (context, categories, _) {
-                final currentCategory = formStateKey.currentState?.selectedExpenseCategory;
-                return DropdownButtonFormField<String>(
-                  decoration: InputDecoration(
-                    labelText: 'Expense Category *',
-                    contentPadding: consistentContentPadding,
-                  ),
-                  value: currentCategory,
-                  items: categories.map((c) => DropdownMenuItem<String>(value: c, child: Text(c))).toList(),
-                  onChanged: (String? newValue) {
-                    formStateKey.currentState?.setState(() {
-                      formStateKey.currentState!.selectedExpenseCategory = newValue;
-                      formStateKey.currentState!.isFuelCategory = (newValue == 'Fuel');
-                    });
-                  },
-                );
-              },
-            ),
-          ),
-          const SizedBox(width: 16),
-          Flexible(
-            flex: 4,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ValueListenableBuilder<bool>(
-                        valueListenable: isCompanyExpenseNotifier,
-                        builder: (context, isCompanyExpense, _) {
-                          return Checkbox(
-                            value: isCompanyExpense,
-                            onChanged: (bool? newValue) {
-                              isCompanyExpenseNotifier.value = newValue ?? false;
-                              if (isCompanyExpenseNotifier.value) {
-                                formStateKey.currentState?.setSelectedProjectId(0);
+              const SizedBox(width: 8),
+              Expanded(
+                child: SizedBox(
+                  height: 40,
+                  child: ValueListenableBuilder<bool>(
+                    valueListenable: isCompanyExpenseNotifier,
+                    builder: (context, isCompanyExpense, _) {
+                      return ValueListenableBuilder<List<Project>>(
+                        valueListenable: filteredProjectsNotifier,
+                        builder: (context, projects, _) {
+                          final isProjectDropdownEnabled = !isCompanyExpense;
+                          final currentProjectId = isCompanyExpense
+                              ? 0
+                              : formStateKey.currentState?.selectedProjectId;
+
+                          return DropdownButtonFormField<int?>(
+                            decoration: InputDecoration(
+                              labelText: 'Project',
+                              labelStyle: const TextStyle(fontSize: 12),
+                              suffixIcon: isProjectDropdownEnabled ? const Padding(padding: EdgeInsets.only(top: 12), child: Text('*', style: TextStyle(color: Colors.red))) : null,
+                              contentPadding: consistentContentPadding,
+                            ),
+                            style: const TextStyle(fontSize: 13, color: Colors.black),
+                            isDense: true,
+                            value: currentProjectId,
+                            onChanged: isProjectDropdownEnabled
+                                ? (int? newValue) {
+                              if (newValue != null) {
+                                formStateKey.currentState?.setSelectedProjectId(newValue);
                               }
-                            },
-                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            }
+                                : null,
+                            items: [
+                              const DropdownMenuItem<int?>(
+                                value: null,
+                                child: Text('All Projects', style: TextStyle(fontStyle: FontStyle.italic)),
+                              ),
+                              ...projects.map((project) {
+                                return DropdownMenuItem<int?>(
+                                  value: project.id,
+                                  child: Text(_getProjectDisplayName(project), overflow: TextOverflow.ellipsis),
+                                );
+                              }).toList(),
+                            ],
                           );
                         },
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text('Vehicle', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
-                          const SizedBox(width: 2),
-                          Tooltip(
-                            message: 'Sets project to Internal and locks dropdown for company vehicle expenses.',
-                            triggerMode: TooltipTriggerMode.tap,
-                            child: const Icon(Icons.help_outline, size: 16, color: Colors.blueGrey),
-                          ),
-                        ],
-                      ),
-                    ],
+                      );
+                    },
                   ),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Checkbox(
-                        value: showCompletedProjects,
-                        onChanged: (bool? newValue) {
-                          onProjectFilterToggle(newValue ?? false);
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Flexible(
+                flex: 5,
+                child: SizedBox(
+                  height: 40,
+                  child: TextFormField(
+                    key: ValueKey('itemName_${currentItemName}_${formStateKey.hashCode}'),
+                    initialValue: currentItemName,
+                    style: const TextStyle(fontSize: 13),
+                    decoration: InputDecoration(
+                      labelText: 'Item Name',
+                      labelStyle: const TextStyle(fontSize: 12),
+                      contentPadding: consistentContentPadding,
+                      isDense: true,
+                    ),
+                    onChanged: (value) {
+                      formStateKey.currentState?.setItemName(value);
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                flex: 3,
+                child: SizedBox(
+                  height: 40,
+                  child: ValueListenableBuilder<List<String>>(
+                    valueListenable: expenseCategoriesNotifier,
+                    builder: (context, categories, _) {
+                      final currentCategory = formStateKey.currentState?.selectedExpenseCategory;
+                      return DropdownButtonFormField<String>(
+                        decoration: InputDecoration(
+                          labelText: 'Category *',
+                          labelStyle: const TextStyle(fontSize: 12),
+                          contentPadding: consistentContentPadding,
+                        ),
+                        style: const TextStyle(fontSize: 13, color: Colors.black),
+                        value: currentCategory,
+                        items: categories.map((c) => DropdownMenuItem<String>(value: c, child: Text(c, style: const TextStyle(fontSize: 12)))).toList(),
+                        onChanged: (String? newValue) {
+                          formStateKey.currentState?.setState(() {
+                            formStateKey.currentState!.selectedExpenseCategory = newValue;
+                            formStateKey.currentState!.isFuelCategory = (newValue == 'Fuel');
+                          });
                         },
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text('Comp.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
-                          const SizedBox(width: 2),
-                          Tooltip(
-                            message: 'Filters list to show only projects marked as "Completed".',
-                            triggerMode: TooltipTriggerMode.tap,
-                            child: const Icon(Icons.help_outline, size: 16, color: Colors.blueGrey),
-                          ),
-                        ],
-                      ),
-                    ],
+                      );
+                    },
                   ),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              Flexible(
+                flex: 4,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: ValueListenableBuilder<bool>(
+                            valueListenable: isCompanyExpenseNotifier,
+                            builder: (context, isCompanyExpense, _) {
+                              return Checkbox(
+                                value: isCompanyExpense,
+                                onChanged: (bool? newValue) {
+                                  isCompanyExpenseNotifier.value = newValue ?? false;
+                                  if (isCompanyExpenseNotifier.value) {
+                                    formStateKey.currentState?.setSelectedProjectId(0);
+                                  }
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                        const Text('Veh.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 9)),
+                      ],
+                    ),
+                    const SizedBox(width: 4),
+                    Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          height: 24,
+                          width: 24,
+                          child: Checkbox(
+                            value: showCompletedProjects,
+                            onChanged: (bool? newValue) {
+                              onProjectFilterToggle(newValue ?? false);
+                            },
+                          ),
+                        ),
+                        const Text('Comp.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 9)),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -214,6 +255,7 @@ class CostEntryScreen extends StatefulWidget {
 class _CostEntryScreenState extends State<CostEntryScreen> {
   final _formStateKey = GlobalKey<CostRecordFormState>();
   final _projectRepo = ProjectRepository();
+  final _clientRepo = ClientRepository();
   CostCodeRepository? _costCodeRepo;
   final _dbHelper = DatabaseHelperV2.instance;
   final dbNotifier = DatabaseHelperV2.instance.databaseNotifier;
@@ -229,7 +271,8 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   final ValueNotifier<List<CostCode>> _costCodesNotifier = ValueNotifier([]);
 
   List<Project> _allProjects = [];
-  int? _selectedProjectIdForFiltering;
+  List<Client> _clients = [];
+  int? _selectedClientId;
 
   @override
   void initState() {
@@ -261,10 +304,15 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
       final settingsMap = await db.query('settings', where: 'id = ?', whereArgs: [1]);
       final settings = settingsMap.isNotEmpty ? SettingsModel.fromMap(settingsMap.first) : SettingsModel();
 
-      final dataFutures = [_projectRepo.getProjects(), DatabaseHelperV2.instance.getExpenseCategoriesV2()];
+      final dataFutures = [
+        _projectRepo.getProjects(), 
+        DatabaseHelperV2.instance.getExpenseCategoriesV2(),
+        _clientRepo.getClients()
+      ];
       final results = await Future.wait(dataFutures);
       _allProjects = results[0] as List<Project>;
       final categories = results[1] as List<ExpenseCategory>;
+      _clients = results[2] as List<Client>;
 
       if (!mounted) return;
       _expenseCategoriesNotifier.value = categories.map((c) => c.name).toList();
@@ -285,13 +333,34 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   void _applyProjectFilter(bool showCompleted) {
     setState(() {
       _showCompletedProjects = showCompleted;
-      _selectedProjectIdForFiltering = null;
     });
-    if (showCompleted) {
-      _filteredProjectsNotifier.value = _allProjects.where((p) => p.isCompleted).toList();
+    _updateFilteredProjectsList();
+  }
+
+  void _updateFilteredProjectsList() {
+    List<Project> filtered = _allProjects;
+    
+    // Filter by completion status
+    if (_showCompletedProjects) {
+      filtered = filtered.where((p) => p.isCompleted).toList();
     } else {
-      _filteredProjectsNotifier.value = _allProjects.where((p) => !p.isCompleted || p.isInternal).toList();
+      filtered = filtered.where((p) => !p.isCompleted || p.isInternal).toList();
     }
+
+    // Filter by client
+    if (_selectedClientId != null) {
+      filtered = filtered.where((p) => p.clientId == _selectedClientId).toList();
+    }
+
+    _filteredProjectsNotifier.value = filtered;
+  }
+
+  void _onClientChanged(int? clientId) {
+    setState(() {
+      _selectedClientId = clientId;
+      _formStateKey.currentState?.setSelectedProjectId(null);
+    });
+    _updateFilteredProjectsList();
   }
 
   void _showEditModal(JobMaterials record) {
@@ -310,14 +379,14 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 AppBar(
-                  title: const Text("Edit Record"),
+                  title: const Text("Edit Record", style: TextStyle(fontSize: 16)),
                   leading: IconButton(
                     icon: const Icon(Icons.close),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(12.0),
                   child: Column(
                     children: [
                       // Vehicle checkbox row
@@ -339,16 +408,11 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                               );
                             },
                           ),
-                          const Text('Vehicle Expense', style: TextStyle(fontWeight: FontWeight.bold)),
+                          const Text('Vehicle Expense', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                           const SizedBox(width: 8),
-                          const Tooltip(
-                            message: 'Sets project to Internal and locks dropdown for company vehicle expenses.',
-                            triggerMode: TooltipTriggerMode.tap,
-                            child: Icon(Icons.help_outline, size: 16, color: Colors.blueGrey),
-                          ),
+                          const Icon(Icons.help_outline, size: 14, color: Colors.blueGrey),
                         ],
                       ),
-                      const SizedBox(height: 8),
                     ],
                   ),
                 ),
@@ -387,8 +451,9 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     _formStateKey.currentState?.resetForm();
     setState(() {
       _isCompanyExpenseNotifier.value = false;
-      _selectedProjectIdForFiltering = null;
+      _selectedClientId = null;
     });
+    _updateFilteredProjectsList();
   }
 
   Future<void> _handleCostSubmission(JobMaterials expense, bool isEditing) async {
@@ -416,6 +481,8 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final selectedProjectId = _formStateKey.currentState?.selectedProjectId;
+
     return Scaffold(
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -423,7 +490,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
         child: Column(
           children: [
             Card(
-              margin: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+              margin: const EdgeInsets.fromLTRB(4, 4, 4, 0),
               child: CostRecordFormTopRow(
                 formStateKey: _formStateKey,
                 filteredProjectsNotifier: _filteredProjectsNotifier,
@@ -432,10 +499,13 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                 showCompletedProjects: _showCompletedProjects,
                 onProjectFilterToggle: _applyProjectFilter,
                 currentItemName: _formStateKey.currentState?.getCurrentItemName() ?? '',
+                clients: _clients,
+                selectedClientId: _selectedClientId,
+                onClientChanged: _onClientChanged,
               ),
             ),
             Card(
-              margin: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+              margin: const EdgeInsets.fromLTRB(4, 0, 4, 4),
               child: CostRecordForm(
                 key: _formStateKey,
                 availableProjectsNotifier: _filteredProjectsNotifier,
@@ -450,7 +520,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                 onCompanyExpenseToggle: _isCompanyExpenseNotifier,
               ),
             ),
-            const Divider(),
+            const Divider(height: 1),
             Expanded(
               child: ValueListenableBuilder<int>(
                 valueListenable: dbNotifier,
@@ -459,37 +529,60 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                     future: DatabaseHelperV2.instance.getCostEntryMaterials(
                       _showCompletedProjects,
                       _allProjects,
-                      selectedProjectId: _selectedProjectIdForFiltering,
+                      selectedProjectId: selectedProjectId,
                     ),
                     builder: (context, snapshot) {
-                      final records = snapshot.data ?? [];
-                      return ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(8.0, 0, 8.0, 80.0),
+                      var records = snapshot.data ?? [];
+                      
+                      if (_selectedClientId != null && selectedProjectId == null) {
+                        records = records.where((r) {
+                          final project = _allProjects.firstWhere((p) => p.id == r.projectId, orElse: () => Project(clientId: -1, projectName: '', pricingModel: ''));
+                          return project.clientId == _selectedClientId;
+                        }).toList();
+                      }
+
+                      return ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(4.0, 4.0, 4.0, 80.0),
                         itemCount: records.length,
+                        separatorBuilder: (context, index) => const SizedBox(height: 2),
                         itemBuilder: (context, index) {
                           final record = records[index];
                           final projectName = _getProjectNameById(record.projectId);
-                          final vendorName = record.vendorOrSubtrade ?? 'Unknown Vendor';
+                          final vendorName = record.vendorOrSubtrade ?? 'Unknown';
                           final costAmount = NumberFormat.currency(locale: 'en_US', symbol: '\$').format(record.cost);
+                          final dateStr = DateFormat('MM/dd').format(record.purchaseDate);
+
                           return Card(
-                            margin: const EdgeInsets.symmetric(vertical: 4),
+                            margin: EdgeInsets.zero,
+                            elevation: 1,
                             child: ListTile(
-                              leading: const Icon(Icons.receipt, color: Colors.green),
+                              dense: true,
+                              visualDensity: VisualDensity.compact,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
                               title: Text(
-                                '${DateFormat('MMM dd, yyyy').format(record.purchaseDate)} | Project: $projectName | $costAmount',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontSize: 14),
+                                '$dateStr | $projectName | $costAmount',
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                                 overflow: TextOverflow.ellipsis,
                               ),
-                              subtitle: Text('Vendor: $vendorName | Category: ${record.expenseCategory ?? 'N/A'}'),
+                              subtitle: Text(
+                                '${record.itemName} | $vendorName',
+                                style: const TextStyle(fontSize: 11),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                               trailing: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   IconButton(
-                                    icon: const Icon(Icons.edit, color: Colors.blueGrey),
+                                    icon: const Icon(Icons.edit, size: 18),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
                                     onPressed: () => _showEditModal(record),
                                   ),
+                                  const SizedBox(width: 8),
                                   IconButton(
-                                    icon: const Icon(Icons.delete_forever, color: Colors.red),
+                                    icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
                                     onPressed: () => _deleteExpense(record.id!),
                                   ),
                                 ],

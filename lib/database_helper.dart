@@ -21,8 +21,8 @@ class DatabaseHelperV2 {
   static Completer<Database>? _dbCompleter;
   static const String _dbName = 'time_tracker_pro.db';
 
-  // Increment version to 14 for discount fields
-  static const int _dbVersion = 14;
+  // Increment version to 15 for internal notes
+  static const int _dbVersion = 15;
 
   final ValueNotifier<int> databaseNotifier = ValueNotifier(0);
 
@@ -400,20 +400,16 @@ class DatabaseHelperV2 {
         }
 
         if (oldVersion < 14) {
-          debugPrint('[DB_V2] V14 Migration: Adding discount columns to invoices...');
-          // Note: discount_amount already existed in V9 creation, but user wants to ensure it's there
-          // and add discount_description.
-          
-          // Check if discount_amount exists first to avoid crash if V9 migration already added it.
-          var tableInfo = await db.rawQuery("PRAGMA table_info(invoices)");
-          bool hasAmount = tableInfo.any((col) => col['name'] == 'discount_amount');
-          
-          if (!hasAmount) {
-            await db.execute("ALTER TABLE invoices ADD COLUMN discount_amount REAL NOT NULL DEFAULT 0.0");
-          }
+          debugPrint('[DB_V2] V14 Migration: Adding discount_description to invoices...');
+          // Note: discount_amount already existed in V9 creation schema.
           await db.execute("ALTER TABLE invoices ADD COLUMN discount_description TEXT");
-          
           debugPrint('[DB_V2] V14 Migration complete.');
+        }
+
+        if (oldVersion < 15) {
+          debugPrint('[DB_V2] V15 Migration: Adding internal_notes to invoices...');
+          await db.execute("ALTER TABLE invoices ADD COLUMN internal_notes TEXT");
+          debugPrint('[DB_V2] V15 Migration complete.');
         }
       },
       onDowngrade: onDatabaseDowngradeDelete,
@@ -474,7 +470,7 @@ class DatabaseHelperV2 {
             id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, is_billable INTEGER DEFAULT 0
           )
         ''');
-      // Fresh install V14 support
+      // Fresh install V15 support
       await txn.execute('''
         CREATE TABLE IF NOT EXISTS invoices (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -513,6 +509,7 @@ class DatabaseHelperV2 {
           deleted_notes TEXT,
           superseded_by_invoice_id INTEGER,
           notes TEXT,
+          internal_notes TEXT,
           is_sent INTEGER NOT NULL DEFAULT 0,
           invoice_type TEXT NOT NULL DEFAULT 'progress',
           FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
