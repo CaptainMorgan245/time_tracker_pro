@@ -221,6 +221,60 @@ class Employee {
   }
 }
 
+class WorkerPayment {
+  final int? id;
+  final int employeeId;
+  final DateTime paymentDate;
+  final double amount;
+  final String? note;
+  final DateTime createdAt;
+
+  WorkerPayment({
+    this.id,
+    required this.employeeId,
+    required this.paymentDate,
+    required this.amount,
+    this.note,
+    required this.createdAt,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'id': id,
+    'employee_id': employeeId,
+    'payment_date': paymentDate.toIso8601String(),
+    'amount': amount,
+    'note': note,
+    'created_at': createdAt.toIso8601String(),
+  };
+
+  factory WorkerPayment.fromMap(Map<String, dynamic> map) => WorkerPayment(
+    id: map['id'],
+    employeeId: map['employee_id'],
+    paymentDate: DateTime.parse(map['payment_date']),
+    amount: (map['amount'] as num).toDouble(),
+    note: map['note'],
+    createdAt: DateTime.parse(map['created_at']),
+  );
+
+  WorkerPayment copyWith({
+    int? id,
+    int? employeeId,
+    DateTime? paymentDate,
+    double? amount,
+    String? note,
+    DateTime? createdAt,
+  }) {
+    return WorkerPayment(
+      id: id ?? this.id,
+      employeeId: employeeId ?? this.employeeId,
+      paymentDate: paymentDate ?? this.paymentDate,
+      amount: amount ?? this.amount,
+      note: note ?? this.note,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+}
+
 class EmployeeSummaryViewModel {
   final String employeeName;
   final String employeeNumber;

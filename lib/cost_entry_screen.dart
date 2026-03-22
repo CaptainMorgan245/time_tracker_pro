@@ -20,7 +20,9 @@ class CostRecordFormTopRow extends StatelessWidget {
   final String currentItemName;
   final List<Client> clients;
   final int? selectedClientId;
+  final int? selectedProjectId;
   final Function(int?) onClientChanged;
+  final Function(int?) onProjectChanged;
 
   const CostRecordFormTopRow({
     super.key,
@@ -33,15 +35,17 @@ class CostRecordFormTopRow extends StatelessWidget {
     required this.currentItemName,
     required this.clients,
     required this.selectedClientId,
+    required this.selectedProjectId,
     required this.onClientChanged,
+    required this.onProjectChanged,
   });
 
   String _getProjectDisplayName(Project project) {
     if (project.isInternal) return 'Internal Company Project';
-    
+
     final name = project.projectName;
     final sameNameCount = filteredProjectsNotifier.value.where((p) => p.projectName == name).length;
-    
+
     if (sameNameCount > 1) {
       final client = clients.firstWhere((c) => c.id == project.clientId, orElse: () => Client(name: 'Unknown'));
       return '$name (${client.name})';
@@ -92,9 +96,13 @@ class CostRecordFormTopRow extends StatelessWidget {
                         valueListenable: filteredProjectsNotifier,
                         builder: (context, projects, _) {
                           final isProjectDropdownEnabled = !isCompanyExpense;
-                          final currentProjectId = isCompanyExpense
-                              ? 0
-                              : formStateKey.currentState?.selectedProjectId;
+
+                          // Ensure project list is unique by ID to prevent dropdown assertion error
+                          final Map<int, Project> uniqueProjects = {};
+                          for (var p in projects) {
+                            if (p.id != null) uniqueProjects[p.id!] = p;
+                          }
+                          final uniqueProjectList = uniqueProjects.values.toList();
 
                           return DropdownButtonFormField<int?>(
                             decoration: InputDecoration(
@@ -105,20 +113,14 @@ class CostRecordFormTopRow extends StatelessWidget {
                             ),
                             style: const TextStyle(fontSize: 13, color: Colors.black),
                             isDense: true,
-                            value: currentProjectId,
-                            onChanged: isProjectDropdownEnabled
-                                ? (int? newValue) {
-                              if (newValue != null) {
-                                formStateKey.currentState?.setSelectedProjectId(newValue);
-                              }
-                            }
-                                : null,
+                            value: selectedProjectId,
+                            onChanged: isProjectDropdownEnabled ? onProjectChanged : null,
                             items: [
                               const DropdownMenuItem<int?>(
                                 value: null,
                                 child: Text('All Projects', style: TextStyle(fontStyle: FontStyle.italic)),
                               ),
-                              ...projects.map((project) {
+                              ...uniqueProjectList.map((project) {
                                 return DropdownMenuItem<int?>(
                                   value: project.id,
                                   child: Text(_getProjectDisplayName(project), overflow: TextOverflow.ellipsis),
@@ -207,7 +209,7 @@ class CostRecordFormTopRow extends StatelessWidget {
                                 onChanged: (bool? newValue) {
                                   isCompanyExpenseNotifier.value = newValue ?? false;
                                   if (isCompanyExpenseNotifier.value) {
-                                    formStateKey.currentState?.setSelectedProjectId(0);
+                                    onProjectChanged(0);
                                   }
                                 },
                               );
@@ -273,6 +275,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   List<Project> _allProjects = [];
   List<Client> _clients = [];
   int? _selectedClientId;
+  int? _selectedProjectId;
 
   @override
   void initState() {
@@ -305,7 +308,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
       final settings = settingsMap.isNotEmpty ? SettingsModel.fromMap(settingsMap.first) : SettingsModel();
 
       final dataFutures = [
-        _projectRepo.getProjects(), 
+        _projectRepo.getProjects(),
         DatabaseHelperV2.instance.getExpenseCategoriesV2(),
         _clientRepo.getClients()
       ];
@@ -339,7 +342,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
 
   void _updateFilteredProjectsList() {
     List<Project> filtered = _allProjects;
-    
+
     // Filter by completion status
     if (_showCompletedProjects) {
       filtered = filtered.where((p) => p.isCompleted).toList();
@@ -358,9 +361,21 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   void _onClientChanged(int? clientId) {
     setState(() {
       _selectedClientId = clientId;
+      _selectedProjectId = null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       _formStateKey.currentState?.setSelectedProjectId(null);
     });
     _updateFilteredProjectsList();
+  }
+
+  void _onProjectChanged(int? projectId) {
+    setState(() {
+      _selectedProjectId = projectId;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _formStateKey.currentState?.setSelectedProjectId(projectId);
+    });
   }
 
   void _showEditModal(JobMaterials record) {
@@ -452,6 +467,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     setState(() {
       _isCompanyExpenseNotifier.value = false;
       _selectedClientId = null;
+      _selectedProjectId = null;
     });
     _updateFilteredProjectsList();
   }
@@ -481,8 +497,6 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final selectedProjectId = _formStateKey.currentState?.selectedProjectId;
-
     return Scaffold(
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -501,7 +515,9 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                 currentItemName: _formStateKey.currentState?.getCurrentItemName() ?? '',
                 clients: _clients,
                 selectedClientId: _selectedClientId,
+                selectedProjectId: _selectedProjectId,
                 onClientChanged: _onClientChanged,
+                onProjectChanged: _onProjectChanged,
               ),
             ),
             Card(
@@ -529,14 +545,18 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                     future: DatabaseHelperV2.instance.getCostEntryMaterials(
                       _showCompletedProjects,
                       _allProjects,
-                      selectedProjectId: selectedProjectId,
+                      selectedProjectId: _selectedProjectId,
                     ),
                     builder: (context, snapshot) {
                       var records = snapshot.data ?? [];
-                      
-                      if (_selectedClientId != null && selectedProjectId == null) {
+
+                      // Secondary filter for Clients (especially when Project is 'All')
+                      if (_selectedClientId != null) {
                         records = records.where((r) {
-                          final project = _allProjects.firstWhere((p) => p.id == r.projectId, orElse: () => Project(clientId: -1, projectName: '', pricingModel: ''));
+                          final project = _allProjects.firstWhere(
+                                  (p) => p.id == r.projectId,
+                              orElse: () => Project(clientId: -1, projectName: '', pricingModel: '')
+                          );
                           return project.clientId == _selectedClientId;
                         }).toList();
                       }

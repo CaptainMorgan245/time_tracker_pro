@@ -21,8 +21,8 @@ class DatabaseHelperV2 {
   static Completer<Database>? _dbCompleter;
   static const String _dbName = 'time_tracker_pro.db';
 
-  // Increment version to 15 for internal notes
-  static const int _dbVersion = 15;
+  // Increment version to 16 for worker_payments table
+  static const int _dbVersion = 16;
 
   final ValueNotifier<int> databaseNotifier = ValueNotifier(0);
 
@@ -411,6 +411,22 @@ class DatabaseHelperV2 {
           await db.execute("ALTER TABLE invoices ADD COLUMN internal_notes TEXT");
           debugPrint('[DB_V2] V15 Migration complete.');
         }
+
+        if (oldVersion < 16) {
+          debugPrint('[DB_V2] V16 Migration: Creating worker_payments table...');
+          await db.execute('''
+            CREATE TABLE worker_payments (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              employee_id INTEGER NOT NULL,
+              payment_date TEXT NOT NULL,
+              amount REAL NOT NULL,
+              note TEXT,
+              created_at TEXT NOT NULL,
+              FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+            )
+          ''');
+          debugPrint('[DB_V2] V16 Migration complete.');
+        }
       },
       onDowngrade: onDatabaseDowngradeDelete,
     );
@@ -538,6 +554,19 @@ class DatabaseHelperV2 {
         )
       ''');
       await txn.insert('company_settings', {'id': 1});
+
+      // Worker payments support (V16)
+      await txn.execute('''
+        CREATE TABLE IF NOT EXISTS worker_payments (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          employee_id INTEGER NOT NULL,
+          payment_date TEXT NOT NULL,
+          amount REAL NOT NULL,
+          note TEXT,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+        )
+      ''');
     });
     debugPrint('[DB_V2] All tables created and default settings inserted successfully.');
   }
@@ -784,7 +813,8 @@ class DatabaseHelperV2 {
       'expense_categories',
       'cost_codes',
       'invoices',
-      'company_settings'
+      'company_settings',
+      'worker_payments'
     ];
 
     for (String tableName in tableNames) {
@@ -812,6 +842,7 @@ class DatabaseHelperV2 {
     const List<String> deletionOrder = [
       'time_entries',
       'materials',
+      'worker_payments',
       'employees',
       'projects',
       'clients',
@@ -855,6 +886,7 @@ class DatabaseHelperV2 {
     const List<String> tableNames = [
       'time_entries',
       'materials',
+      'worker_payments',
       'employees',
       'projects',
       'clients',
@@ -895,6 +927,27 @@ class DatabaseHelperV2 {
       settings.toMap(),
       where: 'id = ?',
       whereArgs: [1],
+    );
+    notifyDatabaseChanged();
+  }
+
+  Future<void> updateWorkerPayment(WorkerPayment payment) async {
+    final db = await database;
+    await db.update(
+      'worker_payments',
+      payment.toMap(),
+      where: 'id = ?',
+      whereArgs: [payment.id],
+    );
+    notifyDatabaseChanged();
+  }
+
+  Future<void> deleteWorkerPayment(int id) async {
+    final db = await database;
+    await db.delete(
+      'worker_payments',
+      where: 'id = ?',
+      whereArgs: [id],
     );
     notifyDatabaseChanged();
   }

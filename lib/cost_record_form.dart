@@ -156,7 +156,6 @@ class CostRecordFormState extends State<CostRecordForm> {
   }
 
   void _submitForm() {
-    print('Debug: Submit called, selectedProjectId = $selectedProjectId');
     SystemChannels.textInput.invokeMethod('TextInput.hide');
 
     if (!_formKey.currentState!.validate()) {

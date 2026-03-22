@@ -538,6 +538,13 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
         title: const Text('Time Records'),
         backgroundColor: theme.primaryColor,
         foregroundColor: Colors.white,
+        actions: [
+          TextButton.icon(
+            onPressed: _showAddRecordDialog,
+            icon: const Icon(Icons.add, color: Colors.white),
+            label: const Text('Add Record', style: TextStyle(color: Colors.white)),
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -777,13 +784,23 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
                         ),
                       ],
                     ),
-                    title: Text(
-                      _getClientName(_getProjectClientId(entry.projectId)),
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    title: RichText(
+                      text: TextSpan(
+                        style: const TextStyle(color: Colors.black, fontSize: 14),
+                        children: [
+                          TextSpan(
+                            text: _getClientName(_getProjectClientId(entry.projectId)),
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          TextSpan(text: ' — ${_getProjectName(entry.projectId)} — ${_getCostCodeName(entry.costCodeId)}'),
+                        ],
+                      ),
                     ),
                     subtitle: Text(
-                      '${_getProjectName(entry.projectId)} - ${_getEmployeeName(entry.employeeId)} - ${_getCostCodeName(entry.costCodeId)}',
+                      '${_getEmployeeName(entry.employeeId)} — ${entry.workDetails ?? ''}',
                       style: const TextStyle(fontSize: 13),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,

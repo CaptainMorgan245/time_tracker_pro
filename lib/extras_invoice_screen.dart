@@ -7,6 +7,7 @@ import 'package:time_tracker_pro/invoice_repository.dart';
 import 'package:time_tracker_pro/invoice_service.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/models/invoice.dart';
+import 'package:time_tracker_pro/models/company_settings.dart';
 
 class ExtrasInvoiceScreen extends StatefulWidget {
   const ExtrasInvoiceScreen({super.key});
@@ -39,6 +40,7 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
   bool _isSaving = false;
   double _burdenRate = 0.0;
   double _discountAmount = 0.0;
+  double _defaultTaxRate = 5.0;
 
   @override
   void initState() {
@@ -73,10 +75,14 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
         burdenRate = (settingsData.first['burden_rate'] as num?)?.toDouble() ?? 0.0;
       }
 
+      final companySettings = await DatabaseHelperV2.instance.getCompanySettings();
+      final defaultTaxRate = companySettings.defaultTax1Rate * 100.0;
+
       setState(() {
         _projects = projectsData;
         _clients = clientsData;
         _burdenRate = burdenRate;
+        _defaultTaxRate = defaultTaxRate;
         _isLoading = false;
       });
     } catch (e) {
@@ -138,8 +144,12 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
       return (te['final_billed_duration_seconds'] as num).toDouble() / 3600.0;
     }
 
+    if (te['end_time'] == null) {
+      return 0.0;
+    }
+
     final start = DateTime.parse(te['start_time']);
-    final end = te['end_time'] != null ? DateTime.parse(te['end_time']) : DateTime.now();
+    final end = DateTime.parse(te['end_time']);
     final pausedSec = (te['paused_duration'] as num?)?.toDouble() ?? 0.0;
 
     final durationSec = end.difference(start).inSeconds.toDouble() - pausedSec;
@@ -178,7 +188,7 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
   }
 
   double get _taxRatePercent =>
-      (_selectedProject?['tax_rate'] as num?)?.toDouble() ?? 5.0;
+      (_selectedProject?['tax_rate'] as num?)?.toDouble() ?? _defaultTaxRate;
 
   double get _gstAmount => _discountedSubtotal * (_taxRatePercent / 100.0);
 
@@ -283,100 +293,84 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
       appBar: AppBar(
         title: const Text('New Extras Invoice'),
       ),
-      body: _isLoading && _projects.isEmpty
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // ① Project dropdown
-            DropdownButtonFormField<int>(
-              decoration: const InputDecoration(labelText: 'Select Project'),
-              value: _selectedProject?['id'],
-              items: _projects.map((p) {
-                return DropdownMenuItem<int>(
-                  value: p['id'] as int,
-                  child: Text(_getProjectDisplayName(p)),
-                );
-              }).toList(),
-              onChanged: (id) {
-                if (id == null) return;
-                final match = _projects.firstWhere((p) => p['id'] == id);
-                _onProjectSelected(match);
-              },
-            ),
-
-            // ② Client disambiguator
-            if (_showClientDisambiguator) ...[
-              const SizedBox(height: 16),
+      body: SelectionArea(
+        child: _isLoading && _projects.isEmpty
+            ? const Center(child: CircularProgressIndicator())
+            : SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // ① Project dropdown
               DropdownButtonFormField<int>(
-                decoration: const InputDecoration(labelText: 'Select Client'),
-                value: _selectedClient?['id'],
-                items: _clients.where((c) {
-                  return _projects.any((p) =>
-                  p['project_name'] == _selectedProject!['project_name'] &&
-                      p['client_id'] == c['id']);
-                }).map((c) {
+                decoration: const InputDecoration(labelText: 'Select Project'),
+                value: _selectedProject?['id'],
+                items: _projects.map((p) {
                   return DropdownMenuItem<int>(
-                      value: c['id'] as int, child: Text(c['name']));
+                    value: p['id'] as int,
+                    child: Text(_getProjectDisplayName(p)),
+                  );
                 }).toList(),
                 onChanged: (id) {
                   if (id == null) return;
-                  final client = _clients.firstWhere((c) => c['id'] == id);
-                  setState(() {
-                    _selectedClient = client;
-                    final project = _projects.firstWhere((p) =>
-                    p['project_name'] == _selectedProject!['project_name'] &&
-                        p['client_id'] == id);
-                    _selectedProject = project;
-                    _loadUnbilledRecords(project['id']);
-                  });
+                  final match = _projects.firstWhere((p) => p['id'] == id);
+                  _onProjectSelected(match);
                 },
               ),
-            ],
 
-            const SizedBox(height: 16),
+              // ② Client disambiguator
+              if (_showClientDisambiguator) ...[
+                const SizedBox(height: 16),
+                DropdownButtonFormField<int>(
+                  decoration: const InputDecoration(labelText: 'Select Client'),
+                  value: _selectedClient?['id'],
+                  items: _clients.where((c) {
+                    return _projects.any((p) =>
+                    p['project_name'] == _selectedProject!['project_name'] &&
+                        p['client_id'] == c['id']);
+                  }).map((c) {
+                    return DropdownMenuItem<int>(
+                        value: c['id'] as int, child: Text(c['name']));
+                  }).toList(),
+                  onChanged: (id) {
+                    if (id == null) return;
+                    final client = _clients.firstWhere((c) => c['id'] == id);
+                    setState(() {
+                      _selectedClient = client;
+                      final project = _projects.firstWhere((p) =>
+                      p['project_name'] == _selectedProject!['project_name'] &&
+                          p['client_id'] == id);
+                      _selectedProject = project;
+                      _loadUnbilledRecords(project['id']);
+                    });
+                  },
+                ),
+              ],
 
-            // ③ Unbilled records
-            if (_selectedProject != null) ...[
-              if (_isLoading)
-                const Center(child: CircularProgressIndicator())
-              else if (_timeEntries.isEmpty && _materials.isEmpty)
-                const Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Text('No unbilled billable records found for this project.'),
-                  ),
-                )
-              else
-                ...allCostCodes.map((ccName) {
-                  final timeForCC = groupedTime[ccName] ?? [];
-                  final matsForCC = groupedMaterials[ccName] ?? [];
+              const SizedBox(height: 16),
 
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 12),
-                    elevation: 2,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              // ③ Unbilled records
+              if (_selectedProject != null) ...[
+                if (_isLoading)
+                  const Center(child: CircularProgressIndicator())
+                else if (_timeEntries.isEmpty && _materials.isEmpty)
+                  const Center(child: Text('No unbilled records for this project.'))
+                else ...[
+                  const Text('Select records to include:',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  ...allCostCodes.map((cc) {
+                    final ccTime = groupedTime[cc] ?? [];
+                    final ccMat = groupedMaterials[cc] ?? [];
+                    return ExpansionTile(
+                      title: Text(cc),
                       children: [
-                        ListTile(
-                          title: Text(
-                            ccName,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                        ...timeForCC.map((te) {
+                        ...ccTime.map((te) {
                           final hours = _calculateTimeEntryHours(te);
-                          final date = DateFormat('MMM d yyyy')
-                              .format(DateTime.parse(te['start_time']));
+                          final date = DateFormat('MMM d').format(DateTime.parse(te['start_time']));
                           return CheckboxListTile(
-                            title: Text(
-                                '${te['employee_name'] ?? 'Unknown'} - $date'),
-                            subtitle: Text(
-                                '${hours.toStringAsFixed(2)} hrs - ${te['work_details'] ?? 'No details'}'),
+                            title: Text('$date: ${te['employee_name'] ?? 'Unknown'}'),
+                            subtitle: Text('${hours.toStringAsFixed(2)} hrs - ${te['work_details'] ?? ''}'),
                             value: _selectedTimeEntryIds.contains(te['id']),
                             onChanged: (val) {
                               setState(() {
@@ -389,14 +383,12 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
                             },
                           );
                         }),
-                        ...matsForCC.map((m) {
-                          final date = DateFormat('MMM d yyyy')
-                              .format(DateTime.parse(m['purchase_date']));
+                        ...ccMat.map((m) {
                           final cost = (m['cost'] as num).toDouble();
+                          final date = DateFormat('MMM d').format(DateTime.parse(m['purchase_date']));
                           return CheckboxListTile(
-                            title: Text('${m['item_name']} - $date'),
-                            subtitle: Text(
-                                '${m['vendor_or_subtrade'] ?? 'Unknown Vendor'} - ${_currencyFormat.format(cost)}'),
+                            title: Text('$date: ${m['item_name']}'),
+                            subtitle: Text('${_currencyFormat.format(cost)} - ${m['description'] ?? ''}'),
                             value: _selectedMaterialIds.contains(m['id']),
                             onChanged: (val) {
                               setState(() {
@@ -410,211 +402,119 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
                           );
                         }),
                       ],
-                    ),
-                  );
-                }),
+                    );
+                  }),
+                ],
 
-              const SizedBox(height: 16),
+                const Divider(height: 32),
 
-              // ④ Narrative field
-              TextField(
-                controller: _narrativeController,
-                decoration: const InputDecoration(
-                  labelText: 'Invoice Narrative',
-                  hintText: 'Describe the work performed (prints on invoice)',
-                  border: OutlineInputBorder(),
-                ),
-                minLines: 3,
-                maxLines: 6,
-              ),
-
-              const SizedBox(height: 16),
-
-              // ⑤ Totals summary card
-              if (hasSelections) ...[
-                Card(
-                  color: Colors.blue.shade50,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: Column(
-                      children: [
-                        // Labour line
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Labour:'),
-                            Text(
-                                '${_currencyFormat.format(_labourSubtotal)} (${_totalHours.toStringAsFixed(2)} hrs)'),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-
-                        // Materials line
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Materials:'),
-                            Text(_currencyFormat.format(_materialsSubtotal)),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-
-                        // Gross subtotal
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Subtotal:',
-                                style: TextStyle(fontWeight: FontWeight.w600)),
-                            Text(_currencyFormat.format(_grossSubtotal),
-                                style:
-                                const TextStyle(fontWeight: FontWeight.w600)),
-                          ],
-                        ),
-
-                        const Divider(height: 20),
-
-                        // Discount amount input
-                        Row(
-                          children: [
-                            const Expanded(
-                              flex: 2,
-                              child: Text(
-                                'Discount:',
-                                style: TextStyle(color: Colors.red),
-                              ),
-                            ),
-                            Expanded(
-                              flex: 3,
-                              child: TextField(
-                                controller: _discountAmountController,
-                                keyboardType:
-                                const TextInputType.numberWithOptions(
-                                    decimal: true),
-                                decoration: const InputDecoration(
-                                  prefixText: '-\$',
-                                  hintText: '0.00',
-                                  isDense: true,
-                                  border: OutlineInputBorder(),
-                                  contentPadding: EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 8),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-
-                        // Discount description input (only shown when discount > 0)
-                        if (_discountAmount > 0) ...[
-                          const SizedBox(height: 8),
-                          TextField(
-                            controller: _discountDescriptionController,
-                            decoration: const InputDecoration(
-                              labelText: 'Discount Description',
-                              hintText: 'e.g. Fixed price adjustment — Demo & Hauling estimate',
-                              isDense: true,
-                              border: OutlineInputBorder(),
-                              contentPadding: EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 8),
-                            ),
-                          ),
-                        ],
-
-                        const Divider(height: 20),
-
-                        // Discounted subtotal (only shown when discount > 0)
-                        if (_discountAmount > 0) ...[
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              const Text('Discounted Subtotal:',
-                                  style: TextStyle(fontWeight: FontWeight.w600)),
-                              Text(_currencyFormat.format(_discountedSubtotal),
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.w600)),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                        ],
-
-                        // GST line — always on discounted subtotal
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                                'GST (${_taxRatePercent.toStringAsFixed(1)}%):'),
-                            Text(_currencyFormat.format(_gstAmount)),
-                          ],
-                        ),
-
-                        const Divider(),
-
-                        // Invoice total
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Invoice Total:',
-                                style: TextStyle(fontWeight: FontWeight.bold)),
-                            Text(
-                              _currencyFormat.format(_invoiceTotal),
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold, fontSize: 18),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
+                // ④ Invoice details
+                const Text('Invoice Details', style: TextStyle(fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _narrativeController,
+                  decoration: const InputDecoration(
+                    labelText: 'Work Description / Narrative',
+                    border: OutlineInputBorder(),
                   ),
+                  maxLines: 3,
                 ),
                 const SizedBox(height: 16),
-              ],
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: TextField(
+                        controller: _discountDescriptionController,
+                        decoration: const InputDecoration(
+                          labelText: 'Discount Description',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 1,
+                      child: TextField(
+                        controller: _discountAmountController,
+                        decoration: const InputDecoration(
+                          labelText: 'Discount (\$)',
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.number,
+                      ),
+                    ),
+                  ],
+                ),
 
-              // ⑥ Action buttons
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: const Text('Cancel'),
-                    ),
+                const Divider(height: 32),
+
+                // ⑤ Summary
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[100],
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: !hasSelections || _isSaving
-                          ? null
-                          : _createInvoice,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: Colors.orange[700],
-                        foregroundColor: Colors.white,
-                      ),
-                      child: _isSaving
-                          ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2),
-                      )
-                          : const Text('Create Invoice'),
-                    ),
+                  child: Column(
+                    children: [
+                      _buildSummaryRow('Total Hours:', _totalHours.toStringAsFixed(2)),
+                      _buildSummaryRow('Labour Total (@ ${_currencyFormat.format(_burdenRate)}/hr):',
+                          _currencyFormat.format(_labourSubtotal)),
+                      _buildSummaryRow('Materials Total:', _currencyFormat.format(_materialsSubtotal)),
+                      const Divider(),
+                      _buildSummaryRow('Gross Subtotal:', _currencyFormat.format(_grossSubtotal)),
+                      if (_discountAmount > 0)
+                        _buildSummaryRow('Discount:', '- ${_currencyFormat.format(_discountAmount)}',
+                            color: Colors.red),
+                      _buildSummaryRow('Taxable Subtotal:', _currencyFormat.format(_discountedSubtotal)),
+                      _buildSummaryRow('GST (${_taxRatePercent.toStringAsFixed(1)}%):',
+                          _currencyFormat.format(_gstAmount)),
+                      const Divider(),
+                      _buildSummaryRow('Invoice Total:', _currencyFormat.format(_invoiceTotal),
+                          isTotal: true),
+                    ],
                   ),
-                ],
-              ),
+                ),
+
+                const SizedBox(height: 24),
+
+                ElevatedButton(
+                  onPressed: (hasSelections && !_isSaving) ? _createInvoice : null,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                  child: _isSaving
+                      ? const CircularProgressIndicator()
+                      : const Text('Create Extras Invoice'),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );
   }
 
-  @override
-  void dispose() {
-    _narrativeController.dispose();
-    _discountAmountController.dispose();
-    _discountDescriptionController.dispose();
-    super.dispose();
+  Widget _buildSummaryRow(String label, String value, {bool isTotal = false, Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label,
+              style: TextStyle(
+                fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+                fontSize: isTotal ? 18 : 14,
+              )),
+          Text(value,
+              style: TextStyle(
+                fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+                fontSize: isTotal ? 18 : 14,
+                color: color,
+              )),
+        ],
+      ),
+    );
   }
 }

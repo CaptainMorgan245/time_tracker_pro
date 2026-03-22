@@ -20,6 +20,7 @@ import 'package:time_tracker_pro/data_management_screen.dart';
 import 'package:time_tracker_pro/cost_code_repository.dart';
 import 'package:time_tracker_pro/manage_cost_codes_page.dart';
 import 'package:time_tracker_pro/invoice_list_screen.dart';
+import 'package:time_tracker_pro/screens/payroll_screen.dart';
 
 // START REUSABLE DRAWER WIDGET
 class AppDrawer extends StatelessWidget {
@@ -82,6 +83,16 @@ class AppDrawer extends StatelessWidget {
               Navigator.pop(context);
               Navigator.of(context).push(
                 MaterialPageRoute(builder: (context) => const ManageCostCodesPage()),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.payments),
+            title: const Text('Payroll'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const PayrollScreen()),
               );
             },
           ),
