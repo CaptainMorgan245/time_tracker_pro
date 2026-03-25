@@ -325,6 +325,12 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
       if (!_allProjects.any((p) => p.id == 0)) {
         _allProjects.insert(0, Project(id: 0, projectName: 'Internal Company Project', clientId: 0, isInternal: true, pricingModel: 'hourly'));
       }
+      if (!_clients.any((c) => c.id == 0)) {
+        _clients.insert(0, Client(
+          id: 0,
+          name: 'Internal',
+        ));
+      }
 
       _applyProjectFilter(_showCompletedProjects);
       setState(() => _isLoading = false);
@@ -356,6 +362,16 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     }
 
     _filteredProjectsNotifier.value = filtered;
+
+    if (_selectedProjectId != null && 
+        !filtered.any((p) => p.id == _selectedProjectId)) {
+      setState(() {
+        _selectedProjectId = null;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _formStateKey.currentState?.setSelectedProjectId(null);
+      });
+    }
   }
 
   void _onClientChanged(int? clientId) {
@@ -482,7 +498,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     if (!isEditing) _handleClearOrCancel();
   }
 
-  Future<void> _deleteExpense(int id) async {
+  Future<void> _handleDeleteExpense(int id) async {
     await AppDatabase.instance.deleteRecordV2(id: id, fromTable: 'materials');
     setState(() => _refreshKey++);
   }
@@ -601,7 +617,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                                 icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
                                 padding: EdgeInsets.zero,
                                 constraints: const BoxConstraints(),
-                                onPressed: () => _deleteExpense(record.id!),
+                                onPressed: () => _handleDeleteExpense(record.id!),
                               ),
                             ],
                           ),
