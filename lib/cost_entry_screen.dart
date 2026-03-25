@@ -16,8 +16,6 @@ class CostRecordFormTopRow extends StatelessWidget {
   final ValueNotifier<List<Project>> filteredProjectsNotifier;
   final ValueNotifier<List<String>> expenseCategoriesNotifier;
   final ValueNotifier<bool> isCompanyExpenseNotifier;
-  final bool showCompletedProjects;
-  final Function(bool showCompleted) onProjectFilterToggle;
   final String currentItemName;
   final List<Client> clients;
   final int? selectedClientId;
@@ -31,8 +29,6 @@ class CostRecordFormTopRow extends StatelessWidget {
     required this.filteredProjectsNotifier,
     required this.expenseCategoriesNotifier,
     required this.isCompanyExpenseNotifier,
-    required this.showCompletedProjects,
-    required this.onProjectFilterToggle,
     required this.currentItemName,
     required this.clients,
     required this.selectedClientId,
@@ -217,24 +213,7 @@ class CostRecordFormTopRow extends StatelessWidget {
                             },
                           ),
                         ),
-                        const Text('Veh.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 9)),
-                      ],
-                    ),
-                    const SizedBox(width: 4),
-                    Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: Checkbox(
-                            value: showCompletedProjects,
-                            onChanged: (bool? newValue) {
-                              onProjectFilterToggle(newValue ?? false);
-                            },
-                          ),
-                        ),
-                        const Text('Comp.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 9)),
+                        const Text('Vehicle Exp.', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 9)),
                       ],
                     ),
                   ],
@@ -262,7 +241,6 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   CostCodeRepository? _costCodeRepo;
 
   bool _isLoading = true;
-  bool _showCompletedProjects = false;
   int _refreshKey = 0;
 
   final ValueNotifier<List<Project>> _filteredProjectsNotifier = ValueNotifier([]);
@@ -325,40 +303,38 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
       if (!_allProjects.any((p) => p.id == 0)) {
         _allProjects.insert(0, Project(id: 0, projectName: 'Internal Company Project', clientId: 0, isInternal: true, pricingModel: 'hourly'));
       }
+      
       if (!_clients.any((c) => c.id == 0)) {
-        _clients.insert(0, Client(
-          id: 0,
-          name: 'Internal',
-        ));
+        _clients.insert(0, Client(id: 0, name: 'Company Expenses'));
+      }
+      if (!_clients.any((c) => c.id == -1)) {
+        _clients.insert(1, Client(id: -1, name: 'Archived Projects'));
       }
 
-      _applyProjectFilter(_showCompletedProjects);
+      _updateFilteredProjectsList();
       setState(() => _isLoading = false);
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _applyProjectFilter(bool showCompleted) {
-    setState(() {
-      _showCompletedProjects = showCompleted;
-    });
-    _updateFilteredProjectsList();
-  }
-
   void _updateFilteredProjectsList() {
     List<Project> filtered = _allProjects;
 
-    // Filter by completion status
-    if (_showCompletedProjects) {
-      filtered = filtered.where((p) => p.isCompleted).toList();
+    if (_selectedClientId == 0) {
+      // Company Expenses — show internal projects only
+      filtered = filtered.where((p) => p.isInternal).toList();
+    } else if (_selectedClientId == -1) {
+      // Archived Projects — show completed projects only
+      filtered = filtered.where((p) => p.isCompleted && !p.isInternal).toList();
+    } else if (_selectedClientId != null) {
+      // Real client — show that client's active projects only
+      filtered = filtered.where((p) => 
+        p.clientId == _selectedClientId && !p.isCompleted).toList();
     } else {
-      filtered = filtered.where((p) => !p.isCompleted || p.isInternal).toList();
-    }
-
-    // Filter by client
-    if (_selectedClientId != null) {
-      filtered = filtered.where((p) => p.clientId == _selectedClientId).toList();
+      // No client selected — show all active non-internal projects
+      filtered = filtered.where((p) => 
+        !p.isCompleted && !p.isInternal).toList();
     }
 
     _filteredProjectsNotifier.value = filtered;
@@ -526,8 +502,6 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                 filteredProjectsNotifier: _filteredProjectsNotifier,
                 expenseCategoriesNotifier: _expenseCategoriesNotifier,
                 isCompanyExpenseNotifier: _isCompanyExpenseNotifier,
-                showCompletedProjects: _showCompletedProjects,
-                onProjectFilterToggle: _applyProjectFilter,
                 currentItemName: _formStateKey.currentState?.getCurrentItemName() ?? '',
                 clients: _clients,
                 selectedClientId: _selectedClientId,
@@ -546,7 +520,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                 vehicleDesignationsNotifier: _vehicleDesignationsNotifier,
                 costCodesNotifier: _costCodesNotifier,
                 onAddExpense: _handleCostSubmission,
-                onProjectFilterToggle: _applyProjectFilter,
+                onProjectFilterToggle: (_) {},
                 onClearForm: _handleClearOrCancel,
                 isEditing: false,
                 onCompanyExpenseToggle: _isCompanyExpenseNotifier,
@@ -557,7 +531,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
               child: FutureBuilder<List<JobMaterials>>(
                 key: ValueKey(_refreshKey),
                 future: AppDatabase.instance.getCostEntryMaterials(
-                  _showCompletedProjects,
+                  false, // showCompleted is no longer used for bulk loading here
                   _allProjects,
                   selectedProjectId: _selectedProjectId,
                 ),
@@ -571,6 +545,10 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                               (p) => p.id == r.projectId,
                           orElse: () => Project(clientId: -1, projectName: '', pricingModel: '')
                       );
+                      
+                      if (_selectedClientId == 0) return project.isInternal;
+                      if (_selectedClientId == -1) return project.isCompleted && !project.isInternal;
+                      
                       return project.clientId == _selectedClientId;
                     }).toList();
                   }
