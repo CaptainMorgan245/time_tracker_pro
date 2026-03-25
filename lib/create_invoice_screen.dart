@@ -3,10 +3,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:drift/drift.dart' show Variable;
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/invoice_repository.dart';
 import 'package:time_tracker_pro/invoice_service.dart';
-import 'package:time_tracker_pro/database_helper.dart';
+import 'package:time_tracker_pro/database/app_database.dart';
 
 // start class: CreateInvoiceScreen
 class CreateInvoiceScreen extends StatefulWidget {
@@ -24,7 +25,6 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   final _formKey = GlobalKey<FormState>();
   final InvoiceRepository _invoiceRepository = InvoiceRepository();
   final InvoiceService _invoiceService = InvoiceService.instance;
-  final _dbHelper = DatabaseHelperV2.instance;
   final NumberFormat _currencyFormat =
       NumberFormat.currency(locale: 'en_US', symbol: '\$');
 
@@ -135,7 +135,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     try {
       // Fetch active projects
       var projects = await _invoiceRepository.getActiveProjects();
-      final cs = await _dbHelper.getCompanySettings();
+      final cs = await AppDatabase.instance.getCompanySettings();
 
       // If editing, ensure the current invoice's project is in the list
       if (_isEditMode) {
@@ -143,12 +143,12 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         final bool exists = projects.any((p) => p.id == targetId);
         
         if (!exists) {
-          final db = await _dbHelper.database;
-          final List<Map<String, dynamic>> maps = await db.query(
-            'projects',
-            where: 'id = ?',
-            whereArgs: [targetId],
-          );
+          final rows = await AppDatabase.instance.customSelect(
+            'SELECT * FROM projects WHERE id = ?',
+            variables: [Variable.withInt(targetId)],
+          ).get();
+          final maps = rows.map((r) => r.data).toList();
+          
           if (maps.isNotEmpty) {
             projects.add(Project.fromMap(maps.first));
           }
@@ -209,8 +209,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         final summary =
             await _invoiceRepository.getProjectBillingSummary(project.id!);
         // Exclude current invoice if editing
-        double billed = summary['total_billed'] ?? 0;
-        double gst = summary['total_gst'] ?? 0;
+        double billed = (summary['total_billed'] as num? ?? 0).toDouble();
+        double gst = (summary['total_gst'] as num? ?? 0).toDouble();
         if (_isEditMode) {
           billed -= widget.existingInvoice!.subtotal;
           gst -= widget.existingInvoice!.tax1Amount ?? 0;

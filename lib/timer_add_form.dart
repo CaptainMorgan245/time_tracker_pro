@@ -33,6 +33,7 @@ class TimerAddFormState extends State<TimerAddForm> {
   Employee? _selectedEmployee;
   CostCode? _selectedCostCode;
   final TextEditingController _workDetailsController = TextEditingController();
+  final FocusNode _workDetailsFocusNode = FocusNode();
   DateTime? _selectedStartTime;
   DateTime? _selectedStopTime;
   String? _editingRecordId;
@@ -42,7 +43,19 @@ class TimerAddFormState extends State<TimerAddForm> {
   @override
   void dispose() {
     _workDetailsController.dispose();
+    _workDetailsFocusNode.dispose();
     super.dispose();
+  }
+
+  void _resetForm() {
+    setState(() {
+      _selectedEmployee = null;
+      _selectedCostCode = null;
+      _workDetailsController.clear();
+      _selectedStartTime = null;
+      _selectedStopTime = null;
+      _editingRecordId = null;
+    });
   }
 
   void resetForm() {
@@ -237,7 +250,6 @@ class TimerAddFormState extends State<TimerAddForm> {
   }
 
   void _submit() {
-    SystemChannels.textInput.invokeMethod('TextInput.hide');
     if (_selectedProject == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please select a project.')),
@@ -258,6 +270,9 @@ class TimerAddFormState extends State<TimerAddForm> {
         return;
       }
     }
+
+    FocusScope.of(context).unfocus();
+
     if (_editingRecordId != null) {
       widget.onUpdate(
         _editingRecordId!,
@@ -278,6 +293,8 @@ class TimerAddFormState extends State<TimerAddForm> {
         _selectedStopTime,
       );
     }
+
+    _resetForm();
   }
 
   @override
@@ -431,6 +448,7 @@ class TimerAddFormState extends State<TimerAddForm> {
             const SizedBox(height: 16),
             TextFormField(
               controller: _workDetailsController,
+              focusNode: _workDetailsFocusNode,
               textCapitalization: TextCapitalization.sentences,
               decoration: const InputDecoration(
                 hintText: "Enter details about work performed...",

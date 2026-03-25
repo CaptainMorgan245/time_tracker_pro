@@ -1,7 +1,7 @@
 // lib/manage_cost_codes_page.dart
 
 import 'package:flutter/material.dart';
-import 'package:time_tracker_pro/database_helper.dart';
+import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/cost_code_repository.dart';
 import 'package:time_tracker_pro/models.dart';
 
@@ -16,36 +16,8 @@ class ManageCostCodesPage extends StatefulWidget {
 
 // start class: _ManageCostCodesPageState
 class _ManageCostCodesPageState extends State<ManageCostCodesPage> {
-  late CostCodeRepository _costCodeRepo;
-  List<CostCode> _costCodes = [];
-  bool _isLoading = true;
-
-  // start method: initState
-  @override
-  void initState() {
-    super.initState();
-    _initializeRepository();
-  }
-  // end method: initState
-
-  // start method: _initializeRepository
-  Future<void> _initializeRepository() async {
-    final db = await DatabaseHelperV2.instance.database;
-    _costCodeRepo = CostCodeRepository(db);
-    await _loadCostCodes();
-  }
-  // end method: _initializeRepository
-
-  // start method: _loadCostCodes
-  Future<void> _loadCostCodes() async {
-    setState(() => _isLoading = true);
-    final costCodes = await _costCodeRepo.getAllCostCodes();
-    setState(() {
-      _costCodes = costCodes;
-      _isLoading = false;
-    });
-  }
-  // end method: _loadCostCodes
+  final CostCodeRepository _costCodeRepo = CostCodeRepository();
+  int _refreshKey = 0;
 
   // start method: _showEditDialog
   Future<void> _showEditDialog(CostCode? costCode) async {
@@ -113,8 +85,10 @@ class _ManageCostCodesPageState extends State<ManageCostCodesPage> {
                       );
                       if (confirm == true) {
                         await _costCodeRepo.deleteCostCode(costCode.id!);
-                        await _loadCostCodes();
-                        if (mounted) Navigator.of(context).pop();
+                        if (mounted) {
+                          setState(() => _refreshKey++);
+                          Navigator.of(context).pop();
+                        }
                       }
                     },
                   ),
@@ -133,8 +107,10 @@ class _ManageCostCodesPageState extends State<ManageCostCodesPage> {
                           isBillable: isBillable,
                         ));
                       }
-                      await _loadCostCodes();
-                      if (mounted) Navigator.of(context).pop();
+                      if (mounted) {
+                        setState(() => _refreshKey++);
+                        Navigator.of(context).pop();
+                      }
                     }
                   },
                 ),
@@ -158,39 +134,47 @@ class _ManageCostCodesPageState extends State<ManageCostCodesPage> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            AddCostCodeForm(onCostCodeAdded: _loadCostCodes),
+            AddCostCodeForm(onCostCodeAdded: () => setState(() => _refreshKey++)),
             const SizedBox(height: 16),
             Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : Card(
-                margin: EdgeInsets.zero,
-                child: _costCodes.isEmpty
-                    ? const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(32.0),
-                    child: Text('No cost codes yet. Add one above.'),
-                  ),
-                )
-                    : ListView.builder(
-                  itemCount: _costCodes.length,
-                  itemBuilder: (context, index) {
-                    final costCode = _costCodes[index];
-                    return ListTile(
-                      leading: Icon(
-                        costCode.isBillable ? Icons.receipt_long : Icons.label,
-                        color: costCode.isBillable ? Colors.green : Colors.blueGrey,
+              child: FutureBuilder<List<CostCode>>(
+                key: ValueKey(_refreshKey),
+                future: _costCodeRepo.getAllCostCodes(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  final costCodes = snapshot.data ?? [];
+                  return Card(
+                    margin: EdgeInsets.zero,
+                    child: costCodes.isEmpty
+                        ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(32.0),
+                        child: Text('No cost codes yet. Add one above.'),
                       ),
-                      title: Text(costCode.name),
-                      subtitle: costCode.isBillable ? const Text('Billable Extra', style: TextStyle(fontSize: 12)) : null,
-                      trailing: IconButton(
-                        icon: const Icon(Icons.edit, color: Colors.blue),
-                        onPressed: () => _showEditDialog(costCode),
-                      ),
-                      onTap: () => _showEditDialog(costCode),
-                    );
-                  },
-                ),
+                    )
+                        : ListView.builder(
+                      itemCount: costCodes.length,
+                      itemBuilder: (context, index) {
+                        final costCode = costCodes[index];
+                        return ListTile(
+                          leading: Icon(
+                            costCode.isBillable ? Icons.receipt_long : Icons.label,
+                            color: costCode.isBillable ? Colors.green : Colors.blueGrey,
+                          ),
+                          title: Text(costCode.name),
+                          subtitle: costCode.isBillable ? const Text('Billable Extra', style: TextStyle(fontSize: 12)) : null,
+                          trailing: IconButton(
+                            icon: const Icon(Icons.edit, color: Colors.blue),
+                            onPressed: () => _showEditDialog(costCode),
+                          ),
+                          onTap: () => _showEditDialog(costCode),
+                        );
+                      },
+                    ),
+                  );
+                },
               ),
             ),
           ],
@@ -218,25 +202,10 @@ class AddCostCodeForm extends StatefulWidget {
 
 // start class: _AddCostCodeFormState
 class _AddCostCodeFormState extends State<AddCostCodeForm> {
-  late CostCodeRepository _costCodeRepo;
+  final CostCodeRepository _costCodeRepo = CostCodeRepository();
   final TextEditingController _nameController = TextEditingController();
   bool _isSubmitting = false;
   bool _isNewCodeBillable = false;
-
-  // start method: initState
-  @override
-  void initState() {
-    super.initState();
-    _initializeRepository();
-  }
-  // end method: initState
-
-  // start method: _initializeRepository
-  Future<void> _initializeRepository() async {
-    final db = await DatabaseHelperV2.instance.database;
-    _costCodeRepo = CostCodeRepository(db);
-  }
-  // end method: _initializeRepository
 
   // start method: dispose
   @override

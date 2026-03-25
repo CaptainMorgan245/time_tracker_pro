@@ -14,6 +14,7 @@ class CompanySettings {
   final double? defaultTax2Rate;
   final String? defaultTax2RegistrationNumber;
   final String defaultTerms;
+  final double taxRate;
 
   CompanySettings({
     this.id = 1,
@@ -31,6 +32,7 @@ class CompanySettings {
     this.defaultTax2Rate,
     this.defaultTax2RegistrationNumber,
     this.defaultTerms = 'Payable on Receipt',
+    this.taxRate = 5.0,
   });
 
   Map<String, dynamic> toMap() {
@@ -50,6 +52,7 @@ class CompanySettings {
       'default_tax2_rate': defaultTax2Rate,
       'default_tax2_registration_number': defaultTax2RegistrationNumber,
       'default_terms': defaultTerms,
+      'tax_rate': taxRate,
     };
   }
 
@@ -70,6 +73,7 @@ class CompanySettings {
       defaultTax2Rate: (map['default_tax2_rate'] as num?)?.toDouble(),
       defaultTax2RegistrationNumber: map['default_tax2_registration_number'] as String?,
       defaultTerms: map['default_terms'] as String? ?? 'Payable on Receipt',
+      taxRate: (map['tax_rate'] as num?)?.toDouble() ?? 5.0,
     );
   }
 
@@ -89,6 +93,7 @@ class CompanySettings {
     double? defaultTax2Rate,
     String? defaultTax2RegistrationNumber,
     String? defaultTerms,
+    double? taxRate,
   }) {
     return CompanySettings(
       id: id ?? this.id,
@@ -106,6 +111,7 @@ class CompanySettings {
       defaultTax2Rate: defaultTax2Rate ?? this.defaultTax2Rate,
       defaultTax2RegistrationNumber: defaultTax2RegistrationNumber ?? this.defaultTax2RegistrationNumber,
       defaultTerms: defaultTerms ?? this.defaultTerms,
+      taxRate: taxRate ?? this.taxRate,
     );
   }
 }

@@ -2,7 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:time_tracker_pro/database_helper.dart';
+import 'package:drift/drift.dart' show Variable;
+import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/invoice_repository.dart';
 import 'package:time_tracker_pro/invoice_service.dart';
 import 'package:time_tracker_pro/models.dart';
@@ -59,23 +60,27 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
   Future<void> _loadInitialData() async {
     setState(() => _isLoading = true);
     try {
-      final db = await DatabaseHelperV2.instance.database;
+      final projectsRows = await AppDatabase.instance.customSelect(
+        'SELECT * FROM projects WHERE is_completed = 0 ORDER BY project_name ASC',
+      ).get();
+      final projectsData = projectsRows.map((r) => r.data).toList();
 
-      final projectsData = await db.query(
-        'projects',
-        where: 'is_completed = 0',
-        orderBy: 'project_name ASC',
-      );
+      final clientsRows = await AppDatabase.instance.customSelect(
+        'SELECT * FROM clients ORDER BY name ASC',
+      ).get();
+      final clientsData = clientsRows.map((r) => r.data).toList();
 
-      final clientsData = await db.query('clients', orderBy: 'name ASC');
+      final settingsRows = await AppDatabase.instance.customSelect(
+        'SELECT burden_rate FROM settings LIMIT 1',
+      ).get();
+      final settingsData = settingsRows.map((r) => r.data).toList();
 
-      final settingsData = await db.rawQuery('SELECT burden_rate FROM settings LIMIT 1');
       double burdenRate = 0.0;
       if (settingsData.isNotEmpty) {
         burdenRate = (settingsData.first['burden_rate'] as num?)?.toDouble() ?? 0.0;
       }
 
-      final companySettings = await DatabaseHelperV2.instance.getCompanySettings();
+      final companySettings = await AppDatabase.instance.getCompanySettings();
       final defaultTaxRate = companySettings.defaultTax1Rate * 100.0;
 
       setState(() {
@@ -124,8 +129,8 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
     try {
       final records = await _invoiceRepository.fetchUnbilledBillableRecords(projectId);
       setState(() {
-        _timeEntries = List<Map<String, dynamic>>.from(records['timeEntries']);
-        _materials = List<Map<String, dynamic>>.from(records['materials']);
+        _timeEntries = List<Map<String, dynamic>>.from(records['timeEntries']!);
+        _materials = List<Map<String, dynamic>>.from(records['materials']!);
         _isLoading = false;
       });
     } catch (e) {

@@ -5,7 +5,8 @@ import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/client_repository.dart';
 import 'package:time_tracker_pro/project_repository.dart';
 import 'package:flutter/services.dart';
-import 'package:time_tracker_pro/database_helper.dart';
+import 'package:drift/drift.dart' show Variable;
+import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/settings_model.dart';
 
 class ClientAndProjectAddForm extends StatefulWidget {
@@ -25,7 +26,6 @@ class ClientAndProjectAddForm extends StatefulWidget {
 class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
   final ClientRepository _clientRepo = ClientRepository();
   final ProjectRepository _projectRepo = ProjectRepository();
-  final _dbHelper = DatabaseHelperV2.instance;
 
   final TextEditingController _clientNameController = TextEditingController();
   final TextEditingController _contactPersonController = TextEditingController();
@@ -49,8 +49,11 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
   }
 
   Future<void> _loadDefaultMarkup() async {
-    final db = await _dbHelper.database;
-    final settingsMap = await db.query('settings', where: 'id = ?', whereArgs: [1]);
+    final settingsRows = await AppDatabase.instance.customSelect(
+      'SELECT * FROM settings WHERE id = ?',
+      variables: [Variable.withInt(1)],
+    ).get();
+    final settingsMap = settingsRows.map((r) => r.data).toList();
     final settings = settingsMap.isNotEmpty
         ? SettingsModel.fromMap(settingsMap.first)
         : SettingsModel();
@@ -170,7 +173,7 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
   Widget build(BuildContext context) {
     final activeClients = widget.clients;
     const itemWidth = 250.0;
-    final phoneNumberFormatter = FilteringTextInputFormatter.allow(RegExp(r'[\d\.\-]'));
+    final phoneNumberFormatter = FilteringTextInputFormatter.allow(RegExp(r'r[\d\.\-]'));
 
     // Get the current theme to style the clear button
     final ButtonStyle elevatedButtonStyle = ElevatedButton.styleFrom(

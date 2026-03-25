@@ -1,8 +1,9 @@
 // lib/screens/payroll_screen.dart
 
+import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:time_tracker_pro/database_helper.dart';
+import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/employee_repository.dart';
 import 'package:time_tracker_pro/models.dart';
 
@@ -15,7 +16,7 @@ class PayrollScreen extends StatefulWidget {
 
 class _PayrollScreenState extends State<PayrollScreen> {
   final EmployeeRepository _employeeRepo = EmployeeRepository();
-  final DatabaseHelperV2 _dbHelper = DatabaseHelperV2.instance;
+  final AppDatabase _dbHelper = AppDatabase.instance;
   final NumberFormat _currencyFormat = NumberFormat.currency(locale: 'en_US', symbol: '\$');
 
   List<Map<String, dynamic>> _payrollData = [];
@@ -36,13 +37,11 @@ class _PayrollScreenState extends State<PayrollScreen> {
   Future<void> _loadPayrollData() async {
     setState(() => _isLoading = true);
     try {
-      final db = await _dbHelper.database;
-      
       final String startDateStr = _startDate.toIso8601String();
       final String endDateStr = DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59, 59).toIso8601String();
 
-      // Query to get active employees with filtered stats
-      final List<Map<String, dynamic>> results = await db.rawQuery('''
+      // Query to get active employees with filtered stats using Drift
+      final rows = await _dbHelper.customSelect('''
         SELECT 
           e.id, 
           e.name, 
@@ -68,20 +67,29 @@ class _PayrollScreenState extends State<PayrollScreen> {
         LEFT JOIN roles r ON e.title_id = r.id
         WHERE e.is_deleted = 0
         ORDER BY e.name ASC
-      ''', [startDateStr, endDateStr, startDateStr, endDateStr, startDateStr, endDateStr]);
+      ''', variables: [
+        Variable.withString(startDateStr),
+        Variable.withString(endDateStr),
+        Variable.withString(startDateStr),
+        Variable.withString(endDateStr),
+        Variable.withString(startDateStr),
+        Variable.withString(endDateStr),
+      ]).get();
 
-      // We also need the individual payment records for editing/deleting
       final List<Map<String, dynamic>> payrollWithPayments = [];
-      for (var emp in results) {
-        final payments = await db.query(
-          'worker_payments',
-          where: 'employee_id = ? AND payment_date >= ? AND payment_date <= ?',
-          whereArgs: [emp['id'], startDateStr, endDateStr],
-          orderBy: 'payment_date DESC',
-        );
+      for (var row in rows) {
+        final emp = row.data;
+        final paymentRows = await _dbHelper.customSelect(
+          'SELECT * FROM worker_payments WHERE employee_id = ? AND payment_date >= ? AND payment_date <= ? ORDER BY payment_date DESC',
+          variables: [
+            Variable.withInt(emp['id']),
+            Variable.withString(startDateStr),
+            Variable.withString(endDateStr),
+          ],
+        ).get();
         
         final mutableEmp = Map<String, dynamic>.from(emp);
-        mutableEmp['payments'] = payments;
+        mutableEmp['payments'] = paymentRows.map((r) => r.data).toList();
         payrollWithPayments.add(mutableEmp);
       }
 
@@ -191,8 +199,16 @@ class _PayrollScreenState extends State<PayrollScreen> {
 
                 try {
                   if (existingPayment == null) {
-                    final db = await _dbHelper.database;
-                    await db.insert('worker_payments', payment.toMap());
+                    await _dbHelper.customInsert(
+                      'INSERT INTO worker_payments (employee_id, payment_date, amount, note, created_at) VALUES (?, ?, ?, ?, ?)',
+                      variables: [
+                        Variable.withInt(payment.employeeId),
+                        Variable.withString(payment.paymentDate.toIso8601String()),
+                        Variable.withReal(payment.amount),
+                        Variable(payment.note),
+                        Variable.withString(payment.createdAt.toIso8601String()),
+                      ],
+                    );
                   } else {
                     await _dbHelper.updateWorkerPayment(payment);
                   }
@@ -317,7 +333,7 @@ class _PayrollScreenState extends State<PayrollScreen> {
                             final double earned = (emp['total_earned'] as num).toDouble();
                             final double paid = (emp['total_paid'] as num).toDouble();
                             final double balance = earned - paid;
-                            final List<Map<String, dynamic>> payments = emp['payments'];
+                            final List<dynamic> payments = emp['payments'];
               
                             return Card(
                               margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),

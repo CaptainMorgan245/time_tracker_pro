@@ -1,14 +1,16 @@
 // lib/settings_screen.dart
 
+import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/settings_model.dart';
-import 'package:time_tracker_pro/database_helper.dart';
+import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/expenses_screen.dart';
 import 'package:time_tracker_pro/personnel_screen.dart';
 import 'package:time_tracker_pro/burden_rate_settings_screen.dart';
 import 'package:time_tracker_pro/help_support_screen.dart';
 import 'package:time_tracker_pro/company_tax_settings_tab.dart';
 import 'package:time_tracker_pro/models.dart';
+import 'package:time_tracker_pro/dashboard_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -19,7 +21,7 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  final _dbHelper = DatabaseHelperV2.instance;
+  final _dbHelper = AppDatabase.instance;
 
   SettingsModel _settings = SettingsModel();
   CompanySettings _companySettings = CompanySettings();
@@ -82,9 +84,10 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   }
 
   Future<void> _loadSettings() async {
-    final db = await _dbHelper.database;
-    final maps = await db.query('settings', where: 'id = ?', whereArgs: [1]);
-    final loadedSettings = maps.isNotEmpty ? SettingsModel.fromMap(maps.first) : SettingsModel();
+    final rows = await _dbHelper.customSelect(
+      'SELECT * FROM settings WHERE id = 1',
+    ).get();
+    final loadedSettings = rows.isNotEmpty ? SettingsModel.fromMap(rows.first.data) : SettingsModel();
 
     setState(() {
       _settings = loadedSettings;
@@ -131,8 +134,19 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       setupCompleted: true,
     );
 
-    final db = await _dbHelper.database;
-    await db.update('settings', settings.toMap(), where: 'id = ?', whereArgs: [1]);
+    await _dbHelper.customUpdate(
+      'UPDATE settings SET employee_number_prefix=?, next_employee_number=?, auto_backup_reminder_frequency=?, default_report_months=?, expense_markup_percentage=?, company_hourly_rate=?, setup_completed=? WHERE id=1',
+      variables: [
+        Variable(settings.employeeNumberPrefix),
+        Variable(settings.nextEmployeeNumber),
+        Variable.withInt(settings.autoBackupReminderFrequency),
+        Variable.withInt(settings.defaultReportMonths),
+        Variable.withReal(settings.expenseMarkupPercentage),
+        Variable(settings.companyHourlyRate),
+        Variable.withInt(1),
+      ],
+      updates: {},
+    );
 
     // 2. Save Company Settings
     final double tax1Rate = (double.tryParse(tax1RateController.text) ?? 0.0) / 100.0;
@@ -162,6 +176,13 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('All Settings Saved!')),
+    );
+
+    // Navigate to Dashboard and clear stack
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (context) => const DashboardScreen()),
+      (route) => false,
     );
   }
 

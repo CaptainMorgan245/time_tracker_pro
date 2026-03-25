@@ -1,46 +1,59 @@
 // lib/cost_code_repository.dart
 
-import 'package:sqflite/sqflite.dart';
-import 'models.dart';
+import 'package:drift/drift.dart';
+import 'package:time_tracker_pro/database/app_database.dart';
+import 'package:time_tracker_pro/models.dart';
 
 class CostCodeRepository {
-  final Database db;
-
-  CostCodeRepository(this.db);
+  final _db = AppDatabase.instance;
 
   Future<List<CostCode>> getAllCostCodes() async {
-    final List<Map<String, dynamic>> maps = await db.query('cost_codes');
-    return List.generate(maps.length, (i) => CostCode.fromMap(maps[i]));
+    final rows = await _db.customSelect('SELECT * FROM cost_codes').get();
+    return rows.map((r) => CostCode.fromMap(r.data)).toList();
   }
 
   Future<CostCode?> getCostCodeById(int id) async {
-    final List<Map<String, dynamic>> maps = await db.query(
-      'cost_codes',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-    if (maps.isEmpty) return null;
-    return CostCode.fromMap(maps.first);
+    final rows = await _db.customSelect(
+      'SELECT * FROM cost_codes WHERE id = ?',
+      variables: [Variable.withInt(id)],
+    ).get();
+    if (rows.isEmpty) return null;
+    return CostCode.fromMap(rows.first.data);
   }
 
   Future<int> insertCostCode(CostCode costCode) async {
-    return await db.insert('cost_codes', costCode.toMap());
+    final id = await _db.customInsert(
+      'INSERT INTO cost_codes (name, is_billable) VALUES (?, ?)',
+      variables: [
+        Variable.withString(costCode.name),
+        Variable.withInt(costCode.isBillable ? 1 : 0),
+      ],
+    );
+    _db.notifyDatabaseChanged();
+    return id;
   }
 
   Future<int> updateCostCode(CostCode costCode) async {
-    return await db.update(
-      'cost_codes',
-      costCode.toMap(),
-      where: 'id = ?',
-      whereArgs: [costCode.id],
+    final result = await _db.customUpdate(
+      'UPDATE cost_codes SET name = ?, is_billable = ? WHERE id = ?',
+      variables: [
+        Variable.withString(costCode.name),
+        Variable.withInt(costCode.isBillable ? 1 : 0),
+        Variable.withInt(costCode.id!),
+      ],
+      updates: {},
     );
+    _db.notifyDatabaseChanged();
+    return result;
   }
 
   Future<int> deleteCostCode(int id) async {
-    return await db.delete(
-      'cost_codes',
-      where: 'id = ?',
-      whereArgs: [id],
+    final result = await _db.customUpdate(
+      'DELETE FROM cost_codes WHERE id = ?',
+      variables: [Variable.withInt(id)],
+      updates: {},
     );
+    _db.notifyDatabaseChanged();
+    return result;
   }
 }

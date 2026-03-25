@@ -77,6 +77,7 @@ class Project {
   final double? fixedPrice;
   final double expenseMarkupPercentage;
   final double taxRate;
+  final int? parentProjectId;
 
   const Project({
     this.id,
@@ -91,6 +92,7 @@ class Project {
     this.fixedPrice,
     this.expenseMarkupPercentage = 15.0,
     this.taxRate = 5.0,
+    this.parentProjectId,
   });
 
   Map<String, dynamic> toMap() {
@@ -107,6 +109,7 @@ class Project {
       'project_price': fixedPrice,
       'expense_markup_percentage': expenseMarkupPercentage,
       'tax_rate': taxRate,
+      'parent_project_id': parentProjectId,
     };
   }
 
@@ -124,6 +127,7 @@ class Project {
       fixedPrice: (map['project_price'] as num?)?.toDouble(),
       expenseMarkupPercentage: (map['expense_markup_percentage'] as num?)?.toDouble() ?? 15.0,
       taxRate: (map['tax_rate'] as num?)?.toDouble() ?? 5.0,
+      parentProjectId: map['parent_project_id'] as int?,
     );
   }
 
@@ -140,6 +144,7 @@ class Project {
     double? fixedPrice,
     double? expenseMarkupPercentage,
     double? taxRate,
+    int? parentProjectId,
   }) {
     return Project(
       id: id ?? this.id,
@@ -154,6 +159,7 @@ class Project {
       fixedPrice: fixedPrice ?? this.fixedPrice,
       expenseMarkupPercentage: expenseMarkupPercentage ?? this.expenseMarkupPercentage,
       taxRate: taxRate ?? this.taxRate,
+      parentProjectId: parentProjectId ?? this.parentProjectId,
     );
   }
 
@@ -314,6 +320,8 @@ class TimeEntry {
   final bool isDeleted;
   final String? workDetails;
   final int? costCodeId;
+  final bool isBilled;
+  final int? invoiceId;
 
   TimeEntry({
     this.id,
@@ -329,6 +337,8 @@ class TimeEntry {
     this.workDetails,
     this.hourlyRate,
     this.costCodeId,
+    this.isBilled = false,
+    this.invoiceId,
   });
 
   factory TimeEntry.fromMap(Map<String, dynamic> map) {
@@ -351,6 +361,8 @@ class TimeEntry {
       workDetails: map['work_details'],
       hourlyRate: (map['hourly_rate'] as num?)?.toDouble(),
       costCodeId: map['cost_code_id'],
+      isBilled: (map['is_billed'] as int? ?? 0) == 1,
+      invoiceId: map['invoice_id'] as int?,
     );
   }
 
@@ -370,6 +382,8 @@ class TimeEntry {
       'work_details': workDetails,
       'hourly_rate': hourlyRate,
       'cost_code_id': costCodeId,
+      'is_billed': isBilled ? 1 : 0,
+      'invoice_id': invoiceId,
     };
   }
 
@@ -387,6 +401,8 @@ class TimeEntry {
     bool? isDeleted,
     String? workDetails,
     int? costCodeId,
+    bool? isBilled,
+    int? invoiceId,
   }) {
     return TimeEntry(
       id: id ?? this.id,
@@ -402,6 +418,8 @@ class TimeEntry {
       isDeleted: isDeleted ?? this.isDeleted,
       workDetails: workDetails ?? this.workDetails,
       costCodeId: costCodeId ?? this.costCodeId,
+      isBilled: isBilled ?? this.isBilled,
+      invoiceId: invoiceId ?? this.invoiceId,
     );
   }
 }
@@ -423,6 +441,8 @@ class JobMaterials {
   final String? vehicleDesignation;
   final String? vendorOrSubtrade;
   final int? costCodeId;
+  final bool isBilled;
+  final int? invoiceId;
 
   JobMaterials({
     this.id,
@@ -441,6 +461,8 @@ class JobMaterials {
     this.vehicleDesignation,
     this.vendorOrSubtrade,
     this.costCodeId,
+    this.isBilled = false,
+    this.invoiceId,
   });
 
   Map<String, dynamic> toMap() {
@@ -461,6 +483,8 @@ class JobMaterials {
       'vehicle_designation': vehicleDesignation,
       'vendor_or_subtrade': vendorOrSubtrade,
       'cost_code_id': costCodeId,
+      'is_billed': isBilled ? 1 : 0,
+      'invoice_id': invoiceId,
     };
   }
 
@@ -482,6 +506,50 @@ class JobMaterials {
       vehicleDesignation: map['vehicle_designation'],
       vendorOrSubtrade: map['vendor_or_subtrade'],
       costCodeId: map['cost_code_id'],
+      isBilled: (map['is_billed'] as int? ?? 0) == 1,
+      invoiceId: map['invoice_id'] as int?,
+    );
+  }
+
+  JobMaterials copyWith({
+    int? id,
+    int? projectId,
+    String? itemName,
+    double? cost,
+    DateTime? purchaseDate,
+    String? description,
+    bool? isDeleted,
+    String? expenseCategory,
+    String? unit,
+    double? quantity,
+    double? baseQuantity,
+    double? odometerReading,
+    bool? isCompanyExpense,
+    String? vehicleDesignation,
+    String? vendorOrSubtrade,
+    int? costCodeId,
+    bool? isBilled,
+    int? invoiceId,
+  }) {
+    return JobMaterials(
+      id: id ?? this.id,
+      projectId: projectId ?? this.projectId,
+      itemName: itemName ?? this.itemName,
+      cost: cost ?? this.cost,
+      purchaseDate: purchaseDate ?? this.purchaseDate,
+      description: description ?? this.description,
+      isDeleted: isDeleted ?? this.isDeleted,
+      expenseCategory: expenseCategory ?? this.expenseCategory,
+      unit: unit ?? this.unit,
+      quantity: quantity ?? this.quantity,
+      baseQuantity: baseQuantity ?? this.baseQuantity,
+      odometerReading: odometerReading ?? this.odometerReading,
+      isCompanyExpense: isCompanyExpense ?? this.isCompanyExpense,
+      vehicleDesignation: vehicleDesignation ?? this.vehicleDesignation,
+      vendorOrSubtrade: vendorOrSubtrade ?? this.vendorOrSubtrade,
+      costCodeId: costCodeId ?? this.costCodeId,
+      isBilled: isBilled ?? this.isBilled,
+      invoiceId: invoiceId ?? this.invoiceId,
     );
   }
 }

@@ -1,63 +1,53 @@
-import 'package:sqflite/sqflite.dart';
-import 'package:time_tracker_pro/database_helper.dart';
+import 'package:drift/drift.dart';
+import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/models.dart';
 
 class ExpenseCategoryRepository {
-  // Corrected to use the singleton instance
-  final _databaseHelper = DatabaseHelperV2.instance;
+  final _db = AppDatabase.instance;
 
-  // start method: insertExpenseCategory
   Future<int> insertExpenseCategory(ExpenseCategory category) async {
-    final db = await _databaseHelper.database;
-    return await db.insert('expense_categories', category.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
+    final id = await _db.customInsert(
+      'INSERT OR REPLACE INTO expense_categories (name) VALUES (?)',
+      variables: [Variable.withString(category.name)],
+    );
+    _db.notifyDatabaseChanged();
+    return id;
   }
-  // end method: insertExpenseCategory
 
-  // start method: getExpenseCategories
   Future<List<ExpenseCategory>> getExpenseCategories() async {
-    final db = await _databaseHelper.database;
-    final List<Map<String, dynamic>> maps = await db.query('expense_categories');
-    return List.generate(maps.length, (i) {
-      return ExpenseCategory.fromMap(maps[i]);
-    });
+    final rows = await _db.customSelect('SELECT * FROM expense_categories').get();
+    return rows.map((r) => ExpenseCategory.fromMap(r.data)).toList();
   }
-  // end method: getExpenseCategories
 
-  // start method: getExpenseCategoryById
   Future<ExpenseCategory?> getExpenseCategoryById(int id) async {
-    final db = await _databaseHelper.database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'expense_categories',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-    if (maps.isNotEmpty) {
-      return ExpenseCategory.fromMap(maps.first);
-    }
-    return null;
+    final rows = await _db.customSelect(
+      'SELECT * FROM expense_categories WHERE id = ?',
+      variables: [Variable.withInt(id)],
+    ).get();
+    if (rows.isEmpty) return null;
+    return ExpenseCategory.fromMap(rows.first.data);
   }
-  // end method: getExpenseCategoryById
 
-  // start method: updateExpenseCategory
   Future<int> updateExpenseCategory(ExpenseCategory category) async {
-    final db = await _databaseHelper.database;
-    return await db.update(
-      'expense_categories',
-      category.toMap(),
-      where: 'id = ?',
-      whereArgs: [category.id],
+    final result = await _db.customUpdate(
+      'UPDATE expense_categories SET name = ? WHERE id = ?',
+      variables: [
+        Variable.withString(category.name),
+        Variable.withInt(category.id!),
+      ],
+      updates: {},
     );
+    _db.notifyDatabaseChanged();
+    return result;
   }
-  // end method: updateExpenseCategory
 
-  // start method: deleteExpenseCategory
   Future<int> deleteExpenseCategory(int id) async {
-    final db = await _databaseHelper.database;
-    return await db.delete(
-      'expense_categories',
-      where: 'id = ?',
-      whereArgs: [id],
+    final result = await _db.customUpdate(
+      'DELETE FROM expense_categories WHERE id = ?',
+      variables: [Variable.withInt(id)],
+      updates: {},
     );
+    _db.notifyDatabaseChanged();
+    return result;
   }
-// end method: deleteExpenseCategory
 }

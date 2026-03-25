@@ -1,7 +1,7 @@
 // lib/time_tracker_page.dart
 
 import 'package:flutter/material.dart';
-import 'package:time_tracker_pro/database_helper.dart';
+import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/models.dart' as app_models;
 import 'package:time_tracker_pro/project_repository.dart';
 import 'package:time_tracker_pro/employee_repository.dart';
@@ -29,7 +29,6 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
   final EmployeeRepository _employeeRepo = EmployeeRepository();
   final ClientRepository _clientRepo = ClientRepository();
   CostCodeRepository? _costCodeRepo; // NEW: Phase repository
-  final dbHelper = DatabaseHelperV2.instance;
 
   final GlobalKey<TimerAddFormState> _dialogFormKey = GlobalKey<TimerAddFormState>();
 
@@ -55,7 +54,6 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
   void initState() {
     super.initState();
     _loadSavedDates();
-    dbHelper.databaseNotifier.addListener(_loadData);
     _loadData();
   }
 
@@ -78,7 +76,6 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
 
   @override
   void dispose() {
-    dbHelper.databaseNotifier.removeListener(_loadData);
     _projectsNotifier.dispose();
     _employeesNotifier.dispose();
     _costCodesNotifier.dispose(); // NEW: Dispose phases notifier
@@ -91,18 +88,17 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
     }
 
     // Initialize phase repository
-    final db = await dbHelper.database;
-    _costCodeRepo ??= CostCodeRepository(db);
+    _costCodeRepo ??= CostCodeRepository();
 
-    final allRecords = await dbHelper.getAllRecordsV2();
+    final allRecords = await AppDatabase.instance.getAllRecordsV2();
     final projects = await _projectRepo.getProjects();
     final employees = await _employeeRepo.getEmployees();
     final clients = await _clientRepo.getClients();
     final phases = await _costCodeRepo!.getAllCostCodes(); // NEW: Load phases
 
     // Load roles for employee rates
-    final rolesData = await db.query('roles');
-    final roles = rolesData.map((r) => app_models.Role.fromMap(r)).toList();
+    final rolesRows = await AppDatabase.instance.customSelect('SELECT * FROM roles').get();
+    final roles = rolesRows.map((r) => app_models.Role.fromMap(r.data)).toList();
 
     if (!mounted) return;
 
@@ -523,6 +519,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Time record updated.')),
       );
+      _loadData();
     }
   }
 

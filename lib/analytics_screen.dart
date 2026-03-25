@@ -1,5 +1,6 @@
-// lib/analytics_screen.dart551 line file
+// lib/analytics_screen.dart
 
+import 'package:drift/drift.dart' show Variable;
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/custom_report_view.dart';
 import 'package:time_tracker_pro/dropdown_repository.dart';
@@ -13,7 +14,7 @@ import 'package:time_tracker_pro/models/analytics_models.dart';
 import 'package:time_tracker_pro/widgets/personnel_list_report.dart';
 import 'package:time_tracker_pro/job_materials_repository.dart';
 import 'package:time_tracker_pro/widgets/company_expenses_report.dart';
-import 'package:time_tracker_pro/database_helper.dart';
+import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/import_errors_report.dart';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
@@ -38,6 +39,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   bool _isLoadingProjects = true;
   CustomReportSettings? _customReportSettings;
 
+  // Refresh trigger — incremented after mutations to force FutureBuilder rebuild
+  int _refreshKey = 0;
+
   Future<ProjectSummaryViewModel?>? _singleProjectCardFuture;
   Future<List<ProjectSummaryViewModel>>? _projectListTableFuture;
   Future<List<EmployeeSummaryViewModel>>? _employeeSummaryFuture;
@@ -47,13 +51,13 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   void initState() {
     super.initState();
     ImportErrorsNotifier.instance.addListener(() {
-      setState(() {}); // Rebuild when errors change
+      if (mounted) setState(() {}); // Rebuild when errors change
     });
     _loadProjects();
   }
 
   void _onErrorsChanged() {
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   @override
@@ -147,15 +151,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       int skipped = 0;
       List<String> errors = [];
 
-      final db = await DatabaseHelperV2.instance.database;
-
       // Look up employee ID from employee_number
-      final employeeResult = await db.query(
-        'employees',
-        columns: ['id'],
-        where: 'employee_number = ? AND is_deleted = 0',
-        whereArgs: [employeeNumber],
-      );
+      final employeeResultRows = await AppDatabase.instance.customSelect(
+        'SELECT id FROM employees WHERE employee_number = ? AND is_deleted = 0',
+        variables: [Variable.withString(employeeNumber)],
+      ).get();
+      final employeeResult = employeeResultRows.map((r) => r.data).toList();
 
       if (employeeResult.isEmpty) {
         if (mounted) {
@@ -176,11 +177,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         final durationSeconds = entryData['duration_seconds'] as int;
 
         // Look up project_id from project name and client name
-        final projectResult = await db.rawQuery('''
+        final projectResultRows = await AppDatabase.instance.customSelect('''
         SELECT p.id FROM projects p
         JOIN clients c ON p.client_id = c.id
         WHERE p.project_name = ? AND c.name = ?
-      ''', [projectName, clientName]);
+      ''', variables: [Variable.withString(projectName), Variable.withString(clientName)]).get();
+        final projectResult = projectResultRows.map((r) => r.data).toList();
 
         if (projectResult.isEmpty) {
           errors.add('$clientName - $projectName: Not found in database');
@@ -195,12 +197,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
         final projectId = projectResult.first['id'] as int;
 
         // Check for duplicate
-        final existing = await db.query(
-          'time_entries',
-          where: 'employee_id = ? AND project_id = ? AND start_time = ? AND end_time = ?',
-          whereArgs: [employeeId, projectId, startTime, endTime],
-          limit: 1,
-        );
+        final existingRows = await AppDatabase.instance.customSelect(
+          'SELECT 1 FROM time_entries WHERE employee_id = ? AND project_id = ? AND start_time = ? AND end_time = ? LIMIT 1',
+          variables: [
+            Variable.withInt(employeeId),
+            Variable.withInt(projectId),
+            Variable.withString(startTime),
+            Variable.withString(endTime),
+          ],
+        ).get();
+        final existing = existingRows.map((r) => r.data).toList();
 
         if (existing.isNotEmpty) {
           skipped++;
@@ -209,16 +215,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
         // Insert entry
         try {
-          await db.insert('time_entries', {
-            'employee_id': employeeId,
-            'project_id': projectId,
-            'start_time': startTime,
-            'end_time': endTime,
-            'final_billed_duration_seconds': durationSeconds,
-            'paused_duration': 0.0,
-            'is_paused': 0,
-            'is_deleted': 0,
-          });
+          await AppDatabase.instance.customInsert(
+            'INSERT INTO time_entries (employee_id, project_id, start_time, end_time, final_billed_duration_seconds, paused_duration, is_paused, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            variables: [
+              Variable.withInt(employeeId),
+              Variable.withInt(projectId),
+              Variable.withString(startTime),
+              Variable.withString(endTime),
+              Variable.withReal(durationSeconds.toDouble()),
+              Variable.withReal(0.0),
+              Variable.withInt(0),
+              Variable.withInt(0),
+            ],
+          );
           imported++;
         } catch (e) {
           errors.add('$clientName - $projectName: Database error - $e');
@@ -228,6 +237,11 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
             'Database error: $e',
           );
         }
+      }
+
+      // Refresh data if anything was imported
+      if (imported > 0 && mounted) {
+        setState(() => _refreshKey++);
       }
 
       // Show summary
@@ -313,6 +327,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
     switch (_currentView) {
       case AnalyticsView.singleProjectCard:
         return FutureBuilder<ProjectSummaryViewModel?>(
+          key: ValueKey('projectCard_$_refreshKey'),
           future: _singleProjectCardFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -331,6 +346,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
       case AnalyticsView.projectListTable:
         return FutureBuilder<List<ProjectSummaryViewModel>>(
+          key: ValueKey('projectList_$_refreshKey'),
           future: _projectListTableFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -350,6 +366,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
       case AnalyticsView.personnelSummary:
         return FutureBuilder<List<EmployeeSummaryViewModel>>(
+          key: ValueKey('personnel_$_refreshKey'),
           future: _employeeSummaryFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -377,6 +394,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
       case AnalyticsView.companyExpenses:
         return FutureBuilder<List<Map<String, dynamic>>>(
+          key: ValueKey('expenses_$_refreshKey'),
           future: _companyExpensesFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {

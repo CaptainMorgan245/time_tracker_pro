@@ -6,7 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:time_tracker_pro/database_helper.dart';
+import 'package:time_tracker_pro/database/app_database.dart';
+import 'package:time_tracker_pro/dashboard_screen.dart';
 
 class DataManagementScreen extends StatefulWidget {
   const DataManagementScreen({super.key});
@@ -78,7 +79,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
     final messenger = ScaffoldMessenger.of(context);
 
     try {
-      final dbHelper = DatabaseHelperV2.instance;
+      final dbHelper = AppDatabase.instance;
       final jsonString = await dbHelper.exportDatabaseToJson();
 
       if (jsonString.isEmpty || jsonString.length < 100) {
@@ -188,7 +189,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
         return;
       }
 
-      await DatabaseHelperV2.instance.importDatabaseFromJson(jsonString);
+      await AppDatabase.instance.importDatabaseFromJson(jsonString);
 
       messenger.showSnackBar(
         const SnackBar(
@@ -196,6 +197,15 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
           backgroundColor: Colors.green,
         ),
       );
+
+      // Navigate to Dashboard and clear stack
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const DashboardScreen()),
+        (route) => false,
+      );
+
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
@@ -241,7 +251,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
     setState(() => _isClearing = true);
 
     try {
-      final dbHelper = DatabaseHelperV2.instance;
+      final dbHelper = AppDatabase.instance;
       await dbHelper.deleteAllData();
 
       if (mounted) {

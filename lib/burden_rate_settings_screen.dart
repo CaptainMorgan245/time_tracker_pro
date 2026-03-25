@@ -1,8 +1,9 @@
 // lib/burden_rate_settings_screen.dart
 
+import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:time_tracker_pro/database_helper.dart';
+import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/settings_model.dart';
 
 // start class: BurdenRateSettingsScreen
@@ -31,7 +32,7 @@ class BurdenRateSettingsScreen extends StatefulWidget {
 
 // start class: _BurdenRateSettingsScreenState
 class _BurdenRateSettingsScreenState extends State<BurdenRateSettingsScreen> {
-  final _dbHelper = DatabaseHelperV2.instance;
+  final _dbHelper = AppDatabase.instance;
   final TextEditingController _rateController = TextEditingController();
 
   // These controllers are for the calculator part only.
@@ -69,8 +70,6 @@ class _BurdenRateSettingsScreenState extends State<BurdenRateSettingsScreen> {
 
   // **** REFACTORED _saveRate METHOD - Direct database access ****
   Future<void> _saveRate(double rate) async {
-    final db = await _dbHelper.database;
-
     // 1. Get the current values from the General tab's controllers.
     final generalSettings = widget.settingsModel.copyWith(
       employeeNumberPrefix: widget.employeeNumberPrefixController.text.isEmpty
@@ -88,25 +87,28 @@ class _BurdenRateSettingsScreenState extends State<BurdenRateSettingsScreen> {
       companyHourlyRate: rate,
     );
 
-    // 3. Save directly to database
-    await db.update(
-      'settings',
-      updatedSettings.toMap(),
-      where: 'id = ?',
-      whereArgs: [1],
+    // 3. Save directly to database using Drift
+    await _dbHelper.customUpdate(
+      'UPDATE settings SET employee_number_prefix=?, next_employee_number=?, auto_backup_reminder_frequency=?, default_report_months=?, burden_rate=?, company_hourly_rate=? WHERE id=1',
+      variables: [
+        Variable(updatedSettings.employeeNumberPrefix),
+        Variable(updatedSettings.nextEmployeeNumber),
+        Variable.withInt(updatedSettings.autoBackupReminderFrequency),
+        Variable.withInt(updatedSettings.defaultReportMonths),
+        Variable.withReal(updatedSettings.burdenRate),
+        Variable(updatedSettings.companyHourlyRate),
+      ],
+      updates: {},
     );
 
     // Notify listeners
     _dbHelper.notifyDatabaseChanged();
 
     // 4. Update UI.
-    if (!mounted) return; // This is the fix
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text('Burden rate saved: \$${rate.toStringAsFixed(2)}/hour')),
     );
-
-    // No need to set controller text here as it's already set by the user
-
   }
   // end method: _saveRate
 
@@ -145,7 +147,6 @@ class _BurdenRateSettingsScreenState extends State<BurdenRateSettingsScreen> {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // ... The entire UI below this line has NO CHANGES ...
             // Manual Rate Entry Card
             Card(
               child: Padding(

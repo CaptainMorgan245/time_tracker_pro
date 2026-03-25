@@ -1,71 +1,59 @@
 // lib/role_repository.dart
 
-import 'package:sqflite/sqflite.dart';
-import 'package:time_tracker_pro/database_helper.dart';
+import 'package:drift/drift.dart';
+import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/models.dart';
 
 class RoleRepository {
-  // THE FIX: Point to the V2 helper
-  final _databaseHelper = DatabaseHelperV2.instance;
+  final _db = AppDatabase.instance;
 
-  // start method: insertRole
   Future<int> insertRole(Role role) async {
-    final db = await _databaseHelper.database;
-    final id = await db.insert('roles', role.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-    _databaseHelper.notifyDatabaseChanged(); // ADDED: Notify UI of change
+    final id = await _db.customInsert(
+      'INSERT OR REPLACE INTO roles (name, standard_rate) VALUES (?, ?)',
+      variables: [
+        Variable.withString(role.name),
+        Variable.withReal(role.standardRate),
+      ],
+    );
+    _db.notifyDatabaseChanged();
     return id;
   }
-  // end method: insertRole
 
-  // start method: getRoles
   Future<List<Role>> getRoles() async {
-    final db = await _databaseHelper.database;
-    final List<Map<String, dynamic>> maps = await db.query('roles');
-    return List.generate(maps.length, (i) {
-      return Role.fromMap(maps[i]);
-    });
+    final rows = await _db.customSelect('SELECT * FROM roles').get();
+    return rows.map((r) => Role.fromMap(r.data)).toList();
   }
-  // end method: getRoles
 
-  // start method: getRoleById
   Future<Role?> getRoleById(int id) async {
-    final db = await _databaseHelper.database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'roles',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-    if (maps.isNotEmpty) {
-      return Role.fromMap(maps.first);
-    }
-    return null;
+    final rows = await _db.customSelect(
+      'SELECT * FROM roles WHERE id = ?',
+      variables: [Variable.withInt(id)],
+    ).get();
+    if (rows.isEmpty) return null;
+    return Role.fromMap(rows.first.data);
   }
-  // end method: getRoleById
 
-  // start method: updateRole
   Future<int> updateRole(Role role) async {
-    final db = await _databaseHelper.database;
-    final result = await db.update(
-      'roles',
-      role.toMap(),
-      where: 'id = ?',
-      whereArgs: [role.id],
+    final result = await _db.customUpdate(
+      'UPDATE roles SET name = ?, standard_rate = ? WHERE id = ?',
+      variables: [
+        Variable.withString(role.name),
+        Variable.withReal(role.standardRate),
+        Variable.withInt(role.id!),
+      ],
+      updates: {},
     );
-    _databaseHelper.notifyDatabaseChanged(); // ADDED: Notify UI of change
+    _db.notifyDatabaseChanged();
     return result;
   }
-  // end method: updateRole
 
-  // start method: deleteRole
   Future<int> deleteRole(int id) async {
-    final db = await _databaseHelper.database;
-    final result = await db.delete(
-      'roles',
-      where: 'id = ?',
-      whereArgs: [id],
+    final result = await _db.customUpdate(
+      'DELETE FROM roles WHERE id = ?',
+      variables: [Variable.withInt(id)],
+      updates: {},
     );
-    _databaseHelper.notifyDatabaseChanged(); // ADDED: Notify UI of change
+    _db.notifyDatabaseChanged();
     return result;
   }
-// end method: deleteRole
 }

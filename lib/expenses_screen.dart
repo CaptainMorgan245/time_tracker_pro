@@ -1,7 +1,8 @@
 // lib/expenses_screen.dart
 
+import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
-import 'package:time_tracker_pro/database_helper.dart';
+import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/settings_model.dart';
 import 'package:time_tracker_pro/widgets/app_setting_list_card.dart';
@@ -14,7 +15,7 @@ class ExpensesScreen extends StatefulWidget {
 }
 
 class _ExpensesScreenState extends State<ExpensesScreen> {
-  final _dbHelper = DatabaseHelperV2.instance;
+  final _dbHelper = AppDatabase.instance;
 
   final TextEditingController _categoryController = TextEditingController();
   final TextEditingController _vehicleController = TextEditingController();
@@ -24,7 +25,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   List<String> _vehicles = [];
   List<String> _vendors = [];
 
-  final dbNotifier = DatabaseHelperV2.instance.databaseNotifier;
+  final dbNotifier = AppDatabase.instance.databaseNotifier;
 
   @override
   void initState() {
@@ -43,14 +44,15 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
   }
 
   Future<void> _loadData() async {
-    // Load settings directly from database
-    final db = await _dbHelper.database;
-    final settingsMap = await db.query('settings', where: 'id = ?', whereArgs: [1]);
-    final settings = settingsMap.isNotEmpty
-        ? SettingsModel.fromMap(settingsMap.first)
+    // Load settings directly from database using Drift
+    final settingsRows = await _dbHelper.customSelect(
+      'SELECT * FROM settings WHERE id = 1',
+    ).get();
+    final settings = settingsRows.isNotEmpty
+        ? SettingsModel.fromMap(settingsRows.first.data)
         : SettingsModel();
 
-    final cats = await DatabaseHelperV2.instance.getExpenseCategoriesV2();
+    final cats = await AppDatabase.instance.getExpenseCategoriesV2();
 
     if (!mounted) return;
 
@@ -61,53 +63,49 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     });
   }
 
-  // This logic is correct: it interacts with the DB directly.
   Future<void> _addCategory() async {
     FocusScope.of(context).unfocus();
     final name = _categoryController.text.trim();
     if (name.isEmpty) return;
-    await DatabaseHelperV2.instance.addExpenseCategoryV2(ExpenseCategory(name: name));
+    await AppDatabase.instance.addExpenseCategoryV2(ExpenseCategory(name: name));
     _categoryController.clear();
   }
 
   Future<void> _deleteCategory(int id) async {
-    await DatabaseHelperV2.instance.deleteRecordV2(id: id, fromTable: 'expense_categories');
+    await AppDatabase.instance.deleteRecordV2(id: id, fromTable: 'expense_categories');
   }
 
   Future<void> _updateCategory(ExpenseCategory category) async {
-    await DatabaseHelperV2.instance.updateExpenseCategoryV2(category);
+    await AppDatabase.instance.updateExpenseCategoryV2(category);
   }
-
-  // --- REVISED AND CORRECTED LOGIC FOR VENDORS/VEHICLES ---
 
   Future<void> _addOption(TextEditingController controller, List<String> list, Function(List<String>) onSave) async {
     FocusScope.of(context).unfocus();
     final name = controller.text.trim();
     if (name.isEmpty) return;
 
-    list.add(name); // Modify local list
+    list.add(name);
     controller.clear();
-    await onSave(list); // Pass the whole list to be saved
+    await onSave(list);
   }
 
   Future<void> _updateOption(List<String> list, int index, String newValue, Function(List<String>) onSave) async {
-    list[index] = newValue; // Modify local list
-    await onSave(list); // Pass the whole list to be saved
+    list[index] = newValue;
+    await onSave(list);
   }
 
   Future<void> _removeOption(List<String> list, int index, Function(List<String>) onSave) async {
-    list.removeAt(index); // Modify local list
-    await onSave(list); // Pass the whole list to be saved
+    list.removeAt(index);
+    await onSave(list);
   }
 
-  // REFACTORED: Direct database access instead of SettingsService
   Future<void> _saveSettings({List<String>? vehicles, List<String>? vendors}) async {
-    final db = await _dbHelper.database;
-
-    // Load current settings from database
-    final settingsMap = await db.query('settings', where: 'id = ?', whereArgs: [1]);
-    final currentSettings = settingsMap.isNotEmpty
-        ? SettingsModel.fromMap(settingsMap.first)
+    // Load current settings using Drift
+    final settingsRows = await _dbHelper.customSelect(
+      'SELECT * FROM settings WHERE id = 1',
+    ).get();
+    final currentSettings = settingsRows.isNotEmpty
+        ? SettingsModel.fromMap(settingsRows.first.data)
         : SettingsModel();
 
     // Create updated settings
@@ -116,20 +114,19 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
       vendors: vendors ?? _vendors,
     );
 
-    // Save directly to database
-    await db.update(
-      'settings',
-      updatedSettings.toMap(),
-      where: 'id = ?',
-      whereArgs: [1],
+    // Save directly using Drift
+    await _dbHelper.customUpdate(
+      'UPDATE settings SET vehicle_designations=?, vendors=? WHERE id=1',
+      variables: [
+        Variable(updatedSettings.vehicleDesignations.join(',')),
+        Variable(updatedSettings.vendors.join(',')),
+      ],
+      updates: {},
     );
 
-    // NOTIFY every other part of the app that settings have changed.
-    DatabaseHelperV2.instance.databaseNotifier.value++;
+    _dbHelper.notifyDatabaseChanged();
   }
 
-
-  // Unchanged UI methods below...
   Widget _buildForm(String label, TextEditingController controller, VoidCallback onAdd) {
     final bool applyCapitalization = label != 'Vehicle Designation';
     return Expanded(

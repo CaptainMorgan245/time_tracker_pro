@@ -631,10 +631,10 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
       await _invoiceRepository.markPaid(
         _invoice!.id!,
         _invoice!.totalAmount,
-        selectedDate,
         paymentMethodController.text.trim().isEmpty
-            ? null
+            ? ''
             : paymentMethodController.text.trim(),
+        selectedDate,
       );
       await _loadInvoice();
       if (mounted) {

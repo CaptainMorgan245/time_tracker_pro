@@ -1,7 +1,8 @@
 // lib/cost_entry_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:time_tracker_pro/database_helper.dart';
+import 'package:drift/drift.dart' show Variable;
+import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/cost_record_form.dart';
 import 'package:time_tracker_pro/project_repository.dart';
 import 'package:time_tracker_pro/client_repository.dart';
@@ -259,11 +260,10 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   final _projectRepo = ProjectRepository();
   final _clientRepo = ClientRepository();
   CostCodeRepository? _costCodeRepo;
-  final _dbHelper = DatabaseHelperV2.instance;
-  final dbNotifier = DatabaseHelperV2.instance.databaseNotifier;
 
   bool _isLoading = true;
   bool _showCompletedProjects = false;
+  int _refreshKey = 0;
 
   final ValueNotifier<List<Project>> _filteredProjectsNotifier = ValueNotifier([]);
   final ValueNotifier<List<String>> _expenseCategoriesNotifier = ValueNotifier([]);
@@ -281,12 +281,10 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   void initState() {
     super.initState();
     _loadAllData();
-    dbNotifier.addListener(_loadAllData);
   }
 
   @override
   void dispose() {
-    dbNotifier.removeListener(_loadAllData);
     _filteredProjectsNotifier.dispose();
     _expenseCategoriesNotifier.dispose();
     _vendorsNotifier.dispose();
@@ -299,17 +297,19 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   Future<void> _loadAllData() async {
     if (mounted) setState(() => _isLoading = true);
     try {
-      final db = await _dbHelper.database;
-      _costCodeRepo ??= CostCodeRepository(db);
+      _costCodeRepo ??= CostCodeRepository();
       final phases = await _costCodeRepo!.getAllCostCodes();
       _costCodesNotifier.value = phases;
 
-      final settingsMap = await db.query('settings', where: 'id = ?', whereArgs: [1]);
-      final settings = settingsMap.isNotEmpty ? SettingsModel.fromMap(settingsMap.first) : SettingsModel();
+      final rows = await AppDatabase.instance
+          .customSelect('SELECT * FROM settings WHERE id = ?', variables: [Variable.withInt(1)])
+          .get();
+      final maps = rows.map((r) => r.data).toList();
+      final settings = maps.isNotEmpty ? SettingsModel.fromMap(maps.first) : SettingsModel();
 
       final dataFutures = [
         _projectRepo.getProjects(),
-        DatabaseHelperV2.instance.getExpenseCategoriesV2(),
+        AppDatabase.instance.getExpenseCategoriesV2(),
         _clientRepo.getClients()
       ];
       final results = await Future.wait(dataFutures);
@@ -474,17 +474,17 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
 
   Future<void> _handleCostSubmission(JobMaterials expense, bool isEditing) async {
     if (isEditing) {
-      await DatabaseHelperV2.instance.updateMaterialV2(expense);
+      await AppDatabase.instance.updateMaterialV2(expense);
     } else {
-      await DatabaseHelperV2.instance.addMaterialV2(expense);
+      await AppDatabase.instance.addMaterialV2(expense);
     }
-    DatabaseHelperV2.instance.databaseNotifier.value++;
+    setState(() => _refreshKey++);
     if (!isEditing) _handleClearOrCancel();
   }
 
   Future<void> _deleteExpense(int id) async {
-    await DatabaseHelperV2.instance.deleteRecordV2(id: id, fromTable: 'materials');
-    DatabaseHelperV2.instance.databaseNotifier.value++;
+    await AppDatabase.instance.deleteRecordV2(id: id, fromTable: 'materials');
+    setState(() => _refreshKey++);
   }
 
   String _getProjectNameById(int projectId) {
@@ -538,78 +538,74 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
             ),
             const Divider(height: 1),
             Expanded(
-              child: ValueListenableBuilder<int>(
-                valueListenable: dbNotifier,
-                builder: (context, _, __) {
-                  return FutureBuilder<List<JobMaterials>>(
-                    future: DatabaseHelperV2.instance.getCostEntryMaterials(
-                      _showCompletedProjects,
-                      _allProjects,
-                      selectedProjectId: _selectedProjectId,
-                    ),
-                    builder: (context, snapshot) {
-                      var records = snapshot.data ?? [];
+              child: FutureBuilder<List<JobMaterials>>(
+                key: ValueKey(_refreshKey),
+                future: AppDatabase.instance.getCostEntryMaterials(
+                  _showCompletedProjects,
+                  _allProjects,
+                  selectedProjectId: _selectedProjectId,
+                ),
+                builder: (context, snapshot) {
+                  var records = snapshot.data ?? [];
 
-                      // Secondary filter for Clients (especially when Project is 'All')
-                      if (_selectedClientId != null) {
-                        records = records.where((r) {
-                          final project = _allProjects.firstWhere(
-                                  (p) => p.id == r.projectId,
-                              orElse: () => Project(clientId: -1, projectName: '', pricingModel: '')
-                          );
-                          return project.clientId == _selectedClientId;
-                        }).toList();
-                      }
+                  // Secondary filter for Clients (especially when Project is 'All')
+                  if (_selectedClientId != null) {
+                    records = records.where((r) {
+                      final project = _allProjects.firstWhere(
+                              (p) => p.id == r.projectId,
+                          orElse: () => Project(clientId: -1, projectName: '', pricingModel: '')
+                      );
+                      return project.clientId == _selectedClientId;
+                    }).toList();
+                  }
 
-                      return ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(4.0, 4.0, 4.0, 80.0),
-                        itemCount: records.length,
-                        separatorBuilder: (context, index) => const SizedBox(height: 2),
-                        itemBuilder: (context, index) {
-                          final record = records[index];
-                          final projectName = _getProjectNameById(record.projectId);
-                          final vendorName = record.vendorOrSubtrade ?? 'Unknown';
-                          final costAmount = NumberFormat.currency(locale: 'en_US', symbol: '\$').format(record.cost);
-                          final dateStr = DateFormat('MM/dd').format(record.purchaseDate);
+                  return ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(4.0, 4.0, 4.0, 80.0),
+                    itemCount: records.length,
+                    separatorBuilder: (context, index) => const SizedBox(height: 2),
+                    itemBuilder: (context, index) {
+                      final record = records[index];
+                      final projectName = _getProjectNameById(record.projectId);
+                      final vendorName = record.vendorOrSubtrade ?? 'Unknown';
+                      final costAmount = NumberFormat.currency(locale: 'en_US', symbol: '\$').format(record.cost);
+                      final dateStr = DateFormat('MM/dd').format(record.purchaseDate);
 
-                          return Card(
-                            margin: EdgeInsets.zero,
-                            elevation: 1,
-                            child: ListTile(
-                              dense: true,
-                              visualDensity: VisualDensity.compact,
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                              title: Text(
-                                '$dateStr | $projectName | $costAmount',
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                overflow: TextOverflow.ellipsis,
+                      return Card(
+                        margin: EdgeInsets.zero,
+                        elevation: 1,
+                        child: ListTile(
+                          dense: true,
+                          visualDensity: VisualDensity.compact,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                          title: Text(
+                            '$dateStr | $projectName | $costAmount',
+                            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            '${record.itemName} | $vendorName',
+                            style: const TextStyle(fontSize: 11),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit, size: 18),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                onPressed: () => _showEditModal(record),
                               ),
-                              subtitle: Text(
-                                '${record.itemName} | $vendorName',
-                                style: const TextStyle(fontSize: 11),
-                                overflow: TextOverflow.ellipsis,
+                              const SizedBox(width: 8),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                onPressed: () => _deleteExpense(record.id!),
                               ),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.edit, size: 18),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                    onPressed: () => _showEditModal(record),
-                                  ),
-                                  const SizedBox(width: 8),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline, size: 18, color: Colors.red),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                    onPressed: () => _deleteExpense(record.id!),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
+                            ],
+                          ),
+                        ),
                       );
                     },
                   );

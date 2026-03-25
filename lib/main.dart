@@ -3,37 +3,24 @@
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/dashboard_screen.dart';
 import 'package:time_tracker_pro/settings_screen.dart';
-import 'package:time_tracker_pro/database_helper.dart';
+import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/settings_model.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'dart:io' show Platform;
 
-// THIS IS THE FUNCTION WE ARE FIXING
 Future<void> main() async {
-  // Add this line to ensure that plugin services are initialized
   WidgetsFlutterBinding.ensureInitialized();
-
-  // This block checks if the app is on a desktop and initializes the database
-  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-    sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
-  }
-
-  // This line remains the same
   runApp(const TimeTrackerProApp());
 }
-// THE REST OF YOUR FILE IS PERFECT AND REMAINS THE SAME
 
 class TimeTrackerProApp extends StatelessWidget {
   const TimeTrackerProApp({super.key});
 
   Future<bool> _hasSettings() async {
     try {
-      final db = await DatabaseHelperV2.instance.database;
-      final settingsMap = await db.query('settings', where: 'id = ?', whereArgs: [1]);
-      if (settingsMap.isEmpty) return false;
-
-      final settings = SettingsModel.fromMap(settingsMap.first);
+      final rows = await AppDatabase.instance.customSelect(
+        'SELECT * FROM settings WHERE id = 1',
+      ).get();
+      if (rows.isEmpty) return false;
+      final settings = SettingsModel.fromMap(rows.first.data);
       return settings.setupCompleted;
     } catch (e) {
       return false;

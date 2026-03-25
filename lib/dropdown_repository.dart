@@ -1,75 +1,51 @@
 // lib/dropdown_repository.dart
 
-import 'package:time_tracker_pro/database_helper.dart';
+import 'package:drift/drift.dart';
+import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/models.dart';
 
 class DropdownRepository {
-  final dbHelper = DatabaseHelperV2.instance;
+  final _db = AppDatabase.instance;
 
   Future<List<DropdownItem>> getClients() async {
-    final db = await dbHelper.database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'clients', where: 'is_active = 1', orderBy: 'name',
-    );
-    return List.generate(maps.length, (i) {
-      return DropdownItem(id: maps[i]['id'], name: maps[i]['name']);
-    });
+    final rows = await _db.customSelect(
+      'SELECT id, name FROM clients WHERE is_active = 1 ORDER BY name',
+    ).get();
+    return rows.map((r) => DropdownItem(id: r.data['id'], name: r.data['name'])).toList();
   }
 
   Future<List<DropdownItem>> getProjects({int? clientId}) async {
-    final db = await dbHelper.database;
-    String? whereClause = 'is_completed = 0';
-    List<dynamic>? whereArgs = [];
+    String query = 'SELECT id, project_name FROM projects WHERE is_completed = 0';
+    List<Variable> vars = [];
 
     if (clientId != null) {
-      whereClause += ' AND client_id = ?';
-      whereArgs.add(clientId);
+      query += ' AND client_id = ?';
+      vars.add(Variable.withInt(clientId));
     }
-    if (whereArgs.isEmpty) {
-      whereArgs = null;
-    }
+    query += ' ORDER BY project_name';
 
-    final List<Map<String, dynamic>> maps = await db.query(
-      'projects', where: whereClause,
-      whereArgs: whereArgs,
-      orderBy: 'project_name',
-    );
-
-    return List.generate(maps.length, (i) {
-      return DropdownItem(id: maps[i]['id'], name: maps[i]['project_name']);
-    });
+    final rows = await _db.customSelect(query, variables: vars).get();
+    return rows.map((r) => DropdownItem(id: r.data['id'], name: r.data['project_name'])).toList();
   }
 
   Future<List<DropdownItem>> getEmployees() async {
-    final db = await dbHelper.database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'employees',
-      where: 'is_deleted = 0',
-      orderBy: 'name',
-    );
-    return List.generate(maps.length, (i) {
-      return DropdownItem(id: maps[i]['id'], name: maps[i]['name']);
-    });
+    final rows = await _db.customSelect(
+      'SELECT id, name FROM employees WHERE is_deleted = 0 ORDER BY name',
+    ).get();
+    return rows.map((r) => DropdownItem(id: r.data['id'], name: r.data['name'])).toList();
   }
 
   Future<List<DropdownItem>> getProjectsByStatus({bool active = true}) async {
-    final db = await dbHelper.database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      'projects',
-      where: 'is_completed = ?',
-      whereArgs: [active ? 0 : 1],
-      orderBy: 'project_name COLLATE NOCASE ASC',
-    );
-    return List.generate(maps.length, (i) {
-      return DropdownItem(id: maps[i]['id'], name: maps[i]['project_name']);
-    });
+    final rows = await _db.customSelect(
+      'SELECT id, project_name FROM projects WHERE is_completed = ? ORDER BY project_name COLLATE NOCASE ASC',
+      variables: [Variable.withInt(active ? 0 : 1)],
+    ).get();
+    return rows.map((r) => DropdownItem(id: r.data['id'], name: r.data['project_name'])).toList();
   }
 
   /// CRITICAL FIX: SQL now calculates the true labor cost.
   Future<Map<String, dynamic>> getProjectSummaryDetails(int projectId) async {
-    final db = await dbHelper.database;
-
-    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+    final rows = await _db.customSelect('''
     SELECT
       p.project_name,
       p.pricing_model,
@@ -92,12 +68,8 @@ class DropdownRepository {
     FROM projects p
     LEFT JOIN clients c ON p.client_id = c.id
     WHERE p.id = ?
-  ''', [projectId]);
+  ''', variables: [Variable.withInt(projectId)]).get();
 
-    if (maps.isNotEmpty) {
-      return maps.first;
-    } else {
-      return {};
-    }
+    return rows.isNotEmpty ? rows.first.data : {};
   }
 }

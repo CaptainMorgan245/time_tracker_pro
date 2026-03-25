@@ -1,7 +1,7 @@
 // lib/project_repository.dart
 
-import 'package:sqflite/sqflite.dart';
-import 'package:time_tracker_pro/database_helper.dart';
+import 'package:drift/drift.dart';
+import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
@@ -10,7 +10,7 @@ import 'package:time_tracker_pro/settings_model.dart';
 import 'package:time_tracker_pro/models/analytics_models.dart';
 
 class ProjectRepository {
-  final dbHelper = DatabaseHelperV2.instance;
+  final _db = AppDatabase.instance;
   final DropdownRepository dropdownRepo = DropdownRepository();
 
   // =========================================================================
@@ -18,20 +18,17 @@ class ProjectRepository {
   // =========================================================================
 
   Future<ProjectSummaryViewModel> _createSummaryViewModel(int projectId) async {
-    final db = await dbHelper.database;
+    final projectRows = await _db.customSelect(
+      'SELECT * FROM projects WHERE id = ?',
+      variables: [Variable.withInt(projectId)],
+    ).get();
 
-    // 1. Fetch core project details
-    final List<Map<String, dynamic>> projectMaps = await db.query(
-        'projects', where: 'id = ?', whereArgs: [projectId]);
-
-    if (projectMaps.isEmpty) {
+    if (projectRows.isEmpty) {
       debugPrint('[ProjectRepo Error] Core project data (ID $projectId) not found in projects table.');
       throw Exception("Project not found for ID: $projectId");
     }
 
-    final projectMap = projectMaps.first;
-
-    // 2. Fetch aggregated summary details, which now includes true labor cost
+    final projectMap = projectRows.first.data;
     final summaryDetails = await dropdownRepo.getProjectSummaryDetails(projectId);
 
     if (summaryDetails.isEmpty || !summaryDetails.containsKey('client_name')) {
@@ -39,43 +36,30 @@ class ProjectRepository {
       throw Exception("Summary aggregation failed due to missing keys or empty data.");
     }
 
-    // 3. Fetch global burden rate for fixed-price calculations directly from database
-    final settingsMap = await db.query('settings', where: 'id = ?', whereArgs: [1]);
-    final settings = settingsMap.isNotEmpty
-        ? SettingsModel.fromMap(settingsMap.first)
-        : SettingsModel();
-    final double companyBurdenRate = settings.burdenRate;
     final double markupPercentage = (projectMap['expense_markup_percentage'] as num?)?.toDouble() ?? 15.0;
-
-    // --- Data Extraction and Financial Calculations ---
 
     final String projectName = projectMap['project_name'] as String;
     final String pricingModel = projectMap['pricing_model'] as String? ?? 'hourly';
-
     final String? clientName = summaryDetails['client_name'] as String?;
     final double totalHours = (summaryDetails['total_hours'] as num? ?? 0.0).toDouble();
     final double totalExpenses = (summaryDetails['total_expenses'] as num? ?? 0.0).toDouble();
-    // Get the true labor cost from our updated query
     final double trueLaborCost = (summaryDetails['total_labor_cost'] as num? ?? 0.0).toDouble();
     final double billedHourlyRate = (projectMap['billed_hourly_rate'] as num? ?? 0.0).toDouble();
     final double fixedPrice = (projectMap['project_price'] as num? ?? 0.0).toDouble();
 
     final double billedRate = (pricingModel == 'hourly') ? billedHourlyRate : fixedPrice;
-
-    // --- CORRECTED LOGIC FOR LABOR COST AND BILLED VALUE ---
-    final double laborCost = trueLaborCost; // This is the final INTERNAL cost of labor
+    final double laborCost = trueLaborCost;
     final double totalBilledValue;
 
     if (pricingModel == 'fixed' || pricingModel == 'project_based') {
       totalBilledValue = fixedPrice;
-    } else { // 'hourly'
+    } else {
       totalBilledValue = totalHours * billedHourlyRate;
     }
-    // DELETE LINE:debugPrint('*** FINAL DEBUG: laborCost=$laborCost, totalBilledValue=$totalBilledValue ***');
+
     final double materialsCost = totalExpenses * (1 + (markupPercentage / 100));
     final double totalCost = laborCost + materialsCost;
     final double profitLoss = totalBilledValue - totalCost;
-    // --------------------------------------------------------
 
     return ProjectSummaryViewModel(
       projectId: projectId,
@@ -93,30 +77,23 @@ class ProjectRepository {
     );
   }
 
-  // Implements getProjectSummary(int projectId)
   Future<ProjectSummaryViewModel?> getProjectSummary(int projectId) async {
     try {
       return await _createSummaryViewModel(projectId);
     } catch (e) {
-      // The error is now trapped and logged correctly.
       debugPrint('*** DEBUG (R-2) DATABASE FAIL: getProjectSummary failed for ID $projectId: $e ***');
       return null;
     }
   }
 
-  // Implements getProjectListReport({required bool activeOnly})
   Future<List<ProjectSummaryViewModel>> getProjectListReport({required bool activeOnly}) async {
-    final db = await dbHelper.database;
+    final rows = await _db.customSelect(
+      'SELECT id FROM projects WHERE is_completed = ?',
+      variables: [Variable.withInt(activeOnly ? 0 : 1)],
+    ).get();
 
-    final List<Map<String, dynamic>> projectMaps = await db.query(
-      'projects',
-      columns: ['id'],
-      where: 'is_completed = ?',
-      whereArgs: [activeOnly ? 0 : 1],
-    );
-
-    final futures = projectMaps.map((map) {
-      final projectId = map['id'] as int;
+    final futures = rows.map((r) {
+      final projectId = r.data['id'] as int;
       return () async {
         try {
           return await _createSummaryViewModel(projectId);
@@ -131,48 +108,34 @@ class ProjectRepository {
     return results.whereType<ProjectSummaryViewModel>().toList();
   }
 
-  // Custom report query based on user filters
   Future<List<Map<String, dynamic>>> getCustomProjectReport(CustomReportSettings settings) async {
-    final db = await dbHelper.database;
-
-    // Build WHERE clause based on filters
     List<String> whereConditions = [];
-    List<dynamic> whereArgs = [];
+    List<Variable> vars = [];
 
-    // Filter by client if specified
     if (settings.clientId != null) {
       whereConditions.add('p.client_id = ?');
-      whereArgs.add(settings.clientId);
+      vars.add(Variable.withInt(settings.clientId!));
     }
-
-    // Filter by project if specified
     if (settings.projectId != null) {
       whereConditions.add('p.id = ?');
-      whereArgs.add(settings.projectId);
+      vars.add(Variable.withInt(settings.projectId!));
     }
 
-    // Build date range filter for time entries
     String dateFilter = '';
-    if (settings.startDate != null || settings.endDate != null) {
-      if (settings.startDate != null) {
-        dateFilter += ' AND te.start_time >= \'${settings.startDate!.toIso8601String()}\'';
-      }
-      if (settings.endDate != null) {
-        dateFilter += ' AND te.start_time <= \'${settings.endDate!.toIso8601String()}\'';
-      }
+    if (settings.startDate != null) {
+      dateFilter += ' AND te.start_time >= ?';
+      vars.add(Variable.withString(settings.startDate!.toIso8601String()));
+    }
+    if (settings.endDate != null) {
+      dateFilter += ' AND te.start_time <= ?';
+      vars.add(Variable.withString(settings.endDate!.toIso8601String()));
     }
 
     String whereClause = whereConditions.isEmpty ? '1=1' : whereConditions.join(' AND ');
 
-    // Build SELECT clause based on included fields
     List<String> selectFields = ['p.project_name AS project'];
-
-    if (settings.includes['Client Details'] == true) {
-      selectFields.add('c.name AS client');
-    }
-    if (settings.includes['Total Hours'] == true) {
-      selectFields.add('IFNULL(SUM(te.final_billed_duration_seconds / 3600.0), 0.0) AS total_hours');
-    }
+    if (settings.includes['Client Details'] == true) selectFields.add('c.name AS client');
+    if (settings.includes['Total Hours'] == true) selectFields.add('IFNULL(SUM(te.final_billed_duration_seconds / 3600.0), 0.0) AS total_hours');
     if (settings.includes['Billed Rate'] == true) {
       selectFields.add('p.billed_hourly_rate AS hourly_rate');
       selectFields.add('p.project_price AS project_price');
@@ -192,10 +155,8 @@ class ProjectRepository {
     ORDER BY p.project_name
   ''';
 
-    debugPrint('[CustomReport Query] $query');
-    debugPrint('[CustomReport Args] $whereArgs');
-
-    return await db.rawQuery(query, whereArgs);
+    final rows = await _db.customSelect(query, variables: vars).get();
+    return rows.map((r) => r.data).toList();
   }
 
   // =========================================================================
@@ -203,48 +164,88 @@ class ProjectRepository {
   // =========================================================================
 
   Future<List<Project>> getProjects() async {
-    final db = await dbHelper.database;
-    final List<Map<String, dynamic>> maps = await db.query('projects');
-    return List.generate(maps.length, (i) => Project.fromMap(maps[i]));
+    final rows = await _db.customSelect('SELECT * FROM projects').get();
+    return rows.map((r) => Project.fromMap(r.data)).toList();
   }
 
   Future<int> insertProject(Project project) async {
-    final db = await dbHelper.database;
-    final result = await db.insert('projects', project.toMap(), conflictAlgorithm: ConflictAlgorithm.replace);
-    dbHelper.notifyDatabaseChanged();
-    return result;
+    final id = await _db.customInsert(
+      '''INSERT OR REPLACE INTO projects (
+        project_name, client_id, location, pricing_model, is_completed,
+        completion_date, is_internal, billed_hourly_rate, project_price,
+        expense_markup_percentage, tax_rate, parent_project_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+      variables: [
+        Variable.withString(project.projectName),
+        Variable.withInt(project.clientId),
+        Variable(project.location),
+        Variable.withString(project.pricingModel),
+        Variable.withInt(project.isCompleted ? 1 : 0),
+        Variable(project.completionDate?.toIso8601String()),
+        Variable.withInt(project.isInternal ? 1 : 0),
+        Variable(project.billedHourlyRate),
+        Variable(project.fixedPrice),
+        Variable.withReal(project.expenseMarkupPercentage),
+        Variable.withReal(project.taxRate),
+        Variable(project.parentProjectId),
+      ],
+    );
+    _db.notifyDatabaseChanged();
+    return id;
   }
 
   Future<int> updateProject(Project project) async {
-    final db = await dbHelper.database;
-    final result = await db.update(
-      'projects', project.toMap(), where: 'id = ?', whereArgs: [project.id],
+    final result = await _db.customUpdate(
+      '''UPDATE projects SET
+        project_name = ?, client_id = ?, location = ?, pricing_model = ?,
+        is_completed = ?, completion_date = ?, is_internal = ?,
+        billed_hourly_rate = ?, project_price = ?,
+        expense_markup_percentage = ?, tax_rate = ?, parent_project_id = ?
+      WHERE id = ?''',
+      variables: [
+        Variable.withString(project.projectName),
+        Variable.withInt(project.clientId),
+        Variable(project.location),
+        Variable.withString(project.pricingModel),
+        Variable.withInt(project.isCompleted ? 1 : 0),
+        Variable(project.completionDate?.toIso8601String()),
+        Variable.withInt(project.isInternal ? 1 : 0),
+        Variable(project.billedHourlyRate),
+        Variable(project.fixedPrice),
+        Variable.withReal(project.expenseMarkupPercentage),
+        Variable.withReal(project.taxRate),
+        Variable(project.parentProjectId),
+        Variable.withInt(project.id!),
+      ],
+      updates: {},
     );
-    dbHelper.notifyDatabaseChanged();
+    _db.notifyDatabaseChanged();
     return result;
   }
 
   Future<int> deleteProject(int id) async {
-    final db = await dbHelper.database;
-    final result = await db.delete('projects', where: 'id = ?', whereArgs: [id]);
-    dbHelper.notifyDatabaseChanged();
+    final result = await _db.customUpdate(
+      'DELETE FROM projects WHERE id = ?',
+      variables: [Variable.withInt(id)],
+      updates: {},
+    );
+    _db.notifyDatabaseChanged();
     return result;
   }
 
   Future<bool> hasAssociatedRecords(int projectId) async {
-    final db = await dbHelper.database;
+    final timeRows = await _db.customSelect(
+      'SELECT id FROM time_entries WHERE project_id = ? LIMIT 1',
+      variables: [Variable.withInt(projectId)],
+    ).get();
+    if (timeRows.isNotEmpty) return true;
 
-    final List<Map<String, dynamic>> timeMaps = await db.query(
-      'time_entries', where: 'project_id = ?', whereArgs: [projectId], limit: 1,
-    );
-    if (timeMaps.isNotEmpty) return true;
-
-    final List<Map<String, dynamic>> materialMaps = await db.query(
-      'materials', where: 'project_id = ?', whereArgs: [projectId], limit: 1,
-    );
-    if (materialMaps.isNotEmpty) return true;
+    final materialRows = await _db.customSelect(
+      'SELECT id FROM materials WHERE project_id = ? LIMIT 1',
+      variables: [Variable.withInt(projectId)],
+    ).get();
+    if (materialRows.isNotEmpty) return true;
 
     return false;
   }
 }
-// lib/project_repository.dart

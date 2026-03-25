@@ -1,143 +1,146 @@
 // lib/job_materials_repository.dart
 
-import 'package:sqflite/sqflite.dart';
-import 'package:time_tracker_pro/database_helper.dart';
+import 'package:drift/drift.dart';
+import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:flutter/foundation.dart';
 
 class JobMaterialsRepository {
-  final _databaseHelper = DatabaseHelperV2.instance;
-  final String _tableName = 'materials'; // Confirmed table name from database_helper
+  final _db = AppDatabase.instance;
 
-  // start method: insertJobMaterial
   Future<int> insertJobMaterial(JobMaterials material) async {
-    final db = await _databaseHelper.database;
-    return await db.insert(
-      _tableName,
-      material.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
+    final id = await _db.customInsert(
+      '''INSERT OR REPLACE INTO materials (
+        project_id, item_name, cost, purchase_date, description, is_deleted,
+        expense_category, unit, quantity, base_quantity, odometer_reading,
+        is_company_expense, vehicle_designation, vendor_or_subtrade, cost_code_id,
+        is_billed, invoice_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+      variables: [
+        Variable.withInt(material.projectId),
+        Variable.withString(material.itemName),
+        Variable.withReal(material.cost),
+        Variable.withString(material.purchaseDate.toIso8601String()),
+        Variable(material.description),
+        Variable.withInt(material.isDeleted ? 1 : 0),
+        Variable(material.expenseCategory),
+        Variable(material.unit),
+        Variable(material.quantity),
+        Variable(material.baseQuantity),
+        Variable(material.odometerReading),
+        Variable.withInt(material.isCompanyExpense ? 1 : 0),
+        Variable(material.vehicleDesignation),
+        Variable(material.vendorOrSubtrade),
+        Variable(material.costCodeId),
+        Variable.withInt(material.isBilled ? 1 : 0),
+        Variable(material.invoiceId),
+      ],
     );
+    _db.notifyDatabaseChanged();
+    return id;
   }
-  // end method: insertJobMaterial
 
-  // start method: getJobMaterials
-  // Updated to accept an optional 'limit' for fetching recent records
   Future<List<JobMaterials>> getJobMaterials({int? limit}) async {
-    final db = await _databaseHelper.database;
-
-    // FIX: Pass the limit directly as an int?, removing unnecessary String conversion
-    final List<Map<String, dynamic>> maps = await db.query(
-      _tableName,
-      orderBy: 'id DESC', // Assumes higher ID means more recent
-      limit: limit, // Now passing int? directly
-    );
-
-    return List.generate(maps.length, (i) {
-      return JobMaterials.fromMap(maps[i]);
-    });
+    String query = 'SELECT * FROM materials ORDER BY id DESC';
+    if (limit != null) query += ' LIMIT $limit';
+    final rows = await _db.customSelect(query).get();
+    return rows.map((r) => JobMaterials.fromMap(r.data)).toList();
   }
-  // end method: getJobMaterials
 
-  // start method: getJobMaterialsByProjectId
   Future<List<JobMaterials>> getJobMaterialsByProjectId(int projectId) async {
-    final db = await _databaseHelper.database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      _tableName,
-      where: 'project_id = ?',
-      whereArgs: [projectId],
-      orderBy: 'purchase_date DESC',
-    );
-    return List.generate(maps.length, (i) {
-      return JobMaterials.fromMap(maps[i]);
-    });
+    final rows = await _db.customSelect(
+      'SELECT * FROM materials WHERE project_id = ? ORDER BY purchase_date DESC',
+      variables: [Variable.withInt(projectId)],
+    ).get();
+    return rows.map((r) => JobMaterials.fromMap(r.data)).toList();
   }
-  // end method: getJobMaterialsByProjectId
 
-  // start method: updateJobMaterial
   Future<int> updateJobMaterial(JobMaterials material) async {
-    final db = await _databaseHelper.database;
-    return await db.update(
-      _tableName,
-      material.toMap(),
-      where: 'id = ?',
-      whereArgs: [material.id],
+    final result = await _db.customUpdate(
+      '''UPDATE materials SET
+        project_id = ?, item_name = ?, cost = ?, purchase_date = ?, description = ?,
+        is_deleted = ?, expense_category = ?, unit = ?, quantity = ?,
+        base_quantity = ?, odometer_reading = ?, is_company_expense = ?,
+        vehicle_designation = ?, vendor_or_subtrade = ?, cost_code_id = ?,
+        is_billed = ?, invoice_id = ?
+      WHERE id = ?''',
+      variables: [
+        Variable.withInt(material.projectId),
+        Variable.withString(material.itemName),
+        Variable.withReal(material.cost),
+        Variable.withString(material.purchaseDate.toIso8601String()),
+        Variable(material.description),
+        Variable.withInt(material.isDeleted ? 1 : 0),
+        Variable(material.expenseCategory),
+        Variable(material.unit),
+        Variable(material.quantity),
+        Variable(material.baseQuantity),
+        Variable(material.odometerReading),
+        Variable.withInt(material.isCompanyExpense ? 1 : 0),
+        Variable(material.vehicleDesignation),
+        Variable(material.vendorOrSubtrade),
+        Variable(material.costCodeId),
+        Variable.withInt(material.isBilled ? 1 : 0),
+        Variable(material.invoiceId),
+        Variable.withInt(material.id!),
+      ],
+      updates: {},
     );
+    _db.notifyDatabaseChanged();
+    return result;
   }
-  // end method: updateJobMaterial
 
-  // start method: getAllJobMaterials
   Future<List<JobMaterials>> getAllJobMaterials() async {
-    final db = await _databaseHelper.database;
-    final List<Map<String, dynamic>> maps = await db.query(
-      _tableName,
-      orderBy: 'id DESC',
-    );
-    print('DATABASE DEBUG: Fetched ${maps.length} records from the database.');
-    return List.generate(maps.length, (i) {
-      return JobMaterials.fromMap(maps[i]);
-    });
+    final rows = await _db.customSelect('SELECT * FROM materials ORDER BY id DESC').get();
+    return rows.map((r) => JobMaterials.fromMap(r.data)).toList();
   }
-  // end method: getAllJobMaterials
-
-  // start method: getCostSummaryByCategory
 
   Future<List<CostSummary>> getCostSummaryByCategory() async {
-    final db = await _databaseHelper.database;
-
-    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+    final rows = await _db.customSelect('''
       SELECT
         expense_category AS categoryName,
         SUM(cost) AS totalCost,
         COUNT(id) AS recordCount
-      FROM $_tableName
+      FROM materials
       GROUP BY expense_category
       HAVING totalCost IS NOT NULL AND totalCost > 0
-    ''');
+    ''').get();
 
-    return List.generate(maps.length, (i) {
-      // NOTE: We rely on the SQL query aliases (categoryName, totalCost, recordCount)
-      // matching the fields required by the CostSummary model constructor.
+    return rows.map((r) {
+      final map = r.data;
       return CostSummary(
-        categoryName: maps[i]['categoryName'] as String,
-        totalCost: (maps[i]['totalCost'] as num).toDouble(),
-        recordCount: maps[i]['recordCount'] as int,
+        categoryName: map['categoryName'] as String,
+        totalCost: (map['totalCost'] as num).toDouble(),
+        recordCount: map['recordCount'] as int,
       );
-    });
+    }).toList();
   }
-  // end method: getCostSummaryByCategory
 
-  // Fetch company overhead expenses with optional date filtering
   Future<List<Map<String, dynamic>>> getCompanyExpenses({
     DateTime? startDate,
     DateTime? endDate,
   }) async {
-    final db = await _databaseHelper.database;
-
     List<String> whereConditions = ['is_company_expense = 1', 'is_deleted = 0'];
-    List<dynamic> whereArgs = [];
+    List<Variable> vars = [];
 
     if (startDate != null) {
       whereConditions.add('purchase_date >= ?');
-      whereArgs.add(startDate.toIso8601String());
+      vars.add(Variable.withString(startDate.toIso8601String()));
     }
 
     if (endDate != null) {
       whereConditions.add('purchase_date <= ?');
-      whereArgs.add(endDate.toIso8601String());
+      vars.add(Variable.withString(endDate.toIso8601String()));
     }
 
     String whereClause = whereConditions.join(' AND ');
+    final rows = await _db.customSelect(
+      'SELECT * FROM materials WHERE $whereClause ORDER BY purchase_date DESC',
+      variables: vars,
+    ).get();
 
-    final List<Map<String, dynamic>> maps = await db.query(
-      _tableName,
-      where: whereClause,
-      whereArgs: whereArgs.isEmpty ? null : whereArgs,
-      orderBy: 'purchase_date DESC',
-    );
-
-    // Return formatted data for display
-    debugPrint('[CompanyExpenses] Found ${maps.length} company expenses');
-    return maps.map((map) {
+    return rows.map((r) {
+      final map = r.data;
       return {
         'Date': map['purchase_date'],
         'Item': map['item_name'],
@@ -149,17 +152,13 @@ class JobMaterialsRepository {
     }).toList();
   }
 
-  // end method: getCompanyExpenses
-
-
-  // start method: deleteJobMaterial
   Future<int> deleteJobMaterial(int id) async {
-    final db = await _databaseHelper.database;
-    return await db.delete(
-      _tableName,
-      where: 'id = ?',
-      whereArgs: [id],
+    final result = await _db.customUpdate(
+      'DELETE FROM materials WHERE id = ?',
+      variables: [Variable.withInt(id)],
+      updates: {},
     );
+    _db.notifyDatabaseChanged();
+    return result;
   }
-// end method: deleteJobMaterial
 }
