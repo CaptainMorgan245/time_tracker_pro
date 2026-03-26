@@ -34,6 +34,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   final _internalNotesController = TextEditingController();
   final _poNumberController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _projectAddressController = TextEditingController();
 
   // Form state
   List<Project> _projects = [];
@@ -65,7 +66,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     'chargeable': 'Chargeable Extra',
     'addendum': 'Addendum',
     'deposit': 'Deposit',
-    'extras': 'Extras Invoice',
+    'extras': 'Time & Materials Invoice',
   };
 
   // ── Calculated fields ─────────────────────────────────────────────────────
@@ -117,6 +118,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       _descriptionController.text = inv.otherCostsDescription ?? '';
       // Amount is the subtotal
       _amountController.text = inv.subtotal.toStringAsFixed(2);
+      _projectAddressController.text = inv.projectAddress ?? '';
     }
   }
 
@@ -127,6 +129,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     _internalNotesController.dispose();
     _poNumberController.dispose();
     _descriptionController.dispose();
+    _projectAddressController.dispose();
     super.dispose();
   }
 
@@ -184,13 +187,14 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     if (project == null) return;
     setState(() {
       _selectedProject = project;
-      _loadingBillingSummary = true;
       if (!silent) {
+        _projectAddressController.text = project.location ?? '';
         // Auto-select invoice type based on pricing model
         _invoiceType =
             project.pricingModel == 'fixed' ? 'progress' : 'chargeable';
         _isFinalInvoice = false;
       }
+      _loadingBillingSummary = true;
     });
 
     // Load client
@@ -265,7 +269,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         invoiceDate: _invoiceDate,
         clientId: _selectedProject!.clientId,
         projectId: _selectedProject!.id!,
-        projectAddress: _selectedProject!.location,
+        projectAddress: _projectAddressController.text.trim(),
         labourSubtotal: _invoiceType == 'chargeable' ? subtotal : 0,
         materialsSubtotal: 0,
         materialsPickupCost: 0,
@@ -691,6 +695,15 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                       ),
                     _buildSectionHeader('Project'),
                     _buildProjectDropdown(),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _projectAddressController,
+                      decoration: const InputDecoration(
+                        labelText: 'Site Address',
+                        hintText: 'Enter site address for this invoice',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     _buildClientField(),
                     const SizedBox(height: 12),

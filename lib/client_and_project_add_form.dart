@@ -173,9 +173,9 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
   Widget build(BuildContext context) {
     final activeClients = widget.clients;
     const itemWidth = 250.0;
-    final phoneNumberFormatter = FilteringTextInputFormatter.allow(RegExp(r'r[\d\.\-]'));
+    // Fixed regex: removed accidental 'r' inside the string
+    final phoneNumberFormatter = FilteringTextInputFormatter.allow(RegExp(r'[\d\.\-\(\)\s+]'));
 
-    // Get the current theme to style the clear button
     final ButtonStyle elevatedButtonStyle = ElevatedButton.styleFrom(
       minimumSize: Size.zero,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -230,7 +230,7 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
                     child: TextField(
                       controller: _phoneNumberController,
                       decoration: const InputDecoration(labelText: 'Phone Number'),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+                      keyboardType: TextInputType.phone,
                       inputFormatters: [phoneNumberFormatter],
                     ),
                   ),
@@ -320,24 +320,26 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
             const SizedBox(height: 24),
             Row(
               children: [
-                // Clear Button (25%)
                 Expanded(
                   flex: 25,
-                  child: ElevatedButton( // Changed to ElevatedButton for consistent style
+                  child: ElevatedButton(
                     style: elevatedButtonStyle,
                     onPressed: _isSubmitting ? null : _resetForm,
                     child: const Text('Clear'),
                   ),
                 ),
                 const SizedBox(width: 8),
-                // Add Project Button (75%)
                 Expanded(
                   flex: 75,
                   child: ElevatedButton(
-                    style: elevatedButtonStyle, // Ensure same style
+                    style: elevatedButtonStyle,
                     onPressed: _isSubmitting ? null : _submit,
                     child: _isSubmitting
-                        ? const CircularProgressIndicator(color: Colors.white)
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          )
                         : const Text('Add Project'),
                   ),
                 ),

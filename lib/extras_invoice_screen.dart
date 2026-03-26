@@ -36,6 +36,7 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
   final TextEditingController _narrativeController = TextEditingController();
   final TextEditingController _discountAmountController = TextEditingController();
   final TextEditingController _discountDescriptionController = TextEditingController();
+  final TextEditingController _projectAddressController = TextEditingController();
 
   bool _isLoading = false;
   bool _isSaving = false;
@@ -109,6 +110,7 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
 
     setState(() {
       _selectedProject = project;
+      _projectAddressController.text = project['location'] ?? '';
       _selectedTimeEntryIds.clear();
       _selectedMaterialIds.clear();
       _timeEntries = [];
@@ -199,6 +201,15 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
 
   double get _invoiceTotal => _discountedSubtotal + _gstAmount;
 
+  @override
+  void dispose() {
+    _narrativeController.dispose();
+    _discountAmountController.dispose();
+    _discountDescriptionController.dispose();
+    _projectAddressController.dispose();
+    super.dispose();
+  }
+
   Future<void> _createInvoice() async {
     if (_selectedProject == null) return;
 
@@ -220,7 +231,7 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
         invoiceDate: DateTime.now(),
         clientId: _selectedProject!['client_id'],
         projectId: _selectedProject!['id'],
-        projectAddress: _selectedProject!['location'] ?? '',
+        projectAddress: _projectAddressController.text.trim(),
         labourSubtotal: _labourSubtotal,
         materialsSubtotal: _materialsSubtotal,
         discountAmount: _discountAmount,
@@ -248,7 +259,7 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
       if (mounted) {
         setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Extras invoice created successfully')),
+          const SnackBar(content: Text('Time & Materials invoice created successfully')),
         );
         Navigator.of(context).pop(true);
       }
@@ -296,7 +307,7 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('New Extras Invoice'),
+        title: const Text('New Time & Materials Invoice'),
       ),
       body: SelectionArea(
         child: _isLoading && _projects.isEmpty
@@ -323,6 +334,16 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
                 },
               ),
 
+              const SizedBox(height: 12),
+              TextField(
+                controller: _projectAddressController,
+                decoration: const InputDecoration(
+                  labelText: 'Site Address',
+                  hintText: 'Enter site address for this invoice',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+
               // ② Client disambiguator
               if (_showClientDisambiguator) ...[
                 const SizedBox(height: 16),
@@ -346,6 +367,7 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
                       p['project_name'] == _selectedProject!['project_name'] &&
                           p['client_id'] == id);
                       _selectedProject = project;
+                      _projectAddressController.text = project['location'] ?? '';
                       _loadUnbilledRecords(project['id']);
                     });
                   },
@@ -491,7 +513,7 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
                   ),
                   child: _isSaving
                       ? const CircularProgressIndicator()
-                      : const Text('Create Extras Invoice'),
+                      : const Text('Create Time & Materials Invoice'),
                 ),
               ],
             ],

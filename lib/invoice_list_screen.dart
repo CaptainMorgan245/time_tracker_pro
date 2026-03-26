@@ -137,7 +137,7 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
           const SizedBox(width: 8),
           Expanded(child: _actionButton('Fixed Price Invoice', Icons.add, _onCreateInvoice, Colors.blue[700]!)),
           const SizedBox(width: 8),
-          Expanded(child: _actionButton('Extras Invoice', Icons.checklist, _onCreateExtrasInvoice, Colors.orange[700]!)),
+          Expanded(child: _actionButton('Time & Materials Invoice', Icons.checklist, _onCreateExtrasInvoice, Colors.orange[700]!)),
         ],
       );
     }

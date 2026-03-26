@@ -168,6 +168,15 @@ class ProjectRepository {
     return rows.map((r) => Project.fromMap(r.data)).toList();
   }
 
+  Future<Project?> getProjectById(int id) async {
+    final rows = await _db.customSelect(
+      'SELECT * FROM projects WHERE id = ?',
+      variables: [Variable.withInt(id)],
+    ).get();
+    if (rows.isEmpty) return null;
+    return Project.fromMap(rows.first.data);
+  }
+
   Future<int> insertProject(Project project) async {
     final id = await _db.customInsert(
       '''INSERT OR REPLACE INTO projects (

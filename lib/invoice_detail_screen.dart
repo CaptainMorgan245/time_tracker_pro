@@ -6,6 +6,10 @@ import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/invoice_repository.dart';
 import 'package:time_tracker_pro/invoice_service.dart';
 import 'package:time_tracker_pro/create_invoice_screen.dart';
+import 'package:printing/printing.dart';
+import 'package:time_tracker_pro/invoice_pdf_service.dart';
+import 'package:time_tracker_pro/project_repository.dart';
+import 'package:time_tracker_pro/database/app_database.dart';
 
 // start class: InvoiceDetailScreen
 class InvoiceDetailScreen extends StatefulWidget {
@@ -21,6 +25,7 @@ class InvoiceDetailScreen extends StatefulWidget {
 // start class: _InvoiceDetailScreenState
 class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
   final InvoiceRepository _invoiceRepository = InvoiceRepository();
+  final ProjectRepository _projectRepository = ProjectRepository();
   final InvoiceService _invoiceService = InvoiceService.instance;
   final NumberFormat _currencyFormat =
   NumberFormat.currency(locale: 'en_US', symbol: '\$');
@@ -36,7 +41,8 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     'progress': 'Progress Draw',
     'chargeable': 'Chargeable Extra',
     'addendum': 'Addendum',
-    'extras': 'Extras Invoice',
+    'deposit': 'Deposit',
+    'extras': 'Time & Materials Invoice',
   };
 
   @override
@@ -90,6 +96,51 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
       }
     } finally {
       if (mounted) setState(() => _isSavingInternalNotes = false);
+    }
+  }
+
+  Future<void> _onSharePdf() async {
+    if (_invoice == null) return;
+
+    try {
+      // Show loading indicator
+      setState(() => _isLoading = true);
+
+      // 1. Load company settings
+      final settings = await AppDatabase.instance.getCompanySettings();
+      final settingsMap = settings.toMap();
+
+      // 2. Load client details
+      final client = await _invoiceRepository.getClientById(_invoice!.clientId);
+
+      // 3. Load project details
+      final project = await _projectRepository.getProjectById(_invoice!.projectId);
+
+      // 4. Generate PDF
+      final pdfBytes = await InvoicePdfService.generateInvoicePdf(
+        invoice: _invoice!,
+        companySettings: settingsMap,
+        clientName: client?.name ?? '',
+        clientAddress: '',
+        clientCity: '',
+        clientPhone: client?.phoneNumber ?? '',
+        projectName: project?.projectName ?? '',
+      );
+
+      setState(() => _isLoading = false);
+
+      // 5. Show print/share preview using printing package
+      await Printing.layoutPdf(
+        onLayout: (_) async => pdfBytes,
+        name: 'Invoice_${_invoice!.invoiceNumber}',
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error generating PDF: $e')),
+        );
+      }
     }
   }
 
@@ -449,7 +500,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
               if (!isLocked) const SizedBox(width: 8),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: _onShare,
+                  onPressed: _onSharePdf,
                   icon: const Icon(Icons.share),
                   label: const Text('Share'),
                   style: ElevatedButton.styleFrom(

@@ -554,11 +554,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  String get _currentScreenTitle {
+    switch (_selectedIndex) {
+      case 0: return 'Dashboard';
+      case 1: return 'Cost Entry';
+      case 2: return 'Analytics';
+      case 3: return 'Invoices';
+      default: return 'Dashboard';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Dashboard'),
+        title: Text(_currentScreenTitle),
       ),
       drawer: const AppDrawer(),
       body: IndexedStack(
