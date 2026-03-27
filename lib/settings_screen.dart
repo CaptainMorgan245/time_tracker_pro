@@ -48,6 +48,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   final TextEditingController tax2RateController = TextEditingController();
   final TextEditingController tax2RegController = TextEditingController();
   final TextEditingController termsController = TextEditingController();
+  final TextEditingController countryController = TextEditingController();
+  final TextEditingController regionLabelController = TextEditingController();
+  final TextEditingController postalCodeLabelController = TextEditingController();
 
   @override
   void initState() {
@@ -80,6 +83,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     tax2RateController.dispose();
     tax2RegController.dispose();
     termsController.dispose();
+    countryController.dispose();
+    regionLabelController.dispose();
+    postalCodeLabelController.dispose();
     super.dispose();
   }
 
@@ -119,10 +125,15 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           : '';
       tax2RegController.text = _companySettings.defaultTax2RegistrationNumber ?? '';
       termsController.text = _companySettings.defaultTerms;
+      countryController.text = _companySettings.country;
+      regionLabelController.text = _companySettings.regionLabel;
+      postalCodeLabelController.text = _companySettings.postalCodeLabel;
     });
   }
 
   Future<void> _saveSettings({double? currentBurdenRate}) async {
+    final bool isFirstRun = _settings.setupCompleted != true;
+
     // 1. Save App Settings
     final settings = _settings.copyWith(
       employeeNumberPrefix: employeeNumberPrefixController.text.isEmpty ? null : employeeNumberPrefixController.text,
@@ -168,6 +179,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       defaultTax2Rate: tax2Rate,
       defaultTax2RegistrationNumber: tax2RegController.text,
       defaultTerms: termsController.text,
+      country: countryController.text,
+      regionLabel: regionLabelController.text,
+      postalCodeLabel: postalCodeLabelController.text,
     );
 
     await _dbHelper.updateCompanySettings(updatedCompany);
@@ -178,12 +192,14 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       const SnackBar(content: Text('All Settings Saved!')),
     );
 
-    // Navigate to Dashboard and clear stack
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => const DashboardScreen()),
-      (route) => false,
-    );
+    if (isFirstRun && mounted) {
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+            builder: (context) => const DashboardScreen()),
+        (route) => false,
+      );
+    }
   }
 
   void _showHelpDialog(String title, String content) {
@@ -259,6 +275,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             tax2RateController: tax2RateController,
             tax2RegController: tax2RegController,
             termsController: termsController,
+            countryController: countryController,
+            regionLabelController: regionLabelController,
+            postalCodeLabelController: postalCodeLabelController,
             onSave: _saveSettings,
           ),
         ],

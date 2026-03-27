@@ -15,6 +15,9 @@ class CompanySettings {
   final String? defaultTax2RegistrationNumber;
   final String defaultTerms;
   final double taxRate;
+  final String postalCodeLabel;
+  final String regionLabel;
+  final String country;
 
   CompanySettings({
     this.id = 1,
@@ -33,6 +36,9 @@ class CompanySettings {
     this.defaultTax2RegistrationNumber,
     this.defaultTerms = 'Payable on Receipt',
     this.taxRate = 5.0,
+    this.postalCodeLabel = 'Postal Code',
+    this.regionLabel = 'Province',
+    this.country = 'Canada',
   });
 
   Map<String, dynamic> toMap() {
@@ -53,6 +59,9 @@ class CompanySettings {
       'default_tax2_registration_number': defaultTax2RegistrationNumber,
       'default_terms': defaultTerms,
       'tax_rate': taxRate,
+      'postal_code_label': postalCodeLabel,
+      'region_label': regionLabel,
+      'country': country,
     };
   }
 
@@ -74,6 +83,9 @@ class CompanySettings {
       defaultTax2RegistrationNumber: map['default_tax2_registration_number'] as String?,
       defaultTerms: map['default_terms'] as String? ?? 'Payable on Receipt',
       taxRate: (map['tax_rate'] as num?)?.toDouble() ?? 5.0,
+      postalCodeLabel: (map['postal_code_label'] as String?) ?? 'Postal Code',
+      regionLabel: (map['region_label'] as String?) ?? 'Province',
+      country: (map['country'] as String?) ?? 'Canada',
     );
   }
 
@@ -94,6 +106,9 @@ class CompanySettings {
     String? defaultTax2RegistrationNumber,
     String? defaultTerms,
     double? taxRate,
+    String? postalCodeLabel,
+    String? regionLabel,
+    String? country,
   }) {
     return CompanySettings(
       id: id ?? this.id,
@@ -112,6 +127,9 @@ class CompanySettings {
       defaultTax2RegistrationNumber: defaultTax2RegistrationNumber ?? this.defaultTax2RegistrationNumber,
       defaultTerms: defaultTerms ?? this.defaultTerms,
       taxRate: taxRate ?? this.taxRate,
+      postalCodeLabel: postalCodeLabel ?? this.postalCodeLabel,
+      regionLabel: regionLabel ?? this.regionLabel,
+      country: country ?? this.country,
     );
   }
 }

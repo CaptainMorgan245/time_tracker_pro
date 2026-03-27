@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/client_repository.dart';
 import 'package:time_tracker_pro/project_repository.dart';
-import 'package:time_tracker_pro/client_and_project_add_form.dart';
 
 class ClientAndProjectScreen extends StatefulWidget {
   const ClientAndProjectScreen({super.key});
@@ -70,6 +69,298 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
     } catch (e) {
       return 'Unknown';
     }
+  }
+
+  void _showAddClientBottomSheet(BuildContext context) {
+    final clientNameController = TextEditingController();
+    final contactPersonController = TextEditingController();
+    final phoneController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+          ),
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Add Client',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: clientNameController,
+                  decoration: const InputDecoration(labelText: 'Client Name'),
+                  validator: (v) =>
+                      (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  textCapitalization: TextCapitalization.words,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: contactPersonController,
+                  decoration: const InputDecoration(labelText: 'Contact Person'),
+                  textCapitalization: TextCapitalization.words,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: phoneController,
+                  decoration: const InputDecoration(labelText: 'Phone Number'),
+                  keyboardType: TextInputType.phone,
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFE8720C),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onPressed: () async {
+                    if (formKey.currentState!.validate()) {
+                      final client = Client(
+                        name: clientNameController.text.trim(),
+                        contactPerson: contactPersonController.text.trim().isEmpty
+                            ? null
+                            : contactPersonController.text.trim(),
+                        phoneNumber: phoneController.text.trim().isEmpty
+                            ? null
+                            : phoneController.text.trim(),
+                      );
+                      await _clientRepo.insertClient(client);
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        _loadData();
+                      }
+                    }
+                  },
+                  child: const Text('Add Client'),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _showAddProjectBottomSheet(BuildContext context) {
+    final projectNameController = TextEditingController();
+    final streetAddressController = TextEditingController();
+    final cityController = TextEditingController();
+    final regionController = TextEditingController();
+    final postalCodeController = TextEditingController();
+    final billedHourlyRateController = TextEditingController();
+    final fixedPriceController = TextEditingController();
+    final expenseMarkupController = TextEditingController(text: '15.0');
+    final formKey = GlobalKey<FormState>();
+
+    String selectedPricingModel = 'hourly';
+    Client? selectedClient;
+    List<Client> clients = [];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            if (clients.isEmpty) {
+              _clientRepo.getClients().then((result) {
+                setModalState(() => clients = result);
+              });
+            }
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+              ),
+              child: Form(
+                key: formKey,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Add Project',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: projectNameController,
+                        decoration:
+                            const InputDecoration(labelText: 'Project Name'),
+                        validator: (v) =>
+                            (v == null || v.trim().isEmpty) ? 'Required' : null,
+                        textCapitalization: TextCapitalization.words,
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<Client>(
+                        value: selectedClient,
+                        decoration: const InputDecoration(labelText: 'Client'),
+                        items: clients
+                            .map((c) => DropdownMenuItem(
+                                  value: c,
+                                  child: Text(c.name),
+                                ))
+                            .toList(),
+                        onChanged: (c) =>
+                            setModalState(() => selectedClient = c),
+                        validator: (v) => v == null ? 'Required' : null,
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        value: selectedPricingModel,
+                        decoration:
+                            const InputDecoration(labelText: 'Pricing Model'),
+                        items: const [
+                          DropdownMenuItem(
+                              value: 'hourly', child: Text('Hourly')),
+                          DropdownMenuItem(
+                              value: 'fixed', child: Text('Fixed Price')),
+                          DropdownMenuItem(
+                              value: 'project_based',
+                              child: Text('Project Based')),
+                        ],
+                        onChanged: (v) =>
+                            setModalState(() => selectedPricingModel = v!),
+                      ),
+                      const SizedBox(height: 12),
+                      if (selectedPricingModel == 'hourly')
+                        TextFormField(
+                          controller: billedHourlyRateController,
+                          decoration: const InputDecoration(
+                              labelText: 'Billed Hourly Rate'),
+                          keyboardType: TextInputType.number,
+                        ),
+                      if (selectedPricingModel == 'fixed' ||
+                          selectedPricingModel == 'project_based')
+                        TextFormField(
+                          controller: fixedPriceController,
+                          decoration: const InputDecoration(
+                              labelText: 'Fixed Project Price'),
+                          keyboardType: TextInputType.number,
+                        ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: streetAddressController,
+                        decoration:
+                            const InputDecoration(labelText: 'Street Address'),
+                        textCapitalization: TextCapitalization.words,
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            flex: 2,
+                            child: TextFormField(
+                              controller: cityController,
+                              decoration:
+                                  const InputDecoration(labelText: 'City'),
+                              textCapitalization: TextCapitalization.words,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextFormField(
+                              controller: regionController,
+                              decoration:
+                                  const InputDecoration(labelText: 'Province'),
+                              textCapitalization: TextCapitalization.characters,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: postalCodeController,
+                        decoration:
+                            const InputDecoration(labelText: 'Postal Code'),
+                        textCapitalization: TextCapitalization.characters,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: expenseMarkupController,
+                        decoration: const InputDecoration(
+                            labelText: 'Expense Markup %'),
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 24),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFE8720C),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        onPressed: () async {
+                          if (formKey.currentState!.validate()) {
+                            final project = Project(
+                              projectName: projectNameController.text.trim(),
+                              clientId: selectedClient!.id!,
+                              location: cityController.text.trim().isEmpty
+                                  ? null
+                                  : cityController.text.trim(),
+                              streetAddress:
+                                  streetAddressController.text.trim().isEmpty
+                                      ? null
+                                      : streetAddressController.text.trim(),
+                              region: regionController.text.trim().isEmpty
+                                  ? null
+                                  : regionController.text.trim(),
+                              postalCode: postalCodeController.text.trim().isEmpty
+                                  ? null
+                                  : postalCodeController.text.trim(),
+                              pricingModel: selectedPricingModel,
+                              billedHourlyRate: double.tryParse(
+                                  billedHourlyRateController.text),
+                              fixedPrice:
+                                  double.tryParse(fixedPriceController.text),
+                              expenseMarkupPercentage: double.tryParse(
+                                      expenseMarkupController.text) ??
+                                  15.0,
+                            );
+                            await _projectRepo.insertProject(project);
+                            if (context.mounted) {
+                              Navigator.pop(context);
+                              _loadData();
+                            }
+                          }
+                        },
+                        child: const Text('Add Project'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _showEditClientDialog(Client client) async {
@@ -148,6 +439,15 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
 
     int? selectedClientId = project.clientId;
 
+    var editCity = project.location ?? '';
+    var editStreetAddress = project.streetAddress ?? '';
+    var editRegion = project.region ?? '';
+    var editPostalCode = project.postalCode ?? '';
+
+    final editStreetAddressController = TextEditingController(text: project.streetAddress ?? '');
+    final editRegionController = TextEditingController(text: project.region ?? '');
+    final editPostalCodeController = TextEditingController(text: project.postalCode ?? '');
+
     await showDialog(
       context: context,
       builder: (context) {
@@ -217,6 +517,30 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                             keyboardType: TextInputType.number,
                           ),
                         ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: editStreetAddressController,
+                        decoration: const InputDecoration(labelText: 'Street Address'),
+                        onChanged: (v) => editStreetAddress = v,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: TextEditingController(text: project.location ?? ''),
+                        decoration: const InputDecoration(labelText: 'City'),
+                        onChanged: (v) => editCity = v,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: editRegionController,
+                        decoration: const InputDecoration(labelText: 'Province'),
+                        onChanged: (v) => editRegion = v,
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: editPostalCodeController,
+                        decoration: const InputDecoration(labelText: 'Postal Code'),
+                        onChanged: (v) => editPostalCode = v,
+                      ),
                       const SizedBox(height: 16),
                       TextField(
                         controller: expenseMarkupController,
@@ -292,9 +616,10 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                           billedHourlyRate: hourlyRate,
                           fixedPrice: newFixedPrice,
                           expenseMarkupPercentage: double.tryParse(expenseMarkupController.text) ?? 15.0,
-                          // If 'projectBasedPrice' exists in the model, set it to null
-                          // to explicitly only use fixedPrice, respecting the DB schema.
-                          // projectBasedPrice: null,
+                          location: editCity,
+                          streetAddress: editStreetAddress.trim().isEmpty ? null : editStreetAddress.trim(),
+                          region: editRegion.trim().isEmpty ? null : editRegion.trim(),
+                          postalCode: editPostalCode.trim().isEmpty ? null : editPostalCode.trim(),
                         );
 
                         _updateProject(updatedProject);
@@ -367,12 +692,40 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
           if (constraints.maxWidth > 800) { // WIDE LAYOUT
             return Column( // Use Column to enable static top content and expandable scrolling content
               children: [
-                // 1. STATIC FORM - Top section, always visible
                 Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: ClientAndProjectAddForm(
-                    clients: activeClients,
-                    onDataAdded: _loadData,
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.person_add, color: Color(0xFFE8720C)),
+                          label: const Text(
+                            'Add Client',
+                            style: TextStyle(color: Color(0xFFE8720C)),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFFE8720C)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          onPressed: () => _showAddClientBottomSheet(context),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.add_business, color: Color(0xFFE8720C)),
+                          label: const Text(
+                            'Add Project',
+                            style: TextStyle(color: Color(0xFFE8720C)),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFFE8720C)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          onPressed: () => _showAddProjectBottomSheet(context),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
 
@@ -418,12 +771,40 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
             return Column( // Use Column to enable static top content and expandable scrolling content
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. STATIC FORM - Top section, always visible
                 Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: ClientAndProjectAddForm(
-                    clients: activeClients,
-                    onDataAdded: _loadData,
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.person_add, color: Color(0xFFE8720C)),
+                          label: const Text(
+                            'Add Client',
+                            style: TextStyle(color: Color(0xFFE8720C)),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFFE8720C)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          onPressed: () => _showAddClientBottomSheet(context),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.add_business, color: Color(0xFFE8720C)),
+                          label: const Text(
+                            'Add Project',
+                            style: TextStyle(color: Color(0xFFE8720C)),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFFE8720C)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          onPressed: () => _showAddProjectBottomSheet(context),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
 

@@ -69,6 +69,9 @@ class Project {
   final String projectName;
   final int clientId;
   final String? location;
+  final String? streetAddress;
+  final String? region;
+  final String? postalCode;
   final String pricingModel;
   final bool isCompleted;
   final DateTime? completionDate;
@@ -84,6 +87,9 @@ class Project {
     required this.projectName,
     required this.clientId,
     this.location,
+    this.streetAddress,
+    this.region,
+    this.postalCode,
     required this.pricingModel,
     this.isCompleted = false,
     this.completionDate,
@@ -101,6 +107,9 @@ class Project {
       'project_name': projectName,
       'client_id': clientId,
       'location': location,
+      'street_address': streetAddress,
+      'region': region,
+      'postal_code': postalCode,
       'pricing_model': pricingModel,
       'is_completed': isCompleted ? 1 : 0,
       'completion_date': completionDate?.toIso8601String(),
@@ -119,6 +128,9 @@ class Project {
       projectName: map['project_name'],
       clientId: map['client_id'],
       location: map['location'],
+      streetAddress: map['street_address'] as String?,
+      region: map['region'] as String?,
+      postalCode: map['postal_code'] as String?,
       pricingModel: map['pricing_model'] ?? 'hourly',
       isCompleted: map['is_completed'] == 1,
       completionDate: map['completion_date'] != null ? DateTime.tryParse(map['completion_date']) : null,
@@ -136,6 +148,9 @@ class Project {
     String? projectName,
     int? clientId,
     String? location,
+    String? streetAddress,
+    String? region,
+    String? postalCode,
     String? pricingModel,
     bool? isCompleted,
     DateTime? completionDate,
@@ -151,6 +166,9 @@ class Project {
       projectName: projectName ?? this.projectName,
       clientId: clientId ?? this.clientId,
       location: location ?? this.location,
+      streetAddress: streetAddress ?? this.streetAddress,
+      region: region ?? this.region,
+      postalCode: postalCode ?? this.postalCode,
       pricingModel: pricingModel ?? this.pricingModel,
       isCompleted: isCompleted ?? this.isCompleted,
       completionDate: completionDate ?? this.completionDate,

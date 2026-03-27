@@ -17,6 +17,9 @@ class CompanyTaxSettingsTab extends StatelessWidget {
   final TextEditingController tax2RateController;
   final TextEditingController tax2RegController;
   final TextEditingController termsController;
+  final TextEditingController countryController;
+  final TextEditingController regionLabelController;
+  final TextEditingController postalCodeLabelController;
   final VoidCallback onSave;
 
   const CompanyTaxSettingsTab({
@@ -35,6 +38,9 @@ class CompanyTaxSettingsTab extends StatelessWidget {
     required this.tax2RateController,
     required this.tax2RegController,
     required this.termsController,
+    required this.countryController,
+    required this.regionLabelController,
+    required this.postalCodeLabelController,
     required this.onSave,
   });
 
@@ -85,6 +91,26 @@ class CompanyTaxSettingsTab extends StatelessWidget {
                     controller: companyPostalCodeController,
                     textCapitalization: TextCapitalization.characters,
                     decoration: const InputDecoration(labelText: 'Postal Code'),
+                  ),
+                  TextField(
+                    controller: countryController,
+                    decoration: const InputDecoration(
+                      labelText: 'Country',
+                    ),
+                  ),
+                  TextField(
+                    controller: regionLabelController,
+                    decoration: const InputDecoration(
+                      labelText: 'Province/State Field Label',
+                      hintText: 'e.g. Province, State, County',
+                    ),
+                  ),
+                  TextField(
+                    controller: postalCodeLabelController,
+                    decoration: const InputDecoration(
+                      labelText: 'Postal/ZIP Field Label',
+                      hintText: 'e.g. Postal Code, ZIP Code, Postcode',
+                    ),
                   ),
                   Row(
                     children: [

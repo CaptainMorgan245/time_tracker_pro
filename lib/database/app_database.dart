@@ -30,7 +30,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 16;
+  int get schemaVersion => 18;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -54,9 +54,19 @@ class AppDatabase extends _$AppDatabase {
         CompanySettingsTableCompanion.insert(id: const Value(1)),
       );
     },
-    // No migrations needed — fresh Drift install starts at v16.
-    // Existing users will have their data migrated via JSON export/import.
-    onUpgrade: (m, from, to) async {},
+    onUpgrade: (m, from, to) async {
+      if (from < 17) {
+        // Use custom statements for migration to avoid issues with un-synced generated code
+        await customStatement('ALTER TABLE company_settings ADD COLUMN postal_code_label TEXT DEFAULT "Postal Code";');
+        await customStatement('ALTER TABLE company_settings ADD COLUMN region_label TEXT DEFAULT "Province";');
+        await customStatement('ALTER TABLE company_settings ADD COLUMN country TEXT DEFAULT "Canada";');
+      }
+      if (from < 18) {
+        await customStatement('ALTER TABLE projects ADD COLUMN street_address TEXT;');
+        await customStatement('ALTER TABLE projects ADD COLUMN region TEXT;');
+        await customStatement('ALTER TABLE projects ADD COLUMN postal_code TEXT;');
+      }
+    },
   );
 
   // =========================================================================
@@ -363,7 +373,8 @@ class AppDatabase extends _$AppDatabase {
         company_email = ?, default_tax1_name = ?, default_tax1_rate = ?,
         default_tax1_registration_number = ?, default_tax2_name = ?,
         default_tax2_rate = ?, default_tax2_registration_number = ?,
-        default_terms = ?, tax_rate = ?
+        default_terms = ?, tax_rate = ?, postal_code_label = ?, 
+        region_label = ?, country = ?
       WHERE id = 1''',
       variables: [
         Variable.withString(s.companyName ?? ''),
@@ -381,6 +392,9 @@ class AppDatabase extends _$AppDatabase {
         Variable.withString(s.defaultTax2RegistrationNumber ?? ''),
         Variable.withString(s.defaultTerms),
         Variable.withReal(s.taxRate),
+        Variable.withString(s.postalCodeLabel),
+        Variable.withString(s.regionLabel),
+        Variable.withString(s.country),
       ],
       updates: {companySettingsTable},
     );

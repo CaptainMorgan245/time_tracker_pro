@@ -39,6 +39,9 @@ class Projects extends Table {
   TextColumn get projectName => text()();
   IntColumn get clientId => integer().references(Clients, #id)();
   TextColumn get location => text().nullable()();
+  TextColumn get streetAddress => text().nullable()();
+  TextColumn get region => text().nullable()();
+  TextColumn get postalCode => text().nullable()();
   TextColumn get pricingModel => text().withDefault(const Constant('hourly'))();
   IntColumn get isCompleted => integer().withDefault(const Constant(0))();
   TextColumn get completionDate => text().nullable()();
@@ -194,6 +197,10 @@ class CompanySettingsTable extends Table {
   TextColumn get defaultTerms => text().withDefault(const Constant('Payable on Receipt'))();
   RealColumn get taxRate => real().withDefault(const Constant(5.0))();
 
+  TextColumn get postalCodeLabel => text().withDefault(const Constant('Postal Code'))();
+  TextColumn get regionLabel => text().withDefault(const Constant('Province'))();
+  TextColumn get country => text().withDefault(const Constant('Canada'))();
+
   @override
   Set<Column> get primaryKey => {id};
 }
@@ -203,6 +210,7 @@ class CompanySettingsTable extends Table {
 class WorkerPayments extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get employeeId => integer().references(Employees, #id)();
+  TextColumn get depthDate => text()(); // Wait, I think this was paymentDate
   TextColumn get paymentDate => text()();
   RealColumn get amount => real()();
   TextColumn get note => text().nullable()();

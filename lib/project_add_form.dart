@@ -24,6 +24,9 @@ class _ProjectAddFormState extends State<ProjectAddForm> {
   final TextEditingController _projectNameController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
   final TextEditingController _billedHourlyRateController = TextEditingController();
+  final _streetAddressController = TextEditingController();
+  final _regionController = TextEditingController();
+  final _postalCodeController = TextEditingController();
 
   Client? _selectedClient;
   String _selectedPricingModel = 'hourly';
@@ -34,6 +37,9 @@ class _ProjectAddFormState extends State<ProjectAddForm> {
     _projectNameController.dispose();
     _locationController.dispose();
     _billedHourlyRateController.dispose();
+    _streetAddressController.dispose();
+    _regionController.dispose();
+    _postalCodeController.dispose();
     super.dispose();
   }
 
@@ -52,7 +58,16 @@ class _ProjectAddFormState extends State<ProjectAddForm> {
     final newProject = Project(
       projectName: projectName,
       clientId: client.id!,
-      location: _locationController.text.isNotEmpty ? _locationController.text : null,
+      location: _locationController.text.isNotEmpty ? _locationController.text.trim() : null,
+      streetAddress: _streetAddressController.text.trim().isEmpty
+          ? null
+          : _streetAddressController.text.trim(),
+      region: _regionController.text.trim().isEmpty
+          ? null
+          : _regionController.text.trim(),
+      postalCode: _postalCodeController.text.trim().isEmpty
+          ? null
+          : _postalCodeController.text.trim(),
       pricingModel: _selectedPricingModel,
       billedHourlyRate: double.tryParse(_billedHourlyRateController.text),
     );
@@ -64,6 +79,9 @@ class _ProjectAddFormState extends State<ProjectAddForm> {
       _projectNameController.clear();
       _locationController.clear();
       _billedHourlyRateController.clear();
+      _streetAddressController.clear();
+      _regionController.clear();
+      _postalCodeController.clear();
       setState(() {
         _selectedClient = null;
         _selectedPricingModel = 'hourly';
@@ -150,12 +168,35 @@ class _ProjectAddFormState extends State<ProjectAddForm> {
               ],
             ),
             const SizedBox(height: 8),
+            TextFormField(
+              controller: _streetAddressController,
+              decoration: const InputDecoration(labelText: 'Street Address'),
+            ),
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _locationController,
-                    decoration: const InputDecoration(labelText: 'Location'),
+                    decoration: const InputDecoration(labelText: 'City'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: TextFormField(
+                    controller: _regionController,
+                    decoration: const InputDecoration(labelText: 'Province'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _postalCodeController,
+                    decoration: const InputDecoration(labelText: 'Postal Code'),
                   ),
                 ),
                 const SizedBox(width: 8),

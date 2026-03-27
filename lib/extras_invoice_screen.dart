@@ -110,7 +110,7 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
 
     setState(() {
       _selectedProject = project;
-      _projectAddressController.text = project['location'] ?? '';
+      _projectAddressController.text = _buildProjectAddress(Project.fromMap(project));
       _selectedTimeEntryIds.clear();
       _selectedMaterialIds.clear();
       _timeEntries = [];
@@ -274,6 +274,19 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
     }
   }
 
+  String _buildProjectAddress(Project project) {
+    final parts = <String>[];
+    if ((project.streetAddress ?? '').isNotEmpty) {
+      parts.add(project.streetAddress!);
+    }
+    final cityLine = <String>[];
+    if ((project.location ?? '').isNotEmpty) cityLine.add(project.location!);
+    if ((project.region ?? '').isNotEmpty) cityLine.add(project.region!);
+    if ((project.postalCode ?? '').isNotEmpty) cityLine.add(project.postalCode!);
+    if (cityLine.isNotEmpty) parts.add(cityLine.join('  '));
+    return parts.join('\n');
+  }
+
   String _getProjectDisplayName(Map<String, dynamic> project) {
     final name = project['project_name'];
     final sameNameProjects = _projects.where((p) => p['project_name'] == name).toList();
@@ -367,7 +380,7 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
                       p['project_name'] == _selectedProject!['project_name'] &&
                           p['client_id'] == id);
                       _selectedProject = project;
-                      _projectAddressController.text = project['location'] ?? '';
+                      _projectAddressController.text = _buildProjectAddress(Project.fromMap(project));
                       _loadUnbilledRecords(project['id']);
                     });
                   },

@@ -36,6 +36,9 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
   final TextEditingController _billedHourlyRateController = TextEditingController();
   final TextEditingController _fixedPriceController = TextEditingController();
   final TextEditingController _expenseMarkupController = TextEditingController();
+  final _streetAddressController = TextEditingController();
+  final _regionController = TextEditingController();
+  final _postalCodeController = TextEditingController();
 
   Client? _selectedClient;
   String _selectedPricingModel = 'hourly';
@@ -75,6 +78,9 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
     _billedHourlyRateController.dispose();
     _fixedPriceController.dispose();
     _expenseMarkupController.dispose();
+    _streetAddressController.dispose();
+    _regionController.dispose();
+    _postalCodeController.dispose();
     super.dispose();
   }
 
@@ -87,6 +93,9 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
     _billedHourlyRateController.clear();
     _fixedPriceController.clear();
     _expenseMarkupController.clear();
+    _streetAddressController.clear();
+    _regionController.clear();
+    _postalCodeController.clear();
     _loadDefaultMarkup();
     setState(() {
       _selectedClient = null;
@@ -140,7 +149,16 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
         final newProject = Project(
           projectName: projectName,
           clientId: clientId,
-          location: _locationController.text.isNotEmpty ? _locationController.text : null,
+          location: _locationController.text.isNotEmpty ? _locationController.text.trim() : null,
+          streetAddress: _streetAddressController.text.trim().isEmpty
+              ? null
+              : _streetAddressController.text.trim(),
+          region: _regionController.text.trim().isEmpty
+              ? null
+              : _regionController.text.trim(),
+          postalCode: _postalCodeController.text.trim().isEmpty
+              ? null
+              : _postalCodeController.text.trim(),
           pricingModel: _selectedPricingModel,
           billedHourlyRate: _selectedPricingModel == 'hourly' && _billedHourlyRateController.text.isNotEmpty
               ? double.tryParse(_billedHourlyRateController.text)
@@ -280,10 +298,31 @@ class _ClientAndProjectAddFormState extends State<ClientAndProjectAddForm> {
                 ),
                 SizedBox(
                   width: itemWidth,
+                  child: TextFormField(
+                    controller: _streetAddressController,
+                    decoration: const InputDecoration(labelText: 'Street Address'),
+                  ),
+                ),
+                SizedBox(
+                  width: itemWidth,
                   child: TextField(
                     controller: _locationController,
-                    decoration: const InputDecoration(labelText: 'Location'),
+                    decoration: const InputDecoration(labelText: 'City'),
                     textCapitalization: TextCapitalization.words,
+                  ),
+                ),
+                SizedBox(
+                  width: itemWidth,
+                  child: TextFormField(
+                    controller: _regionController,
+                    decoration: const InputDecoration(labelText: 'Province'),
+                  ),
+                ),
+                SizedBox(
+                  width: itemWidth,
+                  child: TextFormField(
+                    controller: _postalCodeController,
+                    decoration: const InputDecoration(labelText: 'Postal Code'),
                   ),
                 ),
                 if (_selectedPricingModel == 'hourly')
