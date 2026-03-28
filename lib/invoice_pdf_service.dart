@@ -184,23 +184,37 @@ class InvoicePdfService {
               width: 260,
               child: pw.Column(
                 children: [
-                  _totalsRow(
-                    'Labour',
-                    _formatCurrency(invoice.labourSubtotal),
-                  ),
-                  pw.SizedBox(height: 4),
-                  _totalsRow(
-                    'Materials',
-                    _formatCurrency(invoice.materialsSubtotal),
-                  ),
-                  pw.SizedBox(height: 4),
-                  pw.Divider(height: 8),
-                  _totalsRow(
-                    'Subtotal',
-                    _formatCurrency(
-                        invoice.labourSubtotal + invoice.materialsSubtotal),
-                    bold: true,
-                  ),
+                  if (invoice.invoiceType == 'progress') ...[
+                    _totalsRow(
+                      invoice.otherCostsDescription ?? 'Progress Claim',
+                      _formatCurrency(invoice.otherCosts),
+                    ),
+                    pw.SizedBox(height: 4),
+                    pw.Divider(height: 8),
+                    _totalsRow(
+                      'Subtotal',
+                      _formatCurrency(invoice.otherCosts),
+                      bold: true,
+                    ),
+                  ] else ...[
+                    _totalsRow(
+                      'Labour',
+                      _formatCurrency(invoice.labourSubtotal),
+                    ),
+                    pw.SizedBox(height: 4),
+                    _totalsRow(
+                      'Materials',
+                      _formatCurrency(invoice.materialsSubtotal),
+                    ),
+                    pw.SizedBox(height: 4),
+                    pw.Divider(height: 8),
+                    _totalsRow(
+                      'Subtotal',
+                      _formatCurrency(
+                          invoice.labourSubtotal + invoice.materialsSubtotal),
+                      bold: true,
+                    ),
+                  ],
                   if (invoice.discountAmount > 0) ...[
                     pw.SizedBox(height: 4),
                     _totalsRow(

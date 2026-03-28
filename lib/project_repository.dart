@@ -182,8 +182,9 @@ class ProjectRepository {
       '''INSERT OR REPLACE INTO projects (
         project_name, client_id, location, pricing_model, is_completed,
         completion_date, is_internal, billed_hourly_rate, project_price,
-        expense_markup_percentage, tax_rate, parent_project_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+        expense_markup_percentage, tax_rate, parent_project_id,
+        street_address, region, postal_code
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
       variables: [
         Variable.withString(project.projectName),
         Variable.withInt(project.clientId),
@@ -197,6 +198,9 @@ class ProjectRepository {
         Variable.withReal(project.expenseMarkupPercentage),
         Variable.withReal(project.taxRate),
         Variable(project.parentProjectId),
+        Variable(project.streetAddress),
+        Variable(project.region),
+        Variable(project.postalCode),
       ],
     );
     _db.notifyDatabaseChanged();
@@ -209,7 +213,8 @@ class ProjectRepository {
         project_name = ?, client_id = ?, location = ?, pricing_model = ?,
         is_completed = ?, completion_date = ?, is_internal = ?,
         billed_hourly_rate = ?, project_price = ?,
-        expense_markup_percentage = ?, tax_rate = ?, parent_project_id = ?
+        expense_markup_percentage = ?, tax_rate = ?, parent_project_id = ?,
+        street_address = ?, region = ?, postal_code = ?
       WHERE id = ?''',
       variables: [
         Variable.withString(project.projectName),
@@ -224,6 +229,9 @@ class ProjectRepository {
         Variable.withReal(project.expenseMarkupPercentage),
         Variable.withReal(project.taxRate),
         Variable(project.parentProjectId),
+        Variable(project.streetAddress),
+        Variable(project.region),
+        Variable(project.postalCode),
         Variable.withInt(project.id!),
       ],
       updates: {},
