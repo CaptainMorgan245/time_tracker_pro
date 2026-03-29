@@ -282,7 +282,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                       final project = Project(
                         projectName: projectNameController.text.trim(),
                         clientId: selectedClient!.id!,
-                        location: cityController.text.trim().isEmpty ? null : cityController.text.trim(),
+                        city: cityController.text.trim().isEmpty ? null : cityController.text.trim(),
                         streetAddress: streetAddressController.text.trim().isEmpty
                             ? null
                             : streetAddressController.text.trim(),
@@ -386,7 +386,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
 
     int? selectedClientId = project.clientId;
 
-    var editCity = project.location ?? '';
+    var editCity = project.city ?? '';
     var editStreetAddress = project.streetAddress ?? '';
     var editRegion = project.region ?? '';
     var editPostalCode = project.postalCode ?? '';
@@ -472,7 +472,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                       ),
                       const SizedBox(height: 12),
                       TextField(
-                        controller: TextEditingController(text: project.location ?? ''),
+                        controller: TextEditingController(text: project.city ?? ''),
                         decoration: const InputDecoration(labelText: 'City'),
                         onChanged: (v) => editCity = v,
                       ),
@@ -563,7 +563,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                           billedHourlyRate: hourlyRate,
                           fixedPrice: newFixedPrice,
                           expenseMarkupPercentage: double.tryParse(expenseMarkupController.text) ?? 15.0,
-                          location: editCity,
+                          city: editCity,
                           streetAddress: editStreetAddress.trim().isEmpty ? null : editStreetAddress.trim(),
                           region: editRegion.trim().isEmpty ? null : editRegion.trim(),
                           postalCode: editPostalCode.trim().isEmpty ? null : editPostalCode.trim(),

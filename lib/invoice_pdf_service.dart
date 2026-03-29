@@ -48,21 +48,15 @@ class InvoicePdfService {
     required Invoice invoice,
     required Map<String, dynamic> companySettings,
     required String clientName,
-    required String clientAddress,
     required String clientCity,
     required String clientPhone,
     required String projectName,
+    required String projectStreetAddress,
+    required String projectCity,
+    required String projectRegion,
+    required String projectPostalCode,
   }) async {
     final pdf = pw.Document();
-
-    String invoiceTypeLabel;
-    if (invoice.invoiceType == 'extras') {
-      invoiceTypeLabel = 'Time & Materials Invoice';
-    } else if (invoice.invoiceType == 'progress') {
-      invoiceTypeLabel = 'Progress Invoice';
-    } else {
-      invoiceTypeLabel = invoice.invoiceType;
-    }
 
     pdf.addPage(
       pw.MultiPage(
@@ -87,8 +81,12 @@ class InvoicePdfService {
                   ),
                   pw.Text(companySettings['company_address'] ?? '',
                       style: const pw.TextStyle(fontSize: 10)),
-                  pw.Text(companySettings['company_city'] ?? '',
-                      style: const pw.TextStyle(fontSize: 10)),
+                  pw.Text(
+                    [
+                      companySettings['company_city'] ?? '',
+                      '${companySettings['company_province'] ?? ''} ${companySettings['company_postal_code'] ?? ''}'.trim(),
+                    ].where((s) => s.isNotEmpty).join(', '),
+                    style: const pw.TextStyle(fontSize: 10)),
                   pw.Text('Tel: ' + (companySettings['company_phone'] ?? ''),
                       style: const pw.TextStyle(fontSize: 10)),
                   pw.Text(companySettings['company_email'] ?? '',
@@ -104,7 +102,7 @@ class InvoicePdfService {
                     style: pw.TextStyle(
                       fontSize: 18,
                       fontWeight: pw.FontWeight.bold,
-                      color: _dyconnOrange,
+                      color: PdfColors.black,
                     ),
                   ),
                   pw.Text('Invoice #: ' + invoice.invoiceNumber,
@@ -126,38 +124,65 @@ class InvoicePdfService {
           ),
           pw.Divider(color: _dyconnOrange, height: 24),
 
-          // SECTION 2: BILL TO
-          pw.Text(
-            'BILL TO',
-            style: pw.TextStyle(
-              fontSize: 11,
-              fontWeight: pw.FontWeight.bold,
-              color: _dyconnOrange,
-            ),
+          // SECTION 2 & 3: BILL TO + PROJECT
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              // LEFT: BILL TO
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Container(
+                      color: const PdfColor.fromInt(0xFF2D2D2D),
+                      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      child: pw.Text(
+                        'BILL TO',
+                        style: pw.TextStyle(
+                          fontSize: 11,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white,
+                        ),
+                      ),
+                    ),
+                    pw.SizedBox(height: 6),
+                    pw.Text(clientName, style: const pw.TextStyle(fontSize: 10)),
+                    pw.Text(clientCity, style: const pw.TextStyle(fontSize: 10)),
+                    pw.Text(clientPhone, style: const pw.TextStyle(fontSize: 10)),
+                  ],
+                ),
+              ),
+              pw.SizedBox(width: 24),
+              // RIGHT: PROJECT
+              pw.Expanded(
+                child: pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Container(
+                      color: const PdfColor.fromInt(0xFF2D2D2D),
+                      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      child: pw.Text(
+                        'PROJECT',
+                        style: pw.TextStyle(
+                          fontSize: 11,
+                          fontWeight: pw.FontWeight.bold,
+                          color: PdfColors.white,
+                        ),
+                      ),
+                    ),
+                    pw.SizedBox(height: 6),
+                    pw.Text(projectName, style: const pw.TextStyle(fontSize: 10)),
+                    if (projectStreetAddress.trim().isNotEmpty)
+                      pw.Text(projectStreetAddress, style: const pw.TextStyle(fontSize: 10)),
+                    if (projectCity.trim().isNotEmpty)
+                      pw.Text(projectCity, style: const pw.TextStyle(fontSize: 10)),
+                    if (projectRegion.trim().isNotEmpty || projectPostalCode.trim().isNotEmpty)
+                      pw.Text('${projectRegion}  ${projectPostalCode}'.trim(), style: const pw.TextStyle(fontSize: 10)),
+                  ],
+                ),
+              ),
+            ],
           ),
-          pw.SizedBox(height: 4),
-          pw.Text(clientName, style: const pw.TextStyle(fontSize: 10)),
-          pw.Text(clientAddress, style: const pw.TextStyle(fontSize: 10)),
-          pw.Text(clientCity, style: const pw.TextStyle(fontSize: 10)),
-          pw.Text(clientPhone, style: const pw.TextStyle(fontSize: 10)),
-          pw.SizedBox(height: 16),
-
-          // SECTION 3: PROJECT
-          pw.Text(
-            'PROJECT',
-            style: pw.TextStyle(
-              fontSize: 11,
-              fontWeight: pw.FontWeight.bold,
-              color: _dyconnOrange,
-            ),
-          ),
-          pw.SizedBox(height: 4),
-          pw.Text(projectName, style: const pw.TextStyle(fontSize: 10)),
-          if (invoice.projectAddress != null &&
-              invoice.projectAddress!.trim().isNotEmpty)
-            pw.Text(invoice.projectAddress!,
-                style: const pw.TextStyle(fontSize: 10)),
-          pw.Text(invoiceTypeLabel, style: const pw.TextStyle(fontSize: 10)),
           pw.SizedBox(height: 16),
 
           // SECTION 4: WORK PERFORMED
@@ -170,11 +195,21 @@ class InvoicePdfService {
             ),
           ),
           pw.SizedBox(height: 4),
-          if (invoice.notes != null && invoice.notes!.trim().isNotEmpty)
-            pw.Text(invoice.notes!, style: const pw.TextStyle(fontSize: 10))
-          else
-            pw.Text('No description provided.',
-                style: const pw.TextStyle(fontSize: 10)),
+          pw.Container(
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
+            ),
+            padding: const pw.EdgeInsets.all(8),
+            width: double.infinity,
+            child: pw.Paragraph(
+              text: (invoice.workDescription != null && invoice.workDescription!.trim().isNotEmpty)
+                  ? invoice.workDescription!
+                  : (invoice.notes != null && invoice.notes!.trim().isNotEmpty)
+                      ? invoice.notes!
+                      : 'No description provided.',
+              style: const pw.TextStyle(fontSize: 10),
+            ),
+          ),
           pw.SizedBox(height: 20),
 
           // SECTION 5: TOTALS
@@ -184,50 +219,47 @@ class InvoicePdfService {
               width: 260,
               child: pw.Column(
                 children: [
-                  if (invoice.invoiceType == 'progress') ...[
-                    _totalsRow(
-                      invoice.otherCostsDescription ?? 'Progress Claim',
-                      _formatCurrency(invoice.otherCosts),
-                    ),
-                    pw.SizedBox(height: 4),
-                    pw.Divider(height: 8),
+                  if (invoice.invoiceType == 'progress' ||
+                      invoice.invoiceType == 'deposit') ...[
                     _totalsRow(
                       'Subtotal',
-                      _formatCurrency(invoice.otherCosts),
+                      _formatCurrency(invoice.subtotal),
                       bold: true,
                     ),
                   ] else ...[
-                    _totalsRow(
-                      'Labour',
-                      _formatCurrency(invoice.labourSubtotal),
-                    ),
+                    if (invoice.labourSubtotal > 0)
+                      _totalsRow(
+                        'Labour',
+                        _formatCurrency(invoice.labourSubtotal),
+                      ),
                     pw.SizedBox(height: 4),
-                    _totalsRow(
-                      'Materials',
-                      _formatCurrency(invoice.materialsSubtotal),
-                    ),
+                    if (invoice.materialsSubtotal > 0)
+                      _totalsRow(
+                        'Materials',
+                        _formatCurrency(invoice.materialsSubtotal),
+                      ),
                     pw.SizedBox(height: 4),
-                    pw.Divider(height: 8),
+                    pw.Divider(color: _dyconnOrange, height: 8),
                     _totalsRow(
                       'Subtotal',
                       _formatCurrency(
                           invoice.labourSubtotal + invoice.materialsSubtotal),
                       bold: true,
                     ),
-                  ],
-                  if (invoice.discountAmount > 0) ...[
-                    pw.SizedBox(height: 4),
-                    _totalsRow(
-                      invoice.discountDescription ?? 'Discount',
-                      '-' + _formatCurrency(invoice.discountAmount),
-                      color: PdfColors.red,
-                    ),
-                    pw.SizedBox(height: 4),
-                    _totalsRow(
-                      'Discounted Subtotal',
-                      _formatCurrency(invoice.subtotal),
-                      bold: true,
-                    ),
+                    if (invoice.discountAmount > 0) ...[
+                      pw.SizedBox(height: 4),
+                      _totalsRow(
+                        invoice.discountDescription ?? 'Discount',
+                        '-' + _formatCurrency(invoice.discountAmount),
+                        color: PdfColors.red,
+                      ),
+                      pw.SizedBox(height: 4),
+                      _totalsRow(
+                        'Discounted Subtotal',
+                        _formatCurrency(invoice.subtotal),
+                        bold: true,
+                      ),
+                    ],
                   ],
                   pw.SizedBox(height: 4),
                   _totalsRow(
@@ -250,12 +282,31 @@ class InvoicePdfService {
                       _formatCurrency(invoice.tax2Amount),
                     ),
                   ],
-                  pw.Divider(height: 12),
-                  _totalsRow(
-                    'TOTAL DUE',
-                    _formatCurrency(invoice.totalAmount),
-                    bold: true,
-                    fontSize: 13,
+                  pw.Divider(color: _dyconnOrange, height: 12),
+                  pw.Container(
+                    color: _dyconnOrange,
+                    padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    child: pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Text(
+                          'TOTAL DUE',
+                          style: pw.TextStyle(
+                            fontSize: 13,
+                            fontWeight: pw.FontWeight.bold,
+                            color: PdfColors.white,
+                          ),
+                        ),
+                        pw.Text(
+                          _formatCurrency(invoice.totalAmount),
+                          style: pw.TextStyle(
+                            fontSize: 13,
+                            fontWeight: pw.FontWeight.bold,
+                            color: PdfColors.white,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),

@@ -68,7 +68,7 @@ class Project {
   final int? id;
   final String projectName;
   final int clientId;
-  final String? location;
+  final String? city;
   final String? streetAddress;
   final String? region;
   final String? postalCode;
@@ -86,7 +86,7 @@ class Project {
     this.id,
     required this.projectName,
     required this.clientId,
-    this.location,
+    this.city,
     this.streetAddress,
     this.region,
     this.postalCode,
@@ -106,7 +106,7 @@ class Project {
       'id': id,
       'project_name': projectName,
       'client_id': clientId,
-      'location': location,
+      'city': city,
       'street_address': streetAddress,
       'region': region,
       'postal_code': postalCode,
@@ -127,7 +127,7 @@ class Project {
       id: map['id'],
       projectName: map['project_name'],
       clientId: map['client_id'],
-      location: map['location'],
+      city: map['city'],
       streetAddress: map['street_address'] as String?,
       region: map['region'] as String?,
       postalCode: map['postal_code'] as String?,
@@ -147,7 +147,7 @@ class Project {
     int? id,
     String? projectName,
     int? clientId,
-    String? location,
+    String? city,
     String? streetAddress,
     String? region,
     String? postalCode,
@@ -165,7 +165,7 @@ class Project {
       id: id ?? this.id,
       projectName: projectName ?? this.projectName,
       clientId: clientId ?? this.clientId,
-      location: location ?? this.location,
+      city: city ?? this.city,
       streetAddress: streetAddress ?? this.streetAddress,
       region: region ?? this.region,
       postalCode: postalCode ?? this.postalCode,

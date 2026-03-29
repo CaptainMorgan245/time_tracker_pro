@@ -7,6 +7,7 @@ import 'package:drift/drift.dart' show Variable;
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/invoice_repository.dart';
 import 'package:time_tracker_pro/invoice_service.dart';
+import 'package:time_tracker_pro/project_repository.dart';
 import 'package:time_tracker_pro/database/app_database.dart';
 
 // start class: CreateInvoiceScreen
@@ -24,6 +25,7 @@ class CreateInvoiceScreen extends StatefulWidget {
 class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   final _formKey = GlobalKey<FormState>();
   final InvoiceRepository _invoiceRepository = InvoiceRepository();
+  final ProjectRepository _projectRepository = ProjectRepository();
   final InvoiceService _invoiceService = InvoiceService.instance;
   final NumberFormat _currencyFormat =
       NumberFormat.currency(locale: 'en_US', symbol: '\$');
@@ -35,6 +37,9 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   final _poNumberController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _projectAddressController = TextEditingController();
+  final _workDescriptionController = TextEditingController();
+  final _discountDescriptionController = TextEditingController();
+  final _discountAmountController = TextEditingController();
 
   // Form state
   List<Project> _projects = [];
@@ -63,10 +68,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
   static const Map<String, String> _invoiceTypeLabels = {
     'progress': 'Progress Draw',
-    'chargeable': 'Chargeable Extra',
-    'addendum': 'Addendum',
     'deposit': 'Deposit',
-    'extras': 'Time & Materials Invoice',
+    'extras': 'Time & Materials',
   };
 
   // ── Calculated fields ─────────────────────────────────────────────────────
@@ -87,7 +90,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       final contractGst = (_selectedProject!.fixedPrice ?? 0) * _activeTaxRate;
       return (contractGst - _totalGstCollected).clamp(0, double.infinity);
     }
-    return _enteredAmount * _activeTaxRate;
+    return _discountedAmount * _activeTaxRate;
   }
 
   double get _finalAmount {
@@ -99,7 +102,12 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     return _enteredAmount;
   }
 
-  double get _total => _finalAmount + _gstAmount;
+  double get _discountAmount =>
+      double.tryParse(_discountAmountController.text.trim()) ?? 0;
+
+  double get _discountedAmount => (_finalAmount - _discountAmount).clamp(0, double.infinity);
+
+  double get _total => _discountedAmount + _gstAmount;
 
   @override
   void initState() {
@@ -114,11 +122,14 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
       _invoiceType = inv.invoiceType;
       _notesController.text = inv.notes ?? '';
       _internalNotesController.text = inv.internalNotes ?? '';
+      _workDescriptionController.text = inv.workDescription ?? '';
       _poNumberController.text = inv.poNumber ?? '';
       _descriptionController.text = inv.otherCostsDescription ?? '';
       // Amount is the subtotal
       _amountController.text = inv.subtotal.toStringAsFixed(2);
       _projectAddressController.text = inv.projectAddress ?? '';
+      _discountDescriptionController.text = inv.discountDescription ?? '';
+      _discountAmountController.text = inv.discountAmount > 0 ? inv.discountAmount.toStringAsFixed(2) : '';
     }
   }
 
@@ -127,9 +138,12 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     _amountController.dispose();
     _notesController.dispose();
     _internalNotesController.dispose();
+    _workDescriptionController.dispose();
     _poNumberController.dispose();
     _descriptionController.dispose();
     _projectAddressController.dispose();
+    _discountDescriptionController.dispose();
+    _discountAmountController.dispose();
     super.dispose();
   }
 
@@ -187,8 +201,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     if (project == null) return;
     setState(() {
       _selectedProject = project;
+      _projectAddressController.text = project.streetAddress ?? project.city ?? '';
       if (!silent) {
-        _projectAddressController.text = project.location ?? '';
         // Auto-select invoice type based on pricing model
         _invoiceType =
             project.pricingModel == 'fixed' ? 'progress' : 'chargeable';
@@ -255,7 +269,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     });
 
     try {
-      final subtotal = _finalAmount;
+      final subtotal = _discountedAmount;
       final gst = _gstAmount;
       final total = subtotal + gst;
 
@@ -280,7 +294,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         otherCostsDescription: _descriptionController.text.trim().isEmpty
             ? _invoiceTypeLabels[_invoiceType]
             : _descriptionController.text.trim(),
-        discountAmount: 0,
+        discountAmount: double.tryParse(_discountAmountController.text.trim()) ?? 0,
+        discountDescription: _discountDescriptionController.text.trim().isEmpty ? null : _discountDescriptionController.text.trim(),
         discountPercent: 0,
         tax1Name: _defaultTaxName,
         tax1Rate: _activeTaxRate * 100,
@@ -313,6 +328,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         internalNotes: _internalNotesController.text.trim().isEmpty
             ? null
             : _internalNotesController.text.trim(),
+        workDescription: _workDescriptionController.text.trim().isEmpty ? null : _workDescriptionController.text.trim(),
         isSent: _isEditMode ? widget.existingInvoice!.isSent : false,
         invoiceType: _invoiceType,
       );
@@ -599,8 +615,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     return TextFormField(
       controller: _descriptionController,
       decoration: InputDecoration(
-        labelText: 'Description',
-        hintText: _invoiceTypeLabels[_invoiceType],
+        labelText: 'Invoice Line Label',
+        hintText: _invoiceTypeLabels[_invoiceType] ?? 'e.g. Progress Draw #1',
         border: const OutlineInputBorder(),
       ),
       maxLines: 2,
@@ -722,6 +738,43 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                     _buildGstSummary(),
                     _buildSectionHeader('Additional'),
                     _buildPoField(),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _workDescriptionController,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        labelText: 'Work Description',
+                        hintText: 'Describe the work performed for this invoice',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 2,
+                          child: TextFormField(
+                            controller: _discountDescriptionController,
+                            decoration: const InputDecoration(
+                              labelText: 'Discount Description',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 1,
+                          child: TextFormField(
+                            controller: _discountAmountController,
+                            decoration: const InputDecoration(
+                              labelText: 'Discount (\$)',
+                              border: OutlineInputBorder(),
+                            ),
+                            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          ),
+                        ),
+                      ],
+                    ),
                     const SizedBox(height: 12),
                     _buildNotesField(),
                     const SizedBox(height: 12),

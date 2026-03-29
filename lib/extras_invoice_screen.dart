@@ -115,15 +115,14 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
       _selectedMaterialIds.clear();
       _timeEntries = [];
       _materials = [];
-
+      _showClientDisambiguator = sameNameProjects.length > 1;
       if (sameNameProjects.length > 1) {
-        _showClientDisambiguator = true;
         _selectedClient = null;
-      } else {
-        _showClientDisambiguator = false;
-        _loadUnbilledRecords(project['id']);
       }
     });
+    if (sameNameProjects.length <= 1) {
+      _loadUnbilledRecords(project['id']);
+    }
   }
 
   Future<void> _loadUnbilledRecords(int projectId) async {
@@ -242,7 +241,8 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
         subtotal: _discountedSubtotal,
         totalAmount: _invoiceTotal,
         invoiceType: 'extras',
-        notes: _narrativeController.text.trim(),
+        notes: null,
+        workDescription: _narrativeController.text.trim(),
         isPaid: false,
         isDeleted: false,
         isSent: false,
@@ -280,7 +280,7 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
       parts.add(project.streetAddress!);
     }
     final cityLine = <String>[];
-    if ((project.location ?? '').isNotEmpty) cityLine.add(project.location!);
+    if ((project.city ?? '').isNotEmpty) cityLine.add(project.city!);
     if ((project.region ?? '').isNotEmpty) cityLine.add(project.region!);
     if ((project.postalCode ?? '').isNotEmpty) cityLine.add(project.postalCode!);
     if (cityLine.isNotEmpty) parts.add(cityLine.join('  '));

@@ -38,7 +38,7 @@ class Projects extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get projectName => text()();
   IntColumn get clientId => integer().references(Clients, #id)();
-  TextColumn get location => text().nullable()();
+  TextColumn get city => text().nullable()();
   TextColumn get streetAddress => text().nullable()();
   TextColumn get region => text().nullable()();
   TextColumn get postalCode => text().nullable()();
@@ -127,6 +127,7 @@ class Invoices extends Table {
   IntColumn get supersededByInvoiceId => integer().nullable().references(Invoices, #id)();
   TextColumn get notes => text().nullable()();
   TextColumn get internalNotes => text().nullable()();
+  TextColumn get workDescription => text().nullable()();
   IntColumn get isSent => integer().withDefault(const Constant(0))();
   TextColumn get invoiceType => text().withDefault(const Constant('progress'))();
 }

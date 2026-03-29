@@ -1,6 +1,7 @@
 // lib/invoice_repository.dart
 
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart';
 import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/models.dart';
 
@@ -240,17 +241,19 @@ class InvoiceRepository {
   }
 
   // Used by extras_invoice_screen.dart
-  Future<Map<String, List<dynamic>>> fetchUnbilledBillableRecords(
+  Future<Map<String, List<Map<String, dynamic>>>> fetchUnbilledBillableRecords(
       int projectId) async {
     final teRows = await _db.customSelect(
-      '''SELECT t.*, cc.name as cost_code_name
+      '''SELECT t.*, cc.name as cost_code_name, e.name as employee_name
          FROM time_entries t
          LEFT JOIN cost_codes cc ON t.cost_code_id = cc.id
+         LEFT JOIN employees e ON t.employee_id = e.id
          WHERE t.project_id = ? AND t.is_billed = 0 AND t.is_deleted = 0
            AND t.cost_code_id IN (SELECT id FROM cost_codes WHERE is_billable = 1)
          ORDER BY t.start_time ASC''',
       variables: [Variable.withInt(projectId)],
-    ).get();
+    ).get().then((rows) => rows.map((r) => r.data).toList());
+    debugPrint('Time entries found: ${teRows.length} for project $projectId');
 
     final matRows = await _db.customSelect(
       '''SELECT m.*, cc.name as cost_code_name
@@ -260,11 +263,12 @@ class InvoiceRepository {
            AND m.cost_code_id IN (SELECT id FROM cost_codes WHERE is_billable = 1)
          ORDER BY m.purchase_date ASC''',
       variables: [Variable.withInt(projectId)],
-    ).get();
+    ).get().then((rows) => rows.map((r) => r.data).toList());
+    debugPrint('Materials found: ${matRows.length} for project $projectId');
 
     return {
-      'timeEntries': teRows.map((r) => TimeEntry.fromMap(r.data)).toList(),
-      'materials': matRows.map((r) => JobMaterials.fromMap(r.data)).toList(),
+      'timeEntries': teRows,
+      'materials': matRows,
     };
   }
 

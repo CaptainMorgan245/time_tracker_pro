@@ -30,7 +30,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 18;
+  int get schemaVersion => 19;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -65,6 +65,10 @@ class AppDatabase extends _$AppDatabase {
         await customStatement('ALTER TABLE projects ADD COLUMN street_address TEXT;');
         await customStatement('ALTER TABLE projects ADD COLUMN region TEXT;');
         await customStatement('ALTER TABLE projects ADD COLUMN postal_code TEXT;');
+      }
+      if (from < 19) {
+        await customStatement('ALTER TABLE projects RENAME COLUMN location TO city;');
+        await customStatement('ALTER TABLE invoices ADD COLUMN work_description TEXT;');
       }
     },
   );

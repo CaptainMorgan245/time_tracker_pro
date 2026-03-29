@@ -36,6 +36,7 @@ class Invoice {
   final int? supersededByInvoiceId;
   final String? notes;
   final String? internalNotes;
+  final String? workDescription;
   final bool isSent;
   final String invoiceType;
 
@@ -81,6 +82,7 @@ class Invoice {
     this.supersededByInvoiceId,
     this.notes,
     this.internalNotes,
+    this.workDescription,
     this.isSent = false,
     this.invoiceType = 'progress',
     this.projectName,
@@ -126,6 +128,7 @@ class Invoice {
       'superseded_by_invoice_id': supersededByInvoiceId,
       'notes': notes,
       'internal_notes': internalNotes,
+      'work_description': workDescription,
       'is_sent': isSent ? 1 : 0,
       'invoice_type': invoiceType,
     };
@@ -170,6 +173,7 @@ class Invoice {
       supersededByInvoiceId: map['superseded_by_invoice_id'] as int?,
       notes: map['notes'] as String?,
       internalNotes: map['internal_notes'] as String?,
+      workDescription: map['work_description'] as String?,
       isSent: (map['is_sent'] as int?) == 1,
       invoiceType: map['invoice_type'] as String? ?? 'progress',
       projectName: map['project_name'] as String?,
@@ -215,6 +219,7 @@ class Invoice {
     int? supersededByInvoiceId,
     String? notes,
     String? internalNotes,
+    String? workDescription,
     bool? isSent,
     String? invoiceType,
     String? projectName,
@@ -258,6 +263,7 @@ class Invoice {
       supersededByInvoiceId: supersededByInvoiceId ?? this.supersededByInvoiceId,
       notes: notes ?? this.notes,
       internalNotes: internalNotes ?? this.internalNotes,
+      workDescription: workDescription ?? this.workDescription,
       isSent: isSent ?? this.isSent,
       invoiceType: invoiceType ?? this.invoiceType,
       projectName: projectName ?? this.projectName,

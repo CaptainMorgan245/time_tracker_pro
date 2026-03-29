@@ -10,6 +10,7 @@ import 'package:printing/printing.dart';
 import 'package:time_tracker_pro/invoice_pdf_service.dart';
 import 'package:time_tracker_pro/project_repository.dart';
 import 'package:time_tracker_pro/database/app_database.dart';
+import 'extras_invoice_screen.dart';
 
 // start class: InvoiceDetailScreen
 class InvoiceDetailScreen extends StatefulWidget {
@@ -121,10 +122,13 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
         invoice: _invoice!,
         companySettings: settingsMap,
         clientName: client?.name ?? '',
-        clientAddress: '',
-        clientCity: '',
+        clientCity: project?.city ?? '',
         clientPhone: client?.phoneNumber ?? '',
         projectName: project?.projectName ?? '',
+        projectStreetAddress: project?.streetAddress ?? '',
+        projectCity: project?.city ?? '',
+        projectRegion: project?.region ?? '',
+        projectPostalCode: project?.postalCode ?? '',
       );
 
       setState(() => _isLoading = false);

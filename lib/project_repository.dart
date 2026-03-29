@@ -180,7 +180,7 @@ class ProjectRepository {
   Future<int> insertProject(Project project) async {
     final id = await _db.customInsert(
       '''INSERT OR REPLACE INTO projects (
-        project_name, client_id, location, pricing_model, is_completed,
+        project_name, client_id, city, pricing_model, is_completed,
         completion_date, is_internal, billed_hourly_rate, project_price,
         expense_markup_percentage, tax_rate, parent_project_id,
         street_address, region, postal_code
@@ -188,7 +188,7 @@ class ProjectRepository {
       variables: [
         Variable.withString(project.projectName),
         Variable.withInt(project.clientId),
-        Variable(project.location),
+        Variable(project.city),
         Variable.withString(project.pricingModel),
         Variable.withInt(project.isCompleted ? 1 : 0),
         Variable(project.completionDate?.toIso8601String()),
@@ -210,7 +210,7 @@ class ProjectRepository {
   Future<int> updateProject(Project project) async {
     final result = await _db.customUpdate(
       '''UPDATE projects SET
-        project_name = ?, client_id = ?, location = ?, pricing_model = ?,
+        project_name = ?, client_id = ?, city = ?, pricing_model = ?,
         is_completed = ?, completion_date = ?, is_internal = ?,
         billed_hourly_rate = ?, project_price = ?,
         expense_markup_percentage = ?, tax_rate = ?, parent_project_id = ?,
@@ -219,7 +219,7 @@ class ProjectRepository {
       variables: [
         Variable.withString(project.projectName),
         Variable.withInt(project.clientId),
-        Variable(project.location),
+        Variable(project.city),
         Variable.withString(project.pricingModel),
         Variable.withInt(project.isCompleted ? 1 : 0),
         Variable(project.completionDate?.toIso8601String()),

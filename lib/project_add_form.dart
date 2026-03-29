@@ -58,7 +58,7 @@ class _ProjectAddFormState extends State<ProjectAddForm> {
     final newProject = Project(
       projectName: projectName,
       clientId: client.id!,
-      location: _locationController.text.isNotEmpty ? _locationController.text.trim() : null,
+      city: _locationController.text.isNotEmpty ? _locationController.text.trim() : null,
       streetAddress: _streetAddressController.text.trim().isEmpty
           ? null
           : _streetAddressController.text.trim(),
