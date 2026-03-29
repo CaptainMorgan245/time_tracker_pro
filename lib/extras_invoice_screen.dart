@@ -11,7 +11,8 @@ import 'package:time_tracker_pro/models/invoice.dart';
 import 'package:time_tracker_pro/models/company_settings.dart';
 
 class ExtrasInvoiceScreen extends StatefulWidget {
-  const ExtrasInvoiceScreen({super.key});
+  const ExtrasInvoiceScreen({super.key, this.existingInvoice});
+  final Invoice? existingInvoice;
 
   @override
   State<ExtrasInvoiceScreen> createState() => _ExtrasInvoiceScreenState();
@@ -91,6 +92,66 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
         _defaultTaxRate = defaultTaxRate;
         _isLoading = false;
       });
+
+      // Pre-populate fields if editing
+      if (widget.existingInvoice != null) {
+        final inv = widget.existingInvoice!;
+
+        // Pre-populate text fields
+        _narrativeController.text = inv.workDescription ?? inv.notes ?? '';
+        _discountDescriptionController.text = inv.discountDescription ?? '';
+        _discountAmountController.text = inv.discountAmount > 0
+            ? inv.discountAmount.toStringAsFixed(2)
+            : '';
+
+        // Find and select matching project
+        final matchingProject = projectsData.firstWhere(
+          (p) => p['id'] == inv.projectId,
+          orElse: () => <String, dynamic>{},
+        );
+        if (matchingProject.isNotEmpty) {
+          _onProjectSelected(matchingProject);
+        }
+
+        // Fetch previously billed records for this invoice
+        final billedTimeRows = await AppDatabase.instance.customSelect(
+          'SELECT id FROM time_entries WHERE invoice_id = ?',
+          variables: [Variable.withInt(inv.id!)],
+        ).get();
+        final billedMatRows = await AppDatabase.instance.customSelect(
+          'SELECT id FROM materials WHERE invoice_id = ?',
+          variables: [Variable.withInt(inv.id!)],
+        ).get();
+
+        // Fetch full billed records to display in the list
+        final billedTimeFullRows = await AppDatabase.instance.customSelect(
+          '''SELECT t.*, cc.name as cost_code_name, e.name as employee_name
+             FROM time_entries t
+             LEFT JOIN cost_codes cc ON t.cost_code_id = cc.id
+             LEFT JOIN employees e ON t.employee_id = e.id
+             WHERE t.invoice_id = ?''',
+          variables: [Variable.withInt(inv.id!)],
+        ).get();
+
+        final billedMatFullRows = await AppDatabase.instance.customSelect(
+          '''SELECT m.*, cc.name as cost_code_name
+             FROM materials m
+             LEFT JOIN cost_codes cc ON m.cost_code_id = cc.id
+             WHERE m.invoice_id = ?''',
+          variables: [Variable.withInt(inv.id!)],
+        ).get();
+
+        setState(() {
+          _selectedTimeEntryIds.addAll(
+            billedTimeRows.map((r) => (r.data['id'] as num).toInt())
+          );
+          _selectedMaterialIds.addAll(
+            billedMatRows.map((r) => (r.data['id'] as num).toInt())
+          );
+          _timeEntries = billedTimeFullRows.map((r) => r.data).toList();
+          _materials = billedMatFullRows.map((r) => r.data).toList();
+        });
+      }
     } catch (e) {
       debugPrint('Error loading initial data: $e');
       if (mounted) {
@@ -211,64 +272,99 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
 
   Future<void> _createInvoice() async {
     if (_selectedProject == null) return;
-
-    // Validate discount doesn't exceed gross subtotal
     if (_discountAmount > _grossSubtotal) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Discount cannot exceed the invoice subtotal.')),
       );
       return;
     }
-
     setState(() => _isSaving = true);
     try {
-      final generatedNumber = await _invoiceService.generateInvoiceNumber();
       final discountDesc = _discountDescriptionController.text.trim();
+      final isEditMode = widget.existingInvoice != null;
 
-      final invoice = Invoice(
-        invoiceNumber: generatedNumber,
-        invoiceDate: DateTime.now(),
-        clientId: _selectedProject!['client_id'],
-        projectId: _selectedProject!['id'],
-        projectAddress: _projectAddressController.text.trim(),
-        labourSubtotal: _labourSubtotal,
-        materialsSubtotal: _materialsSubtotal,
-        discountAmount: _discountAmount,
-        discountDescription: discountDesc.isNotEmpty ? discountDesc : null,
-        tax1Name: 'GST',
-        tax1Rate: _taxRatePercent,
-        tax1Amount: _gstAmount,
-        subtotal: _discountedSubtotal,
-        totalAmount: _invoiceTotal,
-        invoiceType: 'extras',
-        notes: null,
-        workDescription: _narrativeController.text.trim(),
-        isPaid: false,
-        isDeleted: false,
-        isSent: false,
-      );
+      if (isEditMode) {
+        // Update existing invoice
+        final updated = widget.existingInvoice!.copyWith(
+          projectAddress: _projectAddressController.text.trim(),
+          labourSubtotal: _labourSubtotal,
+          materialsSubtotal: _materialsSubtotal,
+          discountAmount: _discountAmount,
+          discountDescription: discountDesc.isNotEmpty ? discountDesc : null,
+          tax1Amount: _gstAmount,
+          subtotal: _discountedSubtotal,
+          totalAmount: _invoiceTotal,
+          workDescription: _narrativeController.text.trim(),
+          notes: null,
+        );
+        await _invoiceRepository.updateInvoice(updated);
 
-      final newId = await _invoiceRepository.insertInvoice(invoice);
+        // Reset all previously billed records for this invoice
+        await AppDatabase.instance.customUpdate(
+          'UPDATE time_entries SET is_billed = 0, invoice_id = NULL WHERE invoice_id = ?',
+          variables: [Variable.withInt(widget.existingInvoice!.id!)],
+          updates: {},
+        );
+        await AppDatabase.instance.customUpdate(
+          'UPDATE materials SET is_billed = 0, invoice_id = NULL WHERE invoice_id = ?',
+          variables: [Variable.withInt(widget.existingInvoice!.id!)],
+          updates: {},
+        );
 
-      await _invoiceRepository.markRecordsAsBilled(
-        invoiceId: newId,
-        timeEntryIds: _selectedTimeEntryIds.toList(),
-        materialIds: _selectedMaterialIds.toList(),
-      );
+        // Re-mark selected records as billed
+        await _invoiceRepository.markRecordsAsBilled(
+          invoiceId: widget.existingInvoice!.id!,
+          timeEntryIds: _selectedTimeEntryIds.toList(),
+          materialIds: _selectedMaterialIds.toList(),
+        );
+      } else {
+        // Create new invoice
+        final generatedNumber = await _invoiceService.generateInvoiceNumber();
+        final invoice = Invoice(
+          invoiceNumber: generatedNumber,
+          invoiceDate: DateTime.now(),
+          clientId: _selectedProject!['client_id'],
+          projectId: _selectedProject!['id'],
+          projectAddress: _projectAddressController.text.trim(),
+          labourSubtotal: _labourSubtotal,
+          materialsSubtotal: _materialsSubtotal,
+          discountAmount: _discountAmount,
+          discountDescription: discountDesc.isNotEmpty ? discountDesc : null,
+          tax1Name: 'GST',
+          tax1Rate: _taxRatePercent,
+          tax1Amount: _gstAmount,
+          subtotal: _discountedSubtotal,
+          totalAmount: _invoiceTotal,
+          invoiceType: 'extras',
+          workDescription: _narrativeController.text.trim(),
+          notes: null,
+          isPaid: false,
+          isDeleted: false,
+          isSent: false,
+        );
+        final newId = await _invoiceRepository.insertInvoice(invoice);
+        await _invoiceRepository.markRecordsAsBilled(
+          invoiceId: newId,
+          timeEntryIds: _selectedTimeEntryIds.toList(),
+          materialIds: _selectedMaterialIds.toList(),
+        );
+      }
 
       if (mounted) {
         setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Time & Materials invoice created successfully')),
+          SnackBar(content: Text(isEditMode
+              ? 'Invoice updated successfully'
+              : 'Time & Materials invoice created successfully')),
         );
         Navigator.of(context).pop(true);
       }
     } catch (e) {
-      debugPrint('Error creating invoice: $e');
+      debugPrint('Error saving invoice: $e');
       if (mounted) {
         setState(() => _isSaving = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error creating invoice: $e')),
+          SnackBar(content: Text('Error saving invoice: $e')),
         );
       }
     }
@@ -320,7 +416,26 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('New Time & Materials Invoice'),
+        title: Text(widget.existingInvoice != null
+            ? 'Edit Invoice'
+            : 'New Time & Materials Invoice'),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: ElevatedButton(
+            onPressed: (hasSelections && !_isSaving) ? _createInvoice : null,
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size.fromHeight(50),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+            child: _isSaving
+                ? const CircularProgressIndicator()
+                : Text(widget.existingInvoice != null
+                ? 'Update Invoice'
+                : 'Create Time & Materials Invoice'),
+          ),
+        ),
       ),
       body: SelectionArea(
         child: _isLoading && _projects.isEmpty
@@ -350,6 +465,8 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: _projectAddressController,
+                textCapitalization: TextCapitalization.words,
+                textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
                   labelText: 'Site Address',
                   hintText: 'Enter site address for this invoice',
@@ -453,6 +570,8 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
                 const SizedBox(height: 8),
                 TextField(
                   controller: _narrativeController,
+                  textCapitalization: TextCapitalization.sentences,
+                  textInputAction: TextInputAction.newline,
                   decoration: const InputDecoration(
                     labelText: 'Work Description / Narrative',
                     border: OutlineInputBorder(),
@@ -466,6 +585,8 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
                       flex: 2,
                       child: TextField(
                         controller: _discountDescriptionController,
+                        textCapitalization: TextCapitalization.sentences,
+                        textInputAction: TextInputAction.next,
                         decoration: const InputDecoration(
                           labelText: 'Discount Description',
                           border: OutlineInputBorder(),
@@ -477,6 +598,7 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
                       flex: 1,
                       child: TextField(
                         controller: _discountAmountController,
+                        textInputAction: TextInputAction.done,
                         decoration: const InputDecoration(
                           labelText: 'Discount (\$)',
                           border: OutlineInputBorder(),
@@ -515,18 +637,6 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
                           isTotal: true),
                     ],
                   ),
-                ),
-
-                const SizedBox(height: 24),
-
-                ElevatedButton(
-                  onPressed: (hasSelections && !_isSaving) ? _createInvoice : null,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
-                  child: _isSaving
-                      ? const CircularProgressIndicator()
-                      : const Text('Create Time & Materials Invoice'),
                 ),
               ],
             ],

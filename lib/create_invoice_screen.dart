@@ -554,6 +554,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     }
     return TextFormField(
       controller: _amountController,
+      textInputAction: TextInputAction.next,
       decoration: InputDecoration(
         labelText: 'Amount (before $_defaultTaxName) *',
         border: const OutlineInputBorder(),
@@ -614,6 +615,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   Widget _buildDescriptionField() {
     return TextFormField(
       controller: _descriptionController,
+      textCapitalization: TextCapitalization.sentences,
+      textInputAction: TextInputAction.next,
       decoration: InputDecoration(
         labelText: 'Invoice Line Label',
         hintText: _invoiceTypeLabels[_invoiceType] ?? 'e.g. Progress Draw #1',
@@ -626,6 +629,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   Widget _buildNotesField() {
     return TextFormField(
       controller: _notesController,
+      textCapitalization: TextCapitalization.sentences,
+      textInputAction: TextInputAction.newline,
       decoration: const InputDecoration(
         labelText: 'Notes (Printed on Invoice)',
         border: OutlineInputBorder(),
@@ -637,6 +642,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   Widget _buildInternalNotesField() {
     return TextFormField(
       controller: _internalNotesController,
+      textCapitalization: TextCapitalization.sentences,
+      textInputAction: TextInputAction.newline,
       decoration: InputDecoration(
         labelText: 'Internal Notes',
         hintText: 'Not printed on invoice',
@@ -652,6 +659,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   Widget _buildPoField() {
     return TextFormField(
       controller: _poNumberController,
+      textInputAction: TextInputAction.next,
       decoration: const InputDecoration(
         labelText: 'PO Number (optional)',
         border: OutlineInputBorder(),
@@ -714,6 +722,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                     const SizedBox(height: 12),
                     TextField(
                       controller: _projectAddressController,
+                      textCapitalization: TextCapitalization.words,
+                      textInputAction: TextInputAction.next,
                       decoration: const InputDecoration(
                         labelText: 'Site Address',
                         hintText: 'Enter site address for this invoice',
@@ -741,6 +751,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: _workDescriptionController,
+                      textCapitalization: TextCapitalization.sentences,
+                      textInputAction: TextInputAction.newline,
                       maxLines: 4,
                       decoration: const InputDecoration(
                         labelText: 'Work Description',
@@ -755,6 +767,8 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                           flex: 2,
                           child: TextFormField(
                             controller: _discountDescriptionController,
+                            textCapitalization: TextCapitalization.sentences,
+                            textInputAction: TextInputAction.next,
                             decoration: const InputDecoration(
                               labelText: 'Discount Description',
                               border: OutlineInputBorder(),
@@ -766,6 +780,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                           flex: 1,
                           child: TextFormField(
                             controller: _discountAmountController,
+                            textInputAction: TextInputAction.done,
                             decoration: const InputDecoration(
                               labelText: 'Discount (\$)',
                               border: OutlineInputBorder(),

@@ -445,7 +445,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
   Widget _buildAmountRow(String label, double amount,
       {bool bold = false, Color? color, double fontSize = 14}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -567,12 +567,21 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
   // ── Actions ───────────────────────────────────────────────────────────────
 
   void _onEdit() async {
-    final result = await Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => CreateInvoiceScreen(existingInvoice: _invoice),
-      ),
-    );
-    if (result == true) _loadInvoice();
+    if (_invoice?.invoiceType == 'extras') {
+      final result = await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ExtrasInvoiceScreen(existingInvoice: _invoice),
+        ),
+      );
+      if (result == true) await _loadInvoice();
+    } else {
+      final result = await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => CreateInvoiceScreen(existingInvoice: _invoice),
+        ),
+      );
+      if (result == true) _loadInvoice();
+    }
   }
 
   void _onShare() {
