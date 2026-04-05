@@ -60,11 +60,8 @@ class DropdownRepository {
       (SELECT IFNULL(SUM(m.cost), 0.0) 
        FROM materials m 
        WHERE m.project_id = p.id AND m.is_deleted = 0) AS total_expenses,
-      -- **CORRECTED**: Calculates the true total labor cost using employee wages
-      (SELECT IFNULL(SUM(t.final_billed_duration_seconds / 3600.0 * e.hourly_rate), 0.0)
-       FROM time_entries t
-       LEFT JOIN employees e ON t.employee_id = e.id
-       WHERE t.project_id = p.id AND t.is_deleted = 0) AS total_labor_cost
+      -- total_hours is used by the caller to calculate labor cost at the correct rate
+      0.0 AS total_labor_cost
     FROM projects p
     LEFT JOIN clients c ON p.client_id = c.id
     WHERE p.id = ?

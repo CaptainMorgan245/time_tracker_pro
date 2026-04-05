@@ -42,12 +42,7 @@ class SettingsModel {
   factory SettingsModel.fromMap(Map<String, dynamic> map) {
     List<String> decodeList(dynamic data) {
       if (data == null || data is! String || data.isEmpty) return [];
-      try {
-        final decoded = jsonDecode(data);
-        return List<String>.from(decoded ?? []);
-      } catch (e) {
-        return [];
-      }
+      return data.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
     }
 
     return SettingsModel(

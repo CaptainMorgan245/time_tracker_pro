@@ -644,14 +644,12 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.person_add, color: Color(0xFFE8720C)),
-                          label: const Text(
-                            'Add Client',
-                            style: TextStyle(color: Color(0xFFE8720C)),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Color(0xFFE8720C)),
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.person_add, color: Colors.white),
+                          label: const Text('Add Client'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                           onPressed: () => _showAddClientDialog(context),
@@ -659,14 +657,12 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.add_business, color: Color(0xFFE8720C)),
-                          label: const Text(
-                            'Add Project',
-                            style: TextStyle(color: Color(0xFFE8720C)),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Color(0xFFE8720C)),
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.add_business, color: Colors.white),
+                          label: const Text('Add Project'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.lightGreen,
+                            foregroundColor: Colors.black87,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                           onPressed: () => _showAddProjectDialog(context),
@@ -723,14 +719,12 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.person_add, color: Color(0xFFE8720C)),
-                          label: const Text(
-                            'Add Client',
-                            style: TextStyle(color: Color(0xFFE8720C)),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Color(0xFFE8720C)),
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.person_add, color: Colors.white),
+                          label: const Text('Add Client'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                           onPressed: () => _showAddClientDialog(context),
@@ -738,14 +732,12 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.add_business, color: Color(0xFFE8720C)),
-                          label: const Text(
-                            'Add Project',
-                            style: TextStyle(color: Color(0xFFE8720C)),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            side: const BorderSide(color: Color(0xFFE8720C)),
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.add_business, color: Colors.white),
+                          label: const Text('Add Project'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.lightGreen,
+                            foregroundColor: Colors.black87,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
                           onPressed: () => _showAddProjectDialog(context),

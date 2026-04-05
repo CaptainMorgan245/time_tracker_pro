@@ -16,6 +16,7 @@ class CostRecordForm extends StatefulWidget {
   final VoidCallback onClearForm;
   final bool isEditing;
   final ValueNotifier<bool> onCompanyExpenseToggle;
+  final int? internalProjectId;
 
   const CostRecordForm({
     super.key,
@@ -29,6 +30,7 @@ class CostRecordForm extends StatefulWidget {
     required this.onClearForm,
     required this.isEditing,
     required this.onCompanyExpenseToggle,
+    required this.internalProjectId,
   });
 
   @override
@@ -54,7 +56,7 @@ class CostRecordFormState extends State<CostRecordForm> {
   int? _selectedCostCodeId;
   bool isFuelCategory = false;
 
-  static const int _internalProjectId = 0;
+  // internalProjectId is now passed in via widget.internalProjectId
   int? _editingExpenseId;
 
   String getCurrentItemName() {
@@ -85,7 +87,7 @@ class CostRecordFormState extends State<CostRecordForm> {
 
   Project? getInternalProject() {
     try {
-      return widget.availableProjectsNotifier.value.firstWhere((p) => p.id == _internalProjectId);
+      return widget.availableProjectsNotifier.value.firstWhere((p) => p.id == widget.internalProjectId);
     } catch (_) {
       return null;
     }
@@ -167,7 +169,7 @@ class CostRecordFormState extends State<CostRecordForm> {
     }
 
     final bool isCompanyExpenseFromParent = widget.onCompanyExpenseToggle.value;
-    final int submissionProjectId = isCompanyExpenseFromParent ? _internalProjectId : selectedProjectId!;
+    final int submissionProjectId = isCompanyExpenseFromParent ? (widget.internalProjectId ?? 0) : selectedProjectId!;
 
     final String submittedItemName = _itemNameController.text.isNotEmpty
         ? _itemNameController.text
@@ -226,7 +228,7 @@ class CostRecordFormState extends State<CostRecordForm> {
                           valueListenable: widget.availableProjectsNotifier,
                           builder: (context, projects, _) {
                             final isProjectDropdownEnabled = !isCompanyExpense;
-                            final currentProjectId = isCompanyExpense ? 0 : selectedProjectId;
+                            final currentProjectId = isCompanyExpense ? widget.internalProjectId : selectedProjectId;
 
                             return DropdownButtonFormField<int?>(
                               decoration: const InputDecoration(

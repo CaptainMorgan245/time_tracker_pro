@@ -87,6 +87,7 @@ class _ExpensesScreenState extends State<ExpensesScreen> {
     list.add(name);
     controller.clear();
     await onSave(list);
+    setState(() {});
   }
 
   Future<void> _updateOption(List<String> list, int index, String newValue, Function(List<String>) onSave) async {

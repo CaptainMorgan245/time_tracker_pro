@@ -30,7 +30,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 19;
+  int get schemaVersion => 20;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -53,6 +53,19 @@ class AppDatabase extends _$AppDatabase {
       await into(companySettingsTable).insert(
         CompanySettingsTableCompanion.insert(id: const Value(1)),
       );
+      await customInsert(
+        "INSERT INTO clients (name, is_active) VALUES ('Company Expenses', 1)",
+        variables: [],
+      );
+      await customInsert(
+        '''INSERT INTO projects
+          (project_name, client_id, pricing_model, is_completed, is_internal,
+           expense_markup_percentage, tax_rate)
+          VALUES ('Internal Company Project',
+            (SELECT id FROM clients WHERE name = 'Company Expenses'),
+            'hourly', 0, 1, 15.0, 5.0)''',
+        variables: [],
+      );
     },
     onUpgrade: (m, from, to) async {
       if (from < 17) {
@@ -69,6 +82,20 @@ class AppDatabase extends _$AppDatabase {
       if (from < 19) {
         await customStatement('ALTER TABLE projects RENAME COLUMN location TO city;');
         await customStatement('ALTER TABLE invoices ADD COLUMN work_description TEXT;');
+      }
+      if (from < 20) {
+        await customStatement(
+          "INSERT OR IGNORE INTO clients (name, is_active) VALUES ('Company Expenses', 1)",
+        );
+        await customStatement(
+          '''INSERT INTO projects
+            (project_name, client_id, pricing_model, is_completed, is_internal,
+             expense_markup_percentage, tax_rate)
+            SELECT 'Internal Company Project',
+              (SELECT id FROM clients WHERE name = 'Company Expenses'),
+              'hourly', 0, 1, 15.0, 5.0
+            WHERE NOT EXISTS (SELECT 1 FROM projects WHERE is_internal = 1)''',
+        );
       }
     },
   );
@@ -524,6 +551,19 @@ class AppDatabase extends _$AppDatabase {
     );
 
     _notifyListeners();
+  }
+
+  Future<Map<String, int?>> getInternalRecordIds() async {
+    final clientRows = await customSelect(
+      "SELECT id FROM clients WHERE name = 'Company Expenses' LIMIT 1",
+    ).get();
+    final projectRows = await customSelect(
+      'SELECT id FROM projects WHERE is_internal = 1 LIMIT 1',
+    ).get();
+    return {
+      'companyClientId': clientRows.isNotEmpty ? clientRows.first.data['id'] as int : null,
+      'internalProjectId': projectRows.isNotEmpty ? projectRows.first.data['id'] as int : null,
+    };
   }
 }
 

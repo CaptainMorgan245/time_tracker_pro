@@ -22,6 +22,8 @@ class CostRecordFormTopRow extends StatelessWidget {
   final int? selectedProjectId;
   final Function(int?) onClientChanged;
   final Function(int?) onProjectChanged;
+  final int? internalProjectId;
+  final int? companyClientId;
 
   const CostRecordFormTopRow({
     super.key,
@@ -35,6 +37,8 @@ class CostRecordFormTopRow extends StatelessWidget {
     required this.selectedProjectId,
     required this.onClientChanged,
     required this.onProjectChanged,
+    required this.internalProjectId,
+    required this.companyClientId,
   });
 
   String _getProjectDisplayName(Project project) {
@@ -206,7 +210,8 @@ class CostRecordFormTopRow extends StatelessWidget {
                                 onChanged: (bool? newValue) {
                                   isCompanyExpenseNotifier.value = newValue ?? false;
                                   if (isCompanyExpenseNotifier.value) {
-                                    onProjectChanged(0);
+                                    onClientChanged(companyClientId);
+                                    onProjectChanged(internalProjectId);
                                   }
                                 },
                               );
@@ -254,6 +259,8 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   List<Client> _clients = [];
   int? _selectedClientId;
   int? _selectedProjectId;
+  int? _internalProjectId;
+  int? _companyClientId;
 
   @override
   void initState() {
@@ -300,16 +307,9 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
       _vendorsNotifier.value = List<String>.from(settings.vendors);
       _vehicleDesignationsNotifier.value = List<String>.from(settings.vehicleDesignations);
 
-      if (!_allProjects.any((p) => p.id == 0)) {
-        _allProjects.insert(0, Project(id: 0, projectName: 'Internal Company Project', clientId: 0, isInternal: true, pricingModel: 'hourly'));
-      }
-      
-      if (!_clients.any((c) => c.id == 0)) {
-        _clients.insert(0, Client(id: 0, name: 'Company Expenses'));
-      }
-      if (!_clients.any((c) => c.id == -1)) {
-        _clients.insert(1, Client(id: -1, name: 'Archived Projects'));
-      }
+      final internalIds = await AppDatabase.instance.getInternalRecordIds();
+      _internalProjectId = internalIds['internalProjectId'];
+      _companyClientId = internalIds['companyClientId'];
 
       _updateFilteredProjectsList();
       setState(() => _isLoading = false);
@@ -321,12 +321,9 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   void _updateFilteredProjectsList() {
     List<Project> filtered = _allProjects;
 
-    if (_selectedClientId == 0) {
+    if (_selectedClientId == _companyClientId && _companyClientId != null) {
       // Company Expenses — show internal projects only
       filtered = filtered.where((p) => p.isInternal).toList();
-    } else if (_selectedClientId == -1) {
-      // Archived Projects — show completed projects only
-      filtered = filtered.where((p) => p.isCompleted && !p.isInternal).toList();
     } else if (_selectedClientId != null) {
       // Real client — show that client's active projects only
       filtered = filtered.where((p) => 
@@ -408,7 +405,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                                 onChanged: (bool? newValue) {
                                   editCompanyExpenseNotifier.value = newValue ?? false;
                                   if (editCompanyExpenseNotifier.value) {
-                                    editFormKey.currentState?.setSelectedProjectId(0);
+                                    editFormKey.currentState?.setSelectedProjectId(_internalProjectId);
                                   }
                                 },
                                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -438,6 +435,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                   onClearForm: () => Navigator.pop(context),
                   isEditing: true,
                   onCompanyExpenseToggle: editCompanyExpenseNotifier,
+                  internalProjectId: _internalProjectId,
                 ),
               ],
             ),
@@ -508,6 +506,8 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                 selectedProjectId: _selectedProjectId,
                 onClientChanged: _onClientChanged,
                 onProjectChanged: _onProjectChanged,
+                internalProjectId: _internalProjectId,
+                companyClientId: _companyClientId,
               ),
             ),
             Card(
@@ -524,6 +524,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                 onClearForm: _handleClearOrCancel,
                 isEditing: false,
                 onCompanyExpenseToggle: _isCompanyExpenseNotifier,
+                internalProjectId: _internalProjectId,
               ),
             ),
             const Divider(height: 1),
@@ -546,8 +547,7 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
                           orElse: () => Project(clientId: -1, projectName: '', pricingModel: '')
                       );
                       
-                      if (_selectedClientId == 0) return project.isInternal;
-                      if (_selectedClientId == -1) return project.isCompleted && !project.isInternal;
+                      if (_selectedClientId == _companyClientId && _companyClientId != null) return project.isInternal;
                       
                       return project.clientId == _selectedClientId;
                     }).toList();
