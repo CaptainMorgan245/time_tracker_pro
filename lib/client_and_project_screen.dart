@@ -20,6 +20,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
   List<Client> _clients = [];
   List<Project> _projects = [];
   bool _isLoading = true;
+  bool _showInactive = false;
 
   @override
   void initState() {
@@ -166,7 +167,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
           builder: (context, setModalState) {
             if (clients.isEmpty) {
               _clientRepo.getClients().then((result) {
-                setModalState(() => clients = result);
+                setModalState(() => clients = result.where((c) => c.isActive).toList());
               });
             }
             return AlertDialog(
@@ -311,9 +312,42 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
   }
 
   Future<void> _showEditClientDialog(Client client) async {
+    if (!client.isActive) {
+      final bool? confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Reactivate ${client.name}?'),
+          content: const Text('This client will appear in active dropdowns again.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Reactivate'),
+            ),
+          ],
+        ),
+      );
+      if (confirm == true) {
+        final updatedClient = client.copyWith(isActive: true);
+        _updateClient(updatedClient);
+        if (mounted) {
+          setState(() {
+            _showInactive = false;
+          });
+        }
+      }
+      return;
+    }
+
     final nameController = TextEditingController(text: client.name);
     final contactPersonController = TextEditingController(text: client.contactPerson);
     final phoneNumberController = TextEditingController(text: client.phoneNumber);
+
+    final hasActiveProjects = _projects.any((p) => p.clientId == client.id && !p.isCompleted);
+    final bool isDeactivationDisabled = client.isActive && hasActiveProjects;
 
     await showDialog(
       context: context,
@@ -341,13 +375,44 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
           ),
           actions: [
             TextButton(child: const Text('Cancel'), onPressed: () => Navigator.of(context).pop()),
-            TextButton(
-              child: Text(client.isActive ? 'Deactivate' : 'Activate', style: TextStyle(color: client.isActive ? Colors.red : Colors.green)),
-              onPressed: () {
-                final updatedClient = client.copyWith(isActive: !client.isActive);
-                _updateClient(updatedClient);
-                Navigator.of(context).pop();
-              },
+            Tooltip(
+              message: isDeactivationDisabled ? 'Complete all projects before deactivating' : '',
+              child: TextButton(
+                onPressed: isDeactivationDisabled ? null : () async {
+                  if (client.isActive) {
+                    final bool? confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: Text('Deactivate ${client.name}?'),
+                        content: const Text('This client will no longer appear in active dropdowns.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, false),
+                            child: const Text('Cancel'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(context, true),
+                            child: const Text('Deactivate', style: TextStyle(color: Colors.red)),
+                          ),
+                        ],
+                      ),
+                    );
+                    if (confirm != true) return;
+                  }
+                  
+                  final updatedClient = client.copyWith(isActive: !client.isActive);
+                  _updateClient(updatedClient);
+                  if (mounted) Navigator.of(context).pop();
+                },
+                child: Text(
+                  client.isActive ? 'Deactivate' : 'Activate',
+                  style: TextStyle(
+                    color: isDeactivationDisabled
+                        ? Colors.grey
+                        : (client.isActive ? Colors.red : Colors.green)
+                  ),
+                ),
+              ),
             ),
             ElevatedButton(
               child: const Text('Save'),
@@ -517,6 +582,9 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                           onPressed: () {
                             final toggledProject = project.copyWith(isCompleted: false);
                             _updateProject(toggledProject);
+                            this.setState(() {
+                              _showInactive = false;
+                            });
                             Navigator.of(context).pop();
                           },
                         );
@@ -583,11 +651,26 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
   }
 
   Widget _buildClientListTile(Client client, ThemeData theme) {
+    final isInactive = !client.isActive;
     return Card(
+      color: isInactive ? Colors.grey.shade300 : null,
       child: ListTile(
-        title: Text(client.name, style: theme.textTheme.titleMedium),
-        subtitle: Text('Contact: ${client.contactPerson ?? 'N/A'} | Phone: ${client.phoneNumber ?? 'N/A'}', style: theme.textTheme.bodyMedium),
-        trailing: IconButton(icon: const Icon(Icons.edit, color: Colors.blue), onPressed: () => _showEditClientDialog(client)),
+        title: Text(
+          client.name + (isInactive ? ' (Inactive)' : ''),
+          style: theme.textTheme.titleMedium?.copyWith(
+            color: isInactive ? Colors.grey.shade700 : null,
+          ),
+        ),
+        subtitle: Text(
+          'Contact: ${client.contactPerson ?? 'N/A'} | Phone: ${client.phoneNumber ?? 'N/A'}',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: isInactive ? Colors.grey.shade600 : null,
+          ),
+        ),
+        trailing: IconButton(
+          icon: Icon(Icons.edit, color: isInactive ? Colors.grey : Colors.blue),
+          onPressed: () => _showEditClientDialog(client),
+        ),
         onTap: () => _showEditClientDialog(client),
       ),
     );
@@ -604,16 +687,26 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
       priceOrRate = '\$${price?.toStringAsFixed(2) ?? '0.00'} $modelLabel';
     }
 
-    // FIX 5: Removed the strikethrough logic entirely.
-    final tileColor = project.isCompleted ? Colors.grey.shade300 : null;
+    final isCompleted = project.isCompleted;
+    final tileColor = isCompleted ? Colors.grey.shade300 : null;
 
     return Card(
       color: tileColor,
       child: ListTile(
-        title: Text(project.projectName, style: theme.textTheme.titleMedium),
-        subtitle: Text('Client: ${_getClientName(project.clientId)} | $priceOrRate', style: theme.textTheme.bodyMedium),
+        title: Text(
+          project.projectName + (isCompleted ? ' (Completed)' : ''),
+          style: theme.textTheme.titleMedium?.copyWith(
+            color: isCompleted ? Colors.grey.shade700 : null,
+          ),
+        ),
+        subtitle: Text(
+          'Client: ${_getClientName(project.clientId)} | $priceOrRate',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: isCompleted ? Colors.grey.shade600 : null,
+          ),
+        ),
         trailing: IconButton(
-            icon: const Icon(Icons.edit, color: Colors.blue),
+            icon: Icon(Icons.edit, color: isCompleted ? Colors.grey : Colors.blue),
             onPressed: () => _showEditProjectDialog(project)),
         onTap: () => _showEditProjectDialog(project),
       ),
@@ -623,11 +716,11 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
   @override
   Widget build(BuildContext context) {
     final activeClients = _clients.where((c) => c.isActive).toList();
+    final inactiveClients = _clients.where((c) => !c.isActive).toList();
     final activeProjects = _projects.where((p) => !p.isCompleted).toList();
     final completedProjects = _projects.where((p) => p.isCompleted).toList();
     final theme = Theme.of(context);
 
-    // FIX 6: Re-implemented the main widget tree to enforce the static form/scrolling list requirement.
     return Scaffold(
       appBar: AppBar(
         title: const Text('Clients & Projects'),
@@ -637,42 +730,55 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
           : LayoutBuilder(
         builder: (context, constraints) {
           if (constraints.maxWidth > 800) { // WIDE LAYOUT
-            return Column( // Use Column to enable static top content and expandable scrolling content
+            return Column(
               children: [
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                  child: Row(
+                  child: Column(
                     children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.person_add, color: Colors.white),
-                          label: const Text('Add Client'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          onPressed: () => _showAddClientDialog(context),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFE8720C),
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size.fromHeight(45),
                         ),
+                        onPressed: () => setState(() => _showInactive = !_showInactive),
+                        child: Text(_showInactive ? 'Show Active Clients and Projects' : 'Show Archived Clients and Projects'),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.add_business, color: Colors.white),
-                          label: const Text('Add Project'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.lightGreen,
-                            foregroundColor: Colors.black87,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.person_add, color: Colors.white),
+                              label: const Text('Add Client'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              onPressed: () => _showAddClientDialog(context),
+                            ),
                           ),
-                          onPressed: () => _showAddProjectDialog(context),
-                        ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.add_business, color: Colors.white),
+                              label: const Text('Add Project'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.lightGreen,
+                                foregroundColor: Colors.black87,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              onPressed: () => _showAddProjectDialog(context),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
 
-                // 2. SCROLLING LISTS - Expanded to fill the remaining space
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0),
@@ -681,10 +787,15 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                       children: [
                         Expanded(
                           flex: 5,
-                          child: ListView( // Scrolling List
+                          child: ListView(
                             children: [
-                              const Text('Current Clients', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                              ...activeClients.map((client) => _buildClientListTile(client, theme)).toList(),
+                              if (!_showInactive) ...[
+                                const Text('Current Clients', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                ...activeClients.map((client) => _buildClientListTile(client, theme)).toList(),
+                              ] else ...[
+                                const Text('Inactive Clients', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                ...inactiveClients.map((client) => _buildClientListTile(client, theme)).toList(),
+                              ],
                               const SizedBox(height: 32),
                             ],
                           ),
@@ -692,12 +803,12 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                         const SizedBox(width: 16),
                         Expanded(
                           flex: 5,
-                          child: ListView( // Scrolling List
+                          child: ListView(
                             children: [
-                              const Text('Current Projects', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                              ...activeProjects.map((project) => _buildProjectListTile(project, theme)).toList(),
-                              if (completedProjects.isNotEmpty)...[
-                                const SizedBox(height: 32),
+                              if (!_showInactive) ...[
+                                const Text('Current Projects', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                ...activeProjects.map((project) => _buildProjectListTile(project, theme)).toList(),
+                              ] else ...[
                                 const Text('Completed Projects', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                                 ...completedProjects.map((project) => _buildProjectListTile(project, theme)).toList(),
                               ]
@@ -711,55 +822,71 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
               ],
             );
           } else { // NARROW LAYOUT
-            return Column( // Use Column to enable static top content and expandable scrolling content
+            return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                  child: Row(
+                  child: Column(
                     children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.person_add, color: Colors.white),
-                          label: const Text('Add Client'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          onPressed: () => _showAddClientDialog(context),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFE8720C),
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size.fromHeight(45),
                         ),
+                        onPressed: () => setState(() => _showInactive = !_showInactive),
+                        child: Text(_showInactive ? 'Show Active Clients and Projects' : 'Show Archived Clients and Projects'),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          icon: const Icon(Icons.add_business, color: Colors.white),
-                          label: const Text('Add Project'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.lightGreen,
-                            foregroundColor: Colors.black87,
-                            padding: const EdgeInsets.symmetric(vertical: 12),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.person_add, color: Colors.white),
+                              label: const Text('Add Client'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.blue,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              onPressed: () => _showAddClientDialog(context),
+                            ),
                           ),
-                          onPressed: () => _showAddProjectDialog(context),
-                        ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.add_business, color: Colors.white),
+                              label: const Text('Add Project'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.lightGreen,
+                                foregroundColor: Colors.black87,
+                                padding: const EdgeInsets.symmetric(vertical: 12),
+                              ),
+                              onPressed: () => _showAddProjectDialog(context),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
 
-                // 2. SCROLLING LISTS - Expanded to fill the remaining space
                 Expanded(
-                  child: ListView( // Single Scrolling List
+                  child: ListView(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0),
                     children: [
                       const Divider(height: 1, thickness: 1),
                       const SizedBox(height: 16),
-                      const Text('Current Clients', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      ...activeClients.map((client) => _buildClientListTile(client, theme)).toList(),
-                      const SizedBox(height: 32),
-                      const Text('Current Projects', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      ...activeProjects.map((project) => _buildProjectListTile(project, theme)).toList(),
-                      if (completedProjects.isNotEmpty)...[
+                      if (!_showInactive) ...[
+                        const Text('Current Clients', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        ...activeClients.map((client) => _buildClientListTile(client, theme)).toList(),
+                        const SizedBox(height: 32),
+                        const Text('Current Projects', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        ...activeProjects.map((project) => _buildProjectListTile(project, theme)).toList(),
+                      ] else ...[
+                        const Text('Inactive Clients', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        ...inactiveClients.map((client) => _buildClientListTile(client, theme)).toList(),
                         const SizedBox(height: 32),
                         const Text('Completed Projects', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                         ...completedProjects.map((project) => _buildProjectListTile(project, theme)).toList(),
