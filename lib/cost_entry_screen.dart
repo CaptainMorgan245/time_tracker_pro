@@ -77,7 +77,7 @@ class CostRecordFormTopRow extends StatelessWidget {
                     value: selectedClientId,
                     items: [
                       const DropdownMenuItem<int?>(value: null, child: Text('All Clients')),
-                      ...clients.map((client) => DropdownMenuItem<int?>(
+                      ...clients.where((c) => c.isActive).map((client) => DropdownMenuItem<int?>(
                         value: client.id,
                         child: Text(client.name),
                       )),
@@ -266,10 +266,12 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
   void initState() {
     super.initState();
     _loadAllData();
+    AppDatabase.instance.databaseNotifier.addListener(_loadAllData);
   }
 
   @override
   void dispose() {
+    AppDatabase.instance.databaseNotifier.removeListener(_loadAllData);
     _filteredProjectsNotifier.dispose();
     _expenseCategoriesNotifier.dispose();
     _vendorsNotifier.dispose();

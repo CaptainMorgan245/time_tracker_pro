@@ -95,20 +95,47 @@ class InvoiceRepository {
     return result;
   }
 
-  // softDeleteInvoice — named parameters to match invoice_service.dart calls
+  // softDeleteInvoice — updated to release records for extras invoices
   Future<int> softDeleteInvoice(int id, String reasonCode, String? notes) async {
-    final result = await _db.customUpdate(
-      'UPDATE invoices SET is_deleted = 1, deleted_date = ?, deleted_reason_code = ?, deleted_notes = ? WHERE id = ?',
-      variables: [
-        Variable.withString(DateTime.now().toIso8601String()),
-        Variable.withString(reasonCode),
-        Variable(notes),
-        Variable.withInt(id),
-      ],
-      updates: {},
-    );
-    _db.notifyDatabaseChanged();
-    return result;
+    return await _db.transaction(() async {
+      // 1. Get invoice type
+      final rows = await _db.customSelect(
+        'SELECT invoice_type FROM invoices WHERE id = ?',
+        variables: [Variable.withInt(id)],
+      ).get();
+      
+      if (rows.isEmpty) return 0;
+      final type = rows.first.data['invoice_type'] as String;
+
+      // 2. Void the invoice
+      final result = await _db.customUpdate(
+        'UPDATE invoices SET is_deleted = 1, deleted_date = ?, deleted_reason_code = ?, deleted_notes = ? WHERE id = ?',
+        variables: [
+          Variable.withString(DateTime.now().toIso8601String()),
+          Variable.withString(reasonCode),
+          Variable(notes),
+          Variable.withInt(id),
+        ],
+        updates: {},
+      );
+
+      // 3. If 'extras', release associated time and material records
+      if (type == 'extras') {
+        await _db.customUpdate(
+          'UPDATE time_entries SET is_billed = 0, invoice_id = NULL WHERE invoice_id = ?',
+          variables: [Variable.withInt(id)],
+          updates: {},
+        );
+        await _db.customUpdate(
+          'UPDATE materials SET is_billed = 0, invoice_id = NULL WHERE invoice_id = ?',
+          variables: [Variable.withInt(id)],
+          updates: {},
+        );
+      }
+
+      _db.notifyDatabaseChanged();
+      return result;
+    });
   }
 
   // Alias used by invoice_detail_screen.dart

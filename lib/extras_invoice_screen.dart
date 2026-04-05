@@ -49,6 +49,7 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
   void initState() {
     super.initState();
     _loadInitialData();
+    AppDatabase.instance.databaseNotifier.addListener(_loadUnbilledRecords);
     _discountAmountController.addListener(_onDiscountChanged);
   }
 
@@ -148,8 +149,24 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
           _selectedMaterialIds.addAll(
             billedMatRows.map((r) => (r.data['id'] as num).toInt())
           );
-          _timeEntries = billedTimeFullRows.map((r) => r.data).toList();
-          _materials = billedMatFullRows.map((r) => r.data).toList();
+          
+          final billedTimeEntries = billedTimeFullRows.map((r) => r.data).toList();
+          final billedMaterials = billedMatFullRows.map((r) => r.data).toList();
+
+          // Merge: Only add records that are not already in the list
+          final existingTimeIds = _timeEntries.map((te) => te['id'] as int).toSet();
+          for (var te in billedTimeEntries) {
+            if (!existingTimeIds.contains(te['id'] as int)) {
+              _timeEntries.add(te);
+            }
+          }
+
+          final existingMaterialIds = _materials.map((m) => m['id'] as int).toSet();
+          for (var m in billedMaterials) {
+            if (!existingMaterialIds.contains(m['id'] as int)) {
+              _materials.add(m);
+            }
+          }
         });
       }
     } catch (e) {
@@ -186,15 +203,36 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
     }
   }
 
-  Future<void> _loadUnbilledRecords(int projectId) async {
-    setState(() => _isLoading = true);
+  Future<void> _loadUnbilledRecords([int? projectId]) async {
+    final targetId = projectId ?? _selectedProject?['id'];
+    if (targetId == null) return;
+    
+    if (mounted) setState(() => _isLoading = true);
     try {
-      final records = await _invoiceRepository.fetchUnbilledBillableRecords(projectId);
-      setState(() {
-        _timeEntries = List<Map<String, dynamic>>.from(records['timeEntries']!);
-        _materials = List<Map<String, dynamic>>.from(records['materials']!);
-        _isLoading = false;
-      });
+      final records = await _invoiceRepository.fetchUnbilledBillableRecords(targetId);
+      if (mounted) {
+        setState(() {
+          final newTimeEntries = List<Map<String, dynamic>>.from(records['timeEntries']!);
+          final newMaterials = List<Map<String, dynamic>>.from(records['materials']!);
+
+          // Merge: Only add records that are not already in the list
+          final existingTimeIds = _timeEntries.map((te) => te['id'] as int).toSet();
+          for (var te in newTimeEntries) {
+            if (!existingTimeIds.contains(te['id'] as int)) {
+              _timeEntries.add(te);
+            }
+          }
+
+          final existingMaterialIds = _materials.map((m) => m['id'] as int).toSet();
+          for (var m in newMaterials) {
+            if (!existingMaterialIds.contains(m['id'] as int)) {
+              _materials.add(m);
+            }
+          }
+          
+          _isLoading = false;
+        });
+      }
     } catch (e) {
       debugPrint('Error loading unbilled records: $e');
       if (mounted) {
@@ -263,6 +301,7 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
 
   @override
   void dispose() {
+    AppDatabase.instance.databaseNotifier.removeListener(_loadUnbilledRecords);
     _narrativeController.dispose();
     _discountAmountController.dispose();
     _discountDescriptionController.dispose();
