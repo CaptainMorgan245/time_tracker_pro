@@ -1,7 +1,6 @@
 // lib/dashboard_screen.dart
 
 import 'package:flutter/material.dart';
-import 'package:drift/drift.dart' show Variable;
 import 'package:time_tracker_pro/project_repository.dart';
 import 'package:time_tracker_pro/employee_repository.dart';
 import 'package:time_tracker_pro/time_entry_repository.dart';
@@ -378,8 +377,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _editActiveEntry(app_models.TimeEntry entry) {
-    final project = _allProjectsForLookup.firstWhere((p) => p.id == entry.projectId);
-    final employee = _allEmployeesForLookup.firstWhere((e) => e.id == entry.employeeId);
     final costCode = entry.costCodeId != null
         ? _costCodesNotifier.value.firstWhere((cc) => cc.id == entry.costCodeId)
         : null;

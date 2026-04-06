@@ -3,7 +3,6 @@
 import 'package:drift/drift.dart';
 import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/models.dart';
-import 'package:flutter/foundation.dart';
 
 class JobMaterialsRepository {
   final _db = AppDatabase.instance;

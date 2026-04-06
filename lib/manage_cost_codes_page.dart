@@ -1,7 +1,6 @@
 // lib/manage_cost_codes_page.dart
 
 import 'package:flutter/material.dart';
-import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/cost_code_repository.dart';
 import 'package:time_tracker_pro/models.dart';
 

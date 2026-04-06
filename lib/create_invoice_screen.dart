@@ -7,7 +7,6 @@ import 'package:drift/drift.dart' show Variable;
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/invoice_repository.dart';
 import 'package:time_tracker_pro/invoice_service.dart';
-import 'package:time_tracker_pro/project_repository.dart';
 import 'package:time_tracker_pro/database/app_database.dart';
 
 // start class: CreateInvoiceScreen
@@ -25,7 +24,6 @@ class CreateInvoiceScreen extends StatefulWidget {
 class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   final _formKey = GlobalKey<FormState>();
   final InvoiceRepository _invoiceRepository = InvoiceRepository();
-  final ProjectRepository _projectRepository = ProjectRepository();
   final InvoiceService _invoiceService = InvoiceService.instance;
   final NumberFormat _currencyFormat =
       NumberFormat.currency(locale: 'en_US', symbol: '\$');

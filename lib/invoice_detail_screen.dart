@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/invoice_repository.dart';
-import 'package:time_tracker_pro/invoice_service.dart';
 import 'package:time_tracker_pro/create_invoice_screen.dart';
 import 'package:printing/printing.dart';
 import 'package:time_tracker_pro/invoice_pdf_service.dart';
@@ -27,7 +26,6 @@ class InvoiceDetailScreen extends StatefulWidget {
 class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
   final InvoiceRepository _invoiceRepository = InvoiceRepository();
   final ProjectRepository _projectRepository = ProjectRepository();
-  final InvoiceService _invoiceService = InvoiceService.instance;
   final NumberFormat _currencyFormat =
   NumberFormat.currency(locale: 'en_US', symbol: '\$');
   final DateFormat _dateFormat = DateFormat('MMMM d, yyyy');
@@ -584,6 +582,7 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     }
   }
 
+  // ignore: unused_element
   void _onShare() {
     // TODO: Generate PDF and share
     ScaffoldMessenger.of(context).showSnackBar(

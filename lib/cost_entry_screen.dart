@@ -180,10 +180,7 @@ class CostRecordFormTopRow extends StatelessWidget {
                         value: currentCategory,
                         items: categories.map((c) => DropdownMenuItem<String>(value: c, child: Text(c, style: const TextStyle(fontSize: 12)))).toList(),
                         onChanged: (String? newValue) {
-                          formStateKey.currentState?.setState(() {
-                            formStateKey.currentState!.selectedExpenseCategory = newValue;
-                            formStateKey.currentState!.isFuelCategory = (newValue == 'Fuel');
-                          });
+                          formStateKey.currentState?.setExpenseCategory(newValue, newValue == 'Fuel');
                         },
                       );
                     },

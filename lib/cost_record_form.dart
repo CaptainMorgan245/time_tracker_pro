@@ -71,6 +71,15 @@ class CostRecordFormState extends State<CostRecordForm> {
     }
   }
 
+  void setExpenseCategory(String? category, bool fuel) {
+    if (mounted) {
+      setState(() {
+        selectedExpenseCategory = category;
+        isFuelCategory = fuel;
+      });
+    }
+  }
+
   void triggerSubmit() {
     _submitForm();
   }

@@ -293,6 +293,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
     return total;
   }
 
+  // ignore: unused_element
   Future<void> _exportToCSV() async {
     final filteredEntries = _getFilteredEntries();
 

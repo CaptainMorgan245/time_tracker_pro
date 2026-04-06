@@ -1,7 +1,6 @@
 // lib/screens/database_viewer_screen.dart
 
 import 'dart:math';
-import 'package:drift/drift.dart' show Variable;
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/models.dart';

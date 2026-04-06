@@ -4,7 +4,6 @@ import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:time_tracker_pro/database/app_database.dart';
-import 'package:time_tracker_pro/employee_repository.dart';
 import 'package:time_tracker_pro/models.dart';
 
 class PayrollScreen extends StatefulWidget {
@@ -15,7 +14,6 @@ class PayrollScreen extends StatefulWidget {
 }
 
 class _PayrollScreenState extends State<PayrollScreen> {
-  final EmployeeRepository _employeeRepo = EmployeeRepository();
   final AppDatabase _dbHelper = AppDatabase.instance;
   final NumberFormat _currencyFormat = NumberFormat.currency(locale: 'en_US', symbol: '\$');
 

@@ -1,7 +1,6 @@
 // lib/project_summary_view.dart
 
 import 'package:flutter/material.dart';
-import 'package:drift/drift.dart' show Variable;
 import 'package:time_tracker_pro/database/app_database.dart';
 
 class ProjectSummaryView extends StatelessWidget {

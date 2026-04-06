@@ -189,7 +189,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<Client>(
-                          value: selectedClient,
+                          initialValue: selectedClient,
                           decoration: const InputDecoration(labelText: 'Client'),
                           items: clients
                               .map((c) => DropdownMenuItem(
@@ -202,7 +202,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
-                          value: selectedPricingModel,
+                          initialValue: selectedPricingModel,
                           decoration: const InputDecoration(labelText: 'Pricing Model'),
                           items: const [
                             DropdownMenuItem(value: 'hourly', child: Text('Hourly')),
@@ -402,7 +402,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                   
                   final updatedClient = client.copyWith(isActive: !client.isActive);
                   _updateClient(updatedClient);
-                  if (mounted) Navigator.of(context).pop();
+                  if (context.mounted) Navigator.of(context).pop();
                 },
                 child: Text(
                   client.isActive ? 'Deactivate' : 'Activate',
@@ -478,7 +478,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                       const SizedBox(height: 16),
                       DropdownButtonFormField<int>(
                         decoration: const InputDecoration(labelText: 'Client'),
-                        value: selectedClientId,
+                        initialValue: selectedClientId,
                         items: _clients.where((c) => c.isActive).map((client) {
                           return DropdownMenuItem<int>(
                             value: client.id,
@@ -496,7 +496,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
                         decoration: const InputDecoration(labelText: 'Pricing Model'),
-                        value: selectedPricingModel,
+                        initialValue: selectedPricingModel,
                         items: const [
                           DropdownMenuItem(value: 'hourly', child: Text('Hourly')),
                           DropdownMenuItem(value: 'fixed', child: Text('Fixed Price')),

@@ -8,7 +8,6 @@ import 'package:time_tracker_pro/invoice_repository.dart';
 import 'package:time_tracker_pro/invoice_service.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/models/invoice.dart';
-import 'package:time_tracker_pro/models/company_settings.dart';
 
 class ExtrasInvoiceScreen extends StatefulWidget {
   const ExtrasInvoiceScreen({super.key, this.existingInvoice});
