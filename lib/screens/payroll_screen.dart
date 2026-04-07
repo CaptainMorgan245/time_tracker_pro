@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/models.dart';
+import 'package:time_tracker_pro/settings_service.dart';
+import 'package:time_tracker_pro/settings_model.dart';
 
 class PayrollScreen extends StatefulWidget {
   const PayrollScreen({super.key});
@@ -19,6 +21,7 @@ class _PayrollScreenState extends State<PayrollScreen> {
 
   List<Map<String, dynamic>> _payrollData = [];
   bool _isLoading = true;
+  SettingsModel? _settings;
 
   late DateTime _startDate;
   late DateTime _endDate;
@@ -35,6 +38,7 @@ class _PayrollScreenState extends State<PayrollScreen> {
   Future<void> _loadPayrollData() async {
     setState(() => _isLoading = true);
     try {
+      _settings = await SettingsService.instance.loadSettings();
       final String startDateStr = _startDate.toIso8601String();
       final String endDateStr = DateTime(_endDate.year, _endDate.month, _endDate.day, 23, 59, 59).toIso8601String();
 
@@ -44,12 +48,12 @@ class _PayrollScreenState extends State<PayrollScreen> {
           e.id, 
           e.name, 
           r.name as role,
-          (SELECT IFNULL(SUM(t.final_billed_duration_seconds / 3600.0), 0) 
+          (SELECT IFNULL(SUM(t.final_billed_duration_seconds), 0) 
            FROM time_entries t 
            WHERE t.employee_id = e.id 
              AND t.is_deleted = 0 
              AND t.start_time >= ? 
-             AND t.start_time <= ?) as total_hours,
+             AND t.start_time <= ?) as total_seconds,
           (SELECT IFNULL(SUM((t.final_billed_duration_seconds / 3600.0) * IFNULL(e.hourly_rate, 0)), 0) 
            FROM time_entries t 
            WHERE t.employee_id = e.id 
@@ -77,6 +81,11 @@ class _PayrollScreenState extends State<PayrollScreen> {
       final List<Map<String, dynamic>> payrollWithPayments = [];
       for (var row in rows) {
         final emp = row.data;
+        
+        final double rawSeconds = (emp['total_seconds'] as num).toDouble();
+        final double roundedSeconds = _settings?.applyTimeRounding(rawSeconds) ?? rawSeconds;
+        final double hours = roundedSeconds / 3600.0;
+
         final paymentRows = await _dbHelper.customSelect(
           'SELECT * FROM worker_payments WHERE employee_id = ? AND payment_date >= ? AND payment_date <= ? ORDER BY payment_date DESC',
           variables: [
@@ -87,6 +96,7 @@ class _PayrollScreenState extends State<PayrollScreen> {
         ).get();
         
         final mutableEmp = Map<String, dynamic>.from(emp);
+        mutableEmp['total_hours'] = hours;
         mutableEmp['payments'] = paymentRows.map((r) => r.data).toList();
         payrollWithPayments.add(mutableEmp);
       }

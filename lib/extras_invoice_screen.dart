@@ -8,6 +8,8 @@ import 'package:time_tracker_pro/invoice_repository.dart';
 import 'package:time_tracker_pro/invoice_service.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/models/invoice.dart';
+import 'package:time_tracker_pro/settings_service.dart';
+import 'package:time_tracker_pro/settings_model.dart';
 
 class ExtrasInvoiceScreen extends StatefulWidget {
   const ExtrasInvoiceScreen({super.key, this.existingInvoice});
@@ -43,6 +45,7 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
   double _burdenRate = 0.0;
   double _discountAmount = 0.0;
   double _defaultTaxRate = 5.0;
+  SettingsModel? _settings;
 
   @override
   void initState() {
@@ -62,6 +65,8 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
   Future<void> _loadInitialData() async {
     setState(() => _isLoading = true);
     try {
+      _settings = await SettingsService.instance.loadSettings();
+      
       final projectsRows = await AppDatabase.instance.customSelect(
         'SELECT * FROM projects WHERE is_completed = 0 ORDER BY project_name ASC',
       ).get();
@@ -244,20 +249,21 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
   }
 
   double _calculateTimeEntryHours(Map<String, dynamic> te) {
+    double seconds = 0.0;
+    
     if (te['final_billed_duration_seconds'] != null) {
-      return (te['final_billed_duration_seconds'] as num).toDouble() / 3600.0;
-    }
-
-    if (te['end_time'] == null) {
+      seconds = (te['final_billed_duration_seconds'] as num).toDouble();
+    } else if (te['end_time'] != null) {
+      final start = DateTime.parse(te['start_time']);
+      final end = DateTime.parse(te['end_time']);
+      final pausedSec = (te['paused_duration'] as num?)?.toDouble() ?? 0.0;
+      seconds = end.difference(start).inSeconds.toDouble() - pausedSec;
+    } else {
       return 0.0;
     }
 
-    final start = DateTime.parse(te['start_time']);
-    final end = DateTime.parse(te['end_time']);
-    final pausedSec = (te['paused_duration'] as num?)?.toDouble() ?? 0.0;
-
-    final durationSec = end.difference(start).inSeconds.toDouble() - pausedSec;
-    return durationSec / 3600.0;
+    final roundedSeconds = _settings?.applyTimeRounding(seconds) ?? seconds;
+    return roundedSeconds / 3600.0;
   }
 
   double get _labourSubtotal {
