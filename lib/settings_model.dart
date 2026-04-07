@@ -122,4 +122,11 @@ class SettingsModel {
     );
   }
 // end method: copyWith
+
+  double applyTimeRounding(double seconds) {
+    if (timeRoundingInterval == 0) {
+      return seconds;
+    }
+    return (seconds / (timeRoundingInterval * 60)).round() * (timeRoundingInterval * 60).toDouble();
+  }
 }

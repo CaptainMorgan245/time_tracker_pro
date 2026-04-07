@@ -15,6 +15,8 @@ import 'package:share_plus/share_plus.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:time_tracker_pro/settings_service.dart';
+import 'package:time_tracker_pro/settings_model.dart';
 
 class TimeTrackerPage extends StatefulWidget {
   const TimeTrackerPage({super.key});
@@ -41,6 +43,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
   List<app_models.Project> _allProjects = [];
   List<app_models.Role> _roles = [];
   bool _isLoading = true;
+  SettingsModel? _settings;
 
   // Filter state - default to current year
   DateTime? _startDate = DateTime(DateTime.now().year, 1, 1);
@@ -86,6 +89,8 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
     if (mounted) {
       setState(() => _isLoading = true);
     }
+
+    _settings = await SettingsService.instance.loadSettings();
 
     // Initialize phase repository
     _costCodeRepo ??= CostCodeRepository();
@@ -445,6 +450,14 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
     );
   }
 
+  double _applyTimeRounding(double seconds) {
+    if (_settings == null || _settings!.timeRoundingInterval == 0) {
+      return seconds;
+    }
+    final intervalMinutes = _settings!.timeRoundingInterval;
+    return (seconds / (intervalMinutes * 60)).round() * (intervalMinutes * 60).toDouble();
+  }
+
   Future<void> _submitManualEntry({
     required app_models.Project? project,
     required app_models.Employee? employee,
@@ -475,7 +488,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
       startTime: startTime,
       endTime: stopTime,
       workDetails: workDetails,
-      finalBilledDurationSeconds: duration.inSeconds.toDouble(),
+      finalBilledDurationSeconds: _applyTimeRounding(duration.inSeconds.toDouble()),
     );
 
     await _timeEntryRepo.insertTimeEntry(newEntry);
@@ -512,7 +525,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
       startTime: startTime,
       endTime: stopTime,
       workDetails: workDetails,
-      finalBilledDurationSeconds: duration.inSeconds.toDouble(),
+      finalBilledDurationSeconds: _applyTimeRounding(duration.inSeconds.toDouble()),
     );
 
     await _timeEntryRepo.updateTimeEntry(updatedEntry);

@@ -22,6 +22,8 @@ import 'package:time_tracker_pro/manage_cost_codes_page.dart';
 import 'package:time_tracker_pro/invoice_list_screen.dart';
 import 'package:time_tracker_pro/screens/payroll_screen.dart';
 import 'package:flutter/foundation.dart';
+import 'package:time_tracker_pro/settings_service.dart';
+import 'package:time_tracker_pro/settings_model.dart';
 
 // START REUSABLE DRAWER WIDGET
 class AppDrawer extends StatelessWidget {
@@ -158,6 +160,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final Map<int, Duration> _currentDurations = {};
 
   int _refreshKey = 0;
+  SettingsModel? _settings;
 
   @override
   void initState() {
@@ -196,6 +199,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Future<void> _loadData() async {
     try {
+      _settings = await SettingsService.instance.loadSettings();
       _costCodeRepo ??= CostCodeRepository();
       final projects = await _projectRepo.getProjects();
       final employees = await _employeeRepo.getEmployees();
@@ -326,9 +330,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _stopTimer(app_models.TimeEntry entry) async {
     final now = DateTime.now();
+    final rawSeconds = now.difference(entry.startTime).inSeconds.toDouble() - entry.pausedDuration.inSeconds.toDouble();
     final updatedEntry = entry.copyWith(
       endTime: now,
-      finalBilledDurationSeconds: now.difference(entry.startTime).inSeconds.toDouble() - entry.pausedDuration.inSeconds.toDouble(),
+      finalBilledDurationSeconds: _settings?.applyTimeRounding(rawSeconds) ?? rawSeconds,
     );
 
     await _timeEntryRepo.updateTimeEntry(updatedEntry);
