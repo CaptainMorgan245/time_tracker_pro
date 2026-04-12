@@ -44,8 +44,8 @@ class _ManageCostCodesPageState extends State<ManageCostCodesPage> {
                   ),
                   const SizedBox(height: 16),
                   SwitchListTile(
-                    title: const Text('Billable as Extra'),
-                    subtitle: const Text('Include in extras invoice selection'),
+                    title: const Text('Billable as Time & Materials'),
+                    subtitle: const Text('Include in Time & Materials invoice selection'),
                     value: isBillable,
                     onChanged: (value) {
                       setDialogState(() {
@@ -163,7 +163,7 @@ class _ManageCostCodesPageState extends State<ManageCostCodesPage> {
                             color: costCode.isBillable ? Colors.green : Colors.blueGrey,
                           ),
                           title: Text(costCode.name),
-                          subtitle: costCode.isBillable ? const Text('Billable Extra', style: TextStyle(fontSize: 12)) : null,
+                          subtitle: costCode.isBillable ? const Text('Billable T&M', style: TextStyle(fontSize: 12)) : null,
                           trailing: IconButton(
                             icon: const Icon(Icons.edit, color: Colors.blue),
                             onPressed: () => _showEditDialog(costCode),
@@ -276,7 +276,7 @@ class _AddCostCodeFormState extends State<AddCostCodeForm> {
                                 'Examples:\n'
                                 '• Contract Work - Initial contracted work\n'
                                 '• Addendum - Secondary contracts\n'
-                                '• TBC - Billable extras to be charged\n'
+                                '• TBC - Billable Time & Materials to be charged\n'
                                 '• No Charge - Warranty or goodwill work\n'
                                 '• Internal - Own properties or overhead\n\n'
                                 'Tag time entries and materials with cost codes to track which contract each hour and dollar belongs to.'
@@ -329,8 +329,8 @@ class _AddCostCodeFormState extends State<AddCostCodeForm> {
             ),
             const SizedBox(height: 8),
             SwitchListTile(
-              title: const Text('Billable as Extra'),
-              subtitle: const Text('Include in extras invoice selection'),
+              title: const Text('Billable as Time & Materials'),
+              subtitle: const Text('Include in Time & Materials invoice selection'),
               value: _isNewCodeBillable,
               onChanged: (value) => setState(() => _isNewCodeBillable = value),
               contentPadding: EdgeInsets.zero,

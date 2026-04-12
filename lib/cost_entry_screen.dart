@@ -230,7 +230,9 @@ class CostRecordFormTopRow extends StatelessWidget {
 }
 
 class CostEntryScreen extends StatefulWidget {
-  const CostEntryScreen({super.key});
+  final TextEditingController amountSearchController;
+
+  const CostEntryScreen({super.key, required this.amountSearchController});
 
   @override
   State<CostEntryScreen> createState() => _CostEntryScreenState();
@@ -264,11 +266,17 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
     super.initState();
     _loadAllData();
     AppDatabase.instance.databaseNotifier.addListener(_loadAllData);
+    widget.amountSearchController.addListener(_onSearchChanged);
+  }
+
+  void _onSearchChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     AppDatabase.instance.databaseNotifier.removeListener(_loadAllData);
+    widget.amountSearchController.removeListener(_onSearchChanged);
     _filteredProjectsNotifier.dispose();
     _expenseCategoriesNotifier.dispose();
     _vendorsNotifier.dispose();
@@ -530,16 +538,20 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
             Expanded(
               child: FutureBuilder<List<JobMaterials>>(
                 key: ValueKey(_refreshKey),
-                future: AppDatabase.instance.getCostEntryMaterials(
-                  false, // showCompleted is no longer used for bulk loading here
-                  _allProjects,
-                  selectedProjectId: _selectedProjectId,
-                ),
+                future: widget.amountSearchController.text.trim().isNotEmpty
+                    ? AppDatabase.instance.searchMaterialsByAmount(
+                        widget.amountSearchController.text.trim(),
+                      )
+                    : AppDatabase.instance.getCostEntryMaterials(
+                        false,
+                        _allProjects,
+                        selectedProjectId: _selectedProjectId,
+                      ),
                 builder: (context, snapshot) {
                   var records = snapshot.data ?? [];
 
                   // Secondary filter for Clients (especially when Project is 'All')
-                  if (_selectedClientId != null) {
+                  if (_selectedClientId != null && widget.amountSearchController.text.trim().isEmpty) {
                     records = records.where((r) {
                       final project = _allProjects.firstWhere(
                               (p) => p.id == r.projectId,

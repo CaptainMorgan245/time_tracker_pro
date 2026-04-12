@@ -25,6 +25,8 @@ class _PayrollScreenState extends State<PayrollScreen> {
 
   late DateTime _startDate;
   late DateTime _endDate;
+  List<Map<String, dynamic>> _projects = [];
+  int? _selectedProjectId;
 
   @override
   void initState() {
@@ -32,7 +34,17 @@ class _PayrollScreenState extends State<PayrollScreen> {
     final now = DateTime.now();
     _startDate = DateTime(now.year, now.month, 1);
     _endDate = now;
+    _loadProjects();
     _loadPayrollData();
+  }
+
+  Future<void> _loadProjects() async {
+    final rows = await _dbHelper.customSelect(
+      'SELECT id, project_name as name FROM projects WHERE is_internal = 0 ORDER BY name ASC',
+    ).get();
+    setState(() {
+      _projects = rows.map((r) => r.data).toList();
+    });
   }
 
   Future<void> _loadPayrollData() async {
@@ -53,13 +65,15 @@ class _PayrollScreenState extends State<PayrollScreen> {
            WHERE t.employee_id = e.id 
              AND t.is_deleted = 0 
              AND t.start_time >= ? 
-             AND t.start_time <= ?) as total_seconds,
+             AND t.start_time <= ?
+             ${_selectedProjectId != null ? 'AND t.project_id = $_selectedProjectId' : ''}) as total_seconds,
           (SELECT IFNULL(SUM((t.final_billed_duration_seconds / 3600.0) * IFNULL(e.hourly_rate, 0)), 0) 
            FROM time_entries t 
            WHERE t.employee_id = e.id 
              AND t.is_deleted = 0 
              AND t.start_time >= ? 
-             AND t.start_time <= ?) as total_earned,
+             AND t.start_time <= ?
+             ${_selectedProjectId != null ? 'AND t.project_id = $_selectedProjectId' : ''}) as total_earned,
           (SELECT IFNULL(SUM(p.amount), 0) 
            FROM worker_payments p 
            WHERE p.employee_id = e.id 
@@ -311,7 +325,7 @@ class _PayrollScreenState extends State<PayrollScreen> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 8),
                   Expanded(
                     child: InkWell(
                       onTap: () => _selectDate(context, false),
@@ -323,6 +337,31 @@ class _PayrollScreenState extends State<PayrollScreen> {
                         ),
                         child: Text(DateFormat('MMM d, yyyy').format(_endDate)),
                       ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: DropdownButtonFormField<int?>(
+                      decoration: const InputDecoration(
+                        labelText: 'Project',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      ),
+                      value: _selectedProjectId,
+                      items: [
+                        const DropdownMenuItem<int?>(
+                          value: null,
+                          child: Text('All Projects'),
+                        ),
+                        ..._projects.map((p) => DropdownMenuItem<int?>(
+                          value: p['id'] as int,
+                          child: Text(p['name'] as String),
+                        )),
+                      ],
+                      onChanged: (value) {
+                        setState(() => _selectedProjectId = value);
+                        _loadPayrollData();
+                      },
                     ),
                   ),
                 ],

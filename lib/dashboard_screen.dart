@@ -138,6 +138,8 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   late int _selectedIndex;
+  final TextEditingController _amountSearchController = TextEditingController();
+  bool _isSearching = false;
 
   final ProjectRepository _projectRepo = ProjectRepository();
   final EmployeeRepository _employeeRepo = EmployeeRepository();
@@ -177,6 +179,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     for (final timer in _activeTimers.values) {
       timer.cancel();
     }
+    _amountSearchController.dispose();
     super.dispose();
   }
 
@@ -571,13 +574,58 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(_currentScreenTitle),
+        actions: _selectedIndex == 1
+            ? [
+                if (_isSearching)
+                  SizedBox(
+                    width: 200,
+                    child: TextField(
+                      controller: _amountSearchController,
+                      autofocus: true,
+                      keyboardType: TextInputType.number,
+                      style: null,
+                      decoration: const InputDecoration(
+                        hintText: 'Enter amount...',
+                        border: InputBorder.none,
+                      ),
+                      onChanged: (val) => setState(() {}),
+                    ),
+                  )
+                else
+                  const SizedBox.shrink(),
+                IconButton(
+                  icon: _isSearching
+                      ? const Icon(Icons.close)
+                      : const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.search),
+                            Text(
+                              '\$',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ],
+                        ),
+                  onPressed: () {
+                    setState(() {
+                      _isSearching = !_isSearching;
+                      if (!_isSearching) _amountSearchController.clear();
+                    });
+                  },
+                ),
+              ]
+            : null,
       ),
       drawer: const AppDrawer(),
       body: IndexedStack(
         index: _selectedIndex,
         children: [
           _buildDashboardContent(),
-          const CostEntryScreen(),
+          CostEntryScreen(amountSearchController: _amountSearchController),
           const AnalyticsScreen(),
           const InvoiceListScreen(),
         ],

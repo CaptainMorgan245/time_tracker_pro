@@ -479,7 +479,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                       DropdownButtonFormField<int>(
                         decoration: const InputDecoration(labelText: 'Client'),
                         initialValue: selectedClientId,
-                        items: _clients.where((c) => c.isActive).map((client) {
+                        items: _clients.where((c) => c.isActive || c.id == selectedClientId).map((client) {
                           return DropdownMenuItem<int>(
                             value: client.id,
                             child: Text(client.name),

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
 import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/database/tables.dart';
 
@@ -236,11 +237,26 @@ class AppDatabase extends _$AppDatabase {
     final placeholders = projectIds.map((_) => '?').join(',');
     final rows = await customSelect(
       'SELECT * FROM materials WHERE project_id IN ($placeholders) '
-      'AND is_deleted = 0 ORDER BY purchase_date DESC LIMIT 50',
+      'AND is_deleted = 0 ORDER BY purchase_date DESC',
       variables: projectIds.map((id) => Variable.withInt(id)).toList(),
     ).get();
 
     return rows.map((r) => JobMaterials.fromMap(r.data)).toList();
+  }
+
+  Future<List<JobMaterials>> searchMaterialsByAmount(String amountPrefix) async {
+    final rows = await customSelect(
+      'SELECT * FROM materials WHERE is_deleted = 0 ORDER BY purchase_date DESC',
+    ).get();
+
+    final formatter = NumberFormat.currency(locale: 'en_US', symbol: '\$');
+    return rows
+        .map((row) => JobMaterials.fromMap(row.data))
+        .where((record) {
+          final formatted = formatter.format(record.cost).replaceAll('\$', '');
+          return formatted.startsWith(amountPrefix);
+        })
+        .toList();
   }
 
   // =========================================================================
@@ -256,7 +272,7 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<void> addExpenseCategoryV2(ExpenseCategory category) async {
-    await into(expenseCategories).insert(
+    into(expenseCategories).insert(
       ExpenseCategoriesCompanion.insert(name: category.name),
       mode: InsertMode.insertOrReplace,
     );
