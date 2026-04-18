@@ -44,14 +44,16 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
     'Total Hours Logged': false,
     'Total Billed Value': false,
   };
-  final Map<String, bool> _timeEntryIncludes = {
+  final Map<String, bool> _projectDetailIncludes = {
     'Date': true,
+    'Type (Labour/Material)': true,
     'Employee': true,
-    'Start Time': true,
-    'End Time': true,
+    'Supplier': false,
+    'Description': true,
     'Hours': true,
+    'Unit Cost': false,
+    'Total Cost': true,
     'Cost Code': false,
-    'Work Description': false,
     'Billed Status': false,
   };
 
@@ -104,8 +106,8 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
         return _projectIncludes;
       case ReportSubject.personnel:
         return _personnelIncludes;
-      case ReportSubject.timeEntries:
-        return _timeEntryIncludes;
+      case ReportSubject.projectDetail:
+        return _projectDetailIncludes;
     }
   }
 
@@ -163,7 +165,7 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
     const labels = {
       ReportSubject.projects: 'Projects',
       ReportSubject.personnel: 'Personnel',
-      ReportSubject.timeEntries: 'Time Entries',
+      ReportSubject.projectDetail: 'Project Detail',
     };
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -231,7 +233,7 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
           ]),
         ] else if (_subject == ReportSubject.personnel) ...[
           _buildEmployeeDropdown(),
-        ] else if (_subject == ReportSubject.timeEntries) ...[
+        ] else if (_subject == ReportSubject.projectDetail) ...[
           Row(children: [
             Expanded(child: _buildClientDropdown()),
             const SizedBox(width: 16),

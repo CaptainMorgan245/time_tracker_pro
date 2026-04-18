@@ -91,84 +91,125 @@ class TimeEntryRepository {
     return rows.map((r) => TimeEntry.fromMap(r.data)).toList();
   }
 
-  Future<List<Map<String, dynamic>>> getCustomTimeEntriesReport(
+  Future<List<Map<String, dynamic>>> getCustomProjectDetailReport(
       CustomReportSettings settings) async {
     final includes = settings.includes;
-    final List<String> selectClauses = ['te.id'];
 
-    if (includes['Date'] == true) {
-      selectClauses.add("strftime('%Y-%m-%d', te.start_time) AS date");
-    }
-    if (includes['Employee'] == true) {
-      selectClauses.add('e.name AS employee');
-    }
-    if (includes['Start Time'] == true) {
-      selectClauses.add("strftime('%H:%M', te.start_time) AS start_time");
-    }
-    if (includes['End Time'] == true) {
-      selectClauses.add("strftime('%H:%M', te.end_time) AS end_time");
-    }
-    if (includes['Hours'] == true) {
-      selectClauses.add('ROUND(te.final_billed_duration_seconds / 3600.0, 2) AS hours');
-    }
-    if (includes['Cost Code'] == true) {
-      selectClauses.add('COALESCE(cc.name, \'\') AS cost_code');
-    }
-    if (includes['Work Description'] == true) {
-      selectClauses.add('COALESCE(te.work_details, \'\') AS work_description');
-    }
-    if (includes['Billed Status'] == true) {
-      selectClauses.add("CASE WHEN te.is_billed = 1 THEN 'Billed' ELSE 'Unbilled' END AS billed_status");
-    }
+    // Labour (time entries) WHERE clauses
+    final List<String> labourWhere = ['te.is_deleted = 0', 'te.end_time IS NOT NULL'];
+    final List<Variable> labourVars = [];
 
-    final String select = selectClauses.join(', ');
-
-    final List<String> whereClauses = ['te.is_deleted = 0', 'te.end_time IS NOT NULL'];
-    final List<Variable> variables = [];
+    // Material WHERE clauses
+    final List<String> materialWhere = ['m.is_deleted = 0'];
+    final List<Variable> materialVars = [];
 
     if (settings.clientId != null) {
-      whereClauses.add('p.client_id = ?');
-      variables.add(Variable.withInt(settings.clientId!));
+      labourWhere.add('p.client_id = ?');
+      labourVars.add(Variable.withInt(settings.clientId!));
+      materialWhere.add('p.client_id = ?');
+      materialVars.add(Variable.withInt(settings.clientId!));
     }
     if (settings.projectId != null) {
-      whereClauses.add('te.project_id = ?');
-      variables.add(Variable.withInt(settings.projectId!));
+      labourWhere.add('te.project_id = ?');
+      labourVars.add(Variable.withInt(settings.projectId!));
+      materialWhere.add('m.project_id = ?');
+      materialVars.add(Variable.withInt(settings.projectId!));
     }
     if (settings.employeeId != null) {
-      whereClauses.add('te.employee_id = ?');
-      variables.add(Variable.withInt(settings.employeeId!));
+      // Employee filter applies to labour rows only
+      labourWhere.add('te.employee_id = ?');
+      labourVars.add(Variable.withInt(settings.employeeId!));
     }
     if (settings.costCodeId != null) {
-      whereClauses.add('te.cost_code_id = ?');
-      variables.add(Variable.withInt(settings.costCodeId!));
+      labourWhere.add('te.cost_code_id = ?');
+      labourVars.add(Variable.withInt(settings.costCodeId!));
+      materialWhere.add('m.cost_code_id = ?');
+      materialVars.add(Variable.withInt(settings.costCodeId!));
     }
     if (settings.startDate != null) {
-      whereClauses.add('te.start_time >= ?');
-      variables.add(Variable.withString(settings.startDate!.toIso8601String()));
+      final startIso = settings.startDate!.toIso8601String();
+      final startDate = startIso.substring(0, 10);
+      labourWhere.add('te.start_time >= ?');
+      labourVars.add(Variable.withString(startIso));
+      materialWhere.add('m.purchase_date >= ?');
+      materialVars.add(Variable.withString(startDate));
     }
     if (settings.endDate != null) {
-      whereClauses.add('te.start_time < ?');
-      variables.add(Variable.withString(
-          settings.endDate!.add(const Duration(days: 1)).toIso8601String()));
+      final endIso = settings.endDate!.add(const Duration(days: 1)).toIso8601String();
+      final endDate = endIso.substring(0, 10);
+      labourWhere.add('te.start_time < ?');
+      labourVars.add(Variable.withString(endIso));
+      materialWhere.add('m.purchase_date < ?');
+      materialVars.add(Variable.withString(endDate));
     }
 
-    final String where = whereClauses.join(' AND ');
+    final labourWhereStr = labourWhere.join(' AND ');
+    final materialWhereStr = materialWhere.join(' AND ');
 
     final rows = await _db.customSelect('''
-      SELECT $select
+      SELECT
+        strftime('%Y-%m-%d', te.start_time) AS date,
+        'Labour' AS type,
+        COALESCE(e.name, '') AS employee,
+        '' AS supplier,
+        COALESCE(te.work_details, '') AS description,
+        ROUND(te.final_billed_duration_seconds / 3600.0, 2) AS hours,
+        NULL AS unit_cost,
+        ROUND(te.final_billed_duration_seconds / 3600.0 * COALESCE(te.hourly_rate, 0), 2) AS total_cost,
+        COALESCE(cc.name, '') AS cost_code,
+        CASE WHEN te.is_billed = 1 THEN 'Billed' ELSE 'Unbilled' END AS billed_status,
+        te.start_time AS sort_key
       FROM time_entries te
       LEFT JOIN employees e ON te.employee_id = e.id
       LEFT JOIN projects p ON te.project_id = p.id
       LEFT JOIN cost_codes cc ON te.cost_code_id = cc.id
-      WHERE $where
-      ORDER BY te.start_time DESC
-    ''', variables: variables).get();
+      WHERE $labourWhereStr
 
-    // Strip the internal id column from the returned maps
+      UNION ALL
+
+      SELECT
+        COALESCE(strftime('%Y-%m-%d', m.purchase_date), '') AS date,
+        'Material' AS type,
+        '' AS employee,
+        COALESCE(m.vendor_or_subtrade, '') AS supplier,
+        COALESCE(m.description, m.item_name, '') AS description,
+        NULL AS hours,
+        ROUND(m.cost / NULLIF(COALESCE(m.quantity, 0), 0), 2) AS unit_cost,
+        ROUND(m.cost, 2) AS total_cost,
+        COALESCE(cc.name, '') AS cost_code,
+        CASE WHEN m.is_billed = 1 THEN 'Billed' ELSE 'Unbilled' END AS billed_status,
+        COALESCE(m.purchase_date, '') AS sort_key
+      FROM materials m
+      LEFT JOIN projects p ON m.project_id = p.id
+      LEFT JOIN cost_codes cc ON m.cost_code_id = cc.id
+      WHERE $materialWhereStr
+
+      ORDER BY sort_key DESC
+    ''', variables: [...labourVars, ...materialVars]).get();
+
+    // Map SQL aliases to user-facing includes keys; strip sort_key
+    const columnMap = {
+      'date': 'Date',
+      'type': 'Type (Labour/Material)',
+      'employee': 'Employee',
+      'supplier': 'Supplier',
+      'description': 'Description',
+      'hours': 'Hours',
+      'unit_cost': 'Unit Cost',
+      'total_cost': 'Total Cost',
+      'cost_code': 'Cost Code',
+      'billed_status': 'Billed Status',
+    };
+
     return rows.map((r) {
-      final map = Map<String, dynamic>.from(r.data);
-      map.remove('id');
-      return map;
+      final raw = Map<String, dynamic>.from(r.data);
+      final filtered = <String, dynamic>{};
+      for (final entry in columnMap.entries) {
+        if (includes[entry.value] == true) {
+          filtered[entry.value] = raw[entry.key];
+        }
+      }
+      return filtered;
     }).toList();
   }
 

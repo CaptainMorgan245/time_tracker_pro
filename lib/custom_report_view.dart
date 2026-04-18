@@ -39,8 +39,8 @@ class _CustomReportViewState extends State<CustomReportView> {
         return await _projectRepo.getCustomProjectReport(settings);
       case ReportSubject.personnel:
         return await _employeeRepo.getCustomPersonnelReport(settings);
-      case ReportSubject.timeEntries:
-        return await _timeEntryRepo.getCustomTimeEntriesReport(settings);
+      case ReportSubject.projectDetail:
+        return await _timeEntryRepo.getCustomProjectDetailReport(settings);
     }
   }
 
