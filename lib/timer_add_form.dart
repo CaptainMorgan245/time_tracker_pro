@@ -337,6 +337,7 @@ class TimerAddFormState extends State<TimerAddForm> {
                         });
                       }
                       return DropdownButtonFormField<Project>(
+                        isExpanded: true,
                         decoration: const InputDecoration(
                           border: inputBorder,
                           contentPadding: EdgeInsets.symmetric(horizontal: 12),
@@ -348,7 +349,7 @@ class TimerAddFormState extends State<TimerAddForm> {
                         items: projects.map((project) {
                           return DropdownMenuItem<Project>(
                             value: project,
-                            child: Text(project.projectName),
+                            child: Text(project.projectName, overflow: TextOverflow.ellipsis),
                           );
                         }).toList(),
                         onChanged: (Project? newValue) {
