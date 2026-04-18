@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:time_tracker_pro/models/analytics_models.dart';
 import 'package:time_tracker_pro/project_repository.dart';
 import 'package:time_tracker_pro/employee_repository.dart';
+import 'package:time_tracker_pro/time_entry_repository.dart';
 
 class CustomReportView extends StatefulWidget {
   final CustomReportSettings settings;
@@ -28,6 +29,7 @@ class _CustomReportViewState extends State<CustomReportView> {
   Future<List<Map<String, dynamic>>>? _reportDataFuture;
   final _projectRepo = ProjectRepository();
   final _employeeRepo = EmployeeRepository();
+  final _timeEntryRepo = TimeEntryRepository();
   List<Map<String, dynamic>>? _currentData; // Store data for export
 
   Future<List<Map<String, dynamic>>> _getReportData(CustomReportSettings settings) async {
@@ -37,7 +39,9 @@ class _CustomReportViewState extends State<CustomReportView> {
         return await _projectRepo.getCustomProjectReport(settings);
       case ReportSubject.personnel:
         return await _employeeRepo.getCustomPersonnelReport(settings);
-          }
+      case ReportSubject.timeEntries:
+        return await _timeEntryRepo.getCustomTimeEntriesReport(settings);
+    }
   }
 
   Future<void> _exportToCSV(BuildContext context) async {

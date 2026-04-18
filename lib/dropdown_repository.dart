@@ -43,6 +43,13 @@ class DropdownRepository {
     return rows.map((r) => DropdownItem(id: r.data['id'], name: r.data['project_name'])).toList();
   }
 
+  Future<List<DropdownItem>> getCostCodes() async {
+    final rows = await _db.customSelect(
+      'SELECT id, name FROM cost_codes ORDER BY name',
+    ).get();
+    return rows.map((r) => DropdownItem(id: r.data['id'], name: r.data['name'])).toList();
+  }
+
   /// CRITICAL FIX: SQL now calculates the true labor cost.
   Future<Map<String, dynamic>> getProjectSummaryDetails(int projectId) async {
     final rows = await _db.customSelect('''

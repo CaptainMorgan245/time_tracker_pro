@@ -2,7 +2,7 @@
 
 enum AnalyticsView { none, singleProjectCard, projectListTable, personnelSummary, customReport, companyExpenses, importErrors }
 enum ReportType { activeProjects, completedProjects }
-enum ReportSubject { projects, personnel }
+enum ReportSubject { projects, personnel, timeEntries }
 
 class CustomReportSettings {
   final ReportSubject subject;
@@ -10,6 +10,7 @@ class CustomReportSettings {
   final int? projectId;
   final int? clientId;
   final int? employeeId;
+  final int? costCodeId;
   final DateTime? startDate;
   final DateTime? endDate;
 
@@ -19,6 +20,7 @@ class CustomReportSettings {
     this.projectId,
     this.clientId,
     this.employeeId,
+    this.costCodeId,
     this.startDate,
     this.endDate,
   });

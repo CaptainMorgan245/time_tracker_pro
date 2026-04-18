@@ -480,23 +480,23 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                       width: 20,
                       child: CircularProgressIndicator(strokeWidth: 3))))
             ]
-                : _projectsForDropdown.map((item) {
-              return DropdownMenuItem<int>(
+                : [
+              const DropdownMenuItem<int>(
+                value: null,
+                child: Text('All Projects'),
+              ),
+              ..._projectsForDropdown.map((item) => DropdownMenuItem<int>(
                 value: item.id,
                 child: Text(item.name),
-              );
-            }).toList(),
+              )),
+            ],
             onChanged: (int? value) {
               if (value == null) {
-                setState(() {
-                  _selectedProjectId = null;
-                  _currentView = AnalyticsView.none;
-                });
+                setState(() => _selectedProjectId = null);
+                _showProjectListReport();
                 return;
               }
-              setState(() {
-                _selectedProjectId = value;
-              });
+              setState(() => _selectedProjectId = value);
               _generateSingleSummaryCard(value);
             },
           ),
