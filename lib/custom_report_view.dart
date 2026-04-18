@@ -3,9 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:csv/csv.dart';
-import 'package:share_plus/share_plus.dart';
-import 'dart:io';
-import 'package:path_provider/path_provider.dart';
+import 'package:time_tracker_pro/data_io_helper.dart';
 import 'package:time_tracker_pro/models/analytics_models.dart';
 import 'package:time_tracker_pro/project_repository.dart';
 import 'package:time_tracker_pro/employee_repository.dart';
@@ -59,14 +57,11 @@ class _CustomReportViewState extends State<CustomReportView> {
       ];
 
       String csv = const ListToCsvConverter().convert(csvData);
-      final directory = await getTemporaryDirectory();
       final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
       final subjectName = widget.settings.subject.name;
-      final path = '${directory.path}/custom_${subjectName}_report_$timestamp.csv';
-      final file = File(path);
-      await file.writeAsString(csv);
+      final fileName = 'custom_${subjectName}_report_$timestamp.csv';
 
-      await Share.shareXFiles([XFile(path)], subject: 'Custom $subjectName Report');
+      await exportCsvFile(fileName, csv);
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

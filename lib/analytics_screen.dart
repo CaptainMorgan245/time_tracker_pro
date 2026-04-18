@@ -18,7 +18,8 @@ import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/import_errors_report.dart';
 import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
-import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:time_tracker_pro/data_io_helper.dart';
 import 'package:time_tracker_pro/import_errors_notifier.dart';
 
 class AnalyticsScreen extends StatefulWidget {
@@ -136,12 +137,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['txt', 'json'],
+        withData: kIsWeb,
       );
 
       if (result == null) return;
 
-      final file = File(result.files.single.path!);
-      final jsonString = await file.readAsString();
+      final jsonString = await readPickedFileContent(result.files.single);
       final jsonData = jsonDecode(jsonString);
 
       final employeeNumber = jsonData['employee_id'] as String;  // e.g., "EMP-101"

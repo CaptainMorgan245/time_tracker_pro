@@ -1,11 +1,10 @@
 // lib/data_management_screen.dart
 
-import 'dart:convert';
-import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:time_tracker_pro/data_io_helper.dart';
 import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/dashboard_screen.dart';
 
@@ -21,10 +20,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
   bool _isImporting = false;
   bool _isClearing = false;
 
-  bool get _isMobilePlatform => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
-
   Future<void> _exportData() async {
-    if (!_isMobilePlatform) return;
     if (_isExporting) return;
 
     // Ask for optional custom name
@@ -103,21 +99,16 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
         fileName = 'backup_$timestamp.json';
       }
 
-      const exportPath = '/storage/emulated/0/Download';
-      final exportDir = Directory(exportPath);
+      await exportJsonFile(fileName, jsonString);
 
-      if (!await exportDir.exists()) {
-        await exportDir.create(recursive: true);
-      }
-
-      final filePath = '${exportDir.path}/$fileName';
-      final file = File(filePath);
-      await file.writeAsString(jsonString, encoding: utf8);
+      final message = kIsWeb
+          ? '✅ Backup downloaded as $fileName'
+          : '✅ Backup saved to Download/$fileName';
 
       messenger.showSnackBar(
         SnackBar(
           duration: const Duration(seconds: 8),
-          content: Text('✅ Backup saved to Download/$fileName'),
+          content: Text(message),
           backgroundColor: Colors.green,
         ),
       );
@@ -133,7 +124,6 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
   }
 
   Future<void> _importData() async {
-    if (!_isMobilePlatform) return;
     if (_isImporting) return;
 
     setState(() => _isImporting = true);
@@ -143,6 +133,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['json'],
+        withData: kIsWeb, // web needs bytes; mobile uses path
       );
 
       if (result == null) {
@@ -151,16 +142,10 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
         return;
       }
 
-      final path = result.files.single.path;
-      if (path == null || path.isEmpty) {
-        throw Exception("Selected file path is invalid.");
-      }
-
-      final file = File(path);
-      final jsonString = await file.readAsString();
+      final jsonString = await readPickedFileContent(result.files.single);
 
       if (jsonString.trim().isEmpty) {
-        throw Exception("The selected backup file is empty.");
+        throw Exception('The selected backup file is empty.');
       }
 
       final confirmed = await showDialog<bool>(
@@ -220,7 +205,6 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
   }
 
   Future<void> _clearAllData() async {
-    if (!_isMobilePlatform) return;
     if (_isClearing) return;
 
     final confirmed = await showDialog<bool>(
@@ -251,8 +235,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
     setState(() => _isClearing = true);
 
     try {
-      final dbHelper = AppDatabase.instance;
-      await dbHelper.deleteAllData();
+      await AppDatabase.instance.deleteAllData();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -272,6 +255,10 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final backupDescription = kIsWeb
+        ? 'Use the options below to download a backup (Export) or restore from a backup file (Import).'
+        : 'Use the options below to save a backup (Export) or restore from a backup file (Import). Backups are saved in the Download folder.';
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Data Management'),
@@ -284,20 +271,20 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
           children: [
             _buildSectionHeader(context, 'Database Backup & Restore'),
             const SizedBox(height: 8),
-            _buildInfoCard('Use the options below to save a backup (Export) or restore from a backup file (Import). Backups are saved in the Download folder.'),
+            _buildInfoCard(backupDescription),
             const SizedBox(height: 24),
             _buildActionButton(
               context: context,
               icon: Icons.file_upload_outlined,
               label: _isExporting ? 'Saving...' : 'Export Full Backup',
-              onPressed: _isMobilePlatform && !_isExporting ? _exportData : null,
+              onPressed: !_isExporting ? _exportData : null,
             ),
             const SizedBox(height: 16),
             _buildActionButton(
               context: context,
               icon: Icons.file_download_outlined,
               label: _isImporting ? 'Importing...' : 'Import From Backup',
-              onPressed: _isMobilePlatform && !_isImporting ? _importData : null,
+              onPressed: !_isImporting ? _importData : null,
             ),
             const Divider(height: 48),
             _buildSectionHeader(context, 'Danger Zone'),
@@ -308,7 +295,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
               context: context,
               icon: Icons.delete_forever_outlined,
               label: _isClearing ? 'Clearing...' : 'Clear All Data',
-              onPressed: _isMobilePlatform && !_isClearing ? _clearAllData : null,
+              onPressed: !_isClearing ? _clearAllData : null,
               color: Colors.red.shade700,
             ),
           ],
@@ -353,7 +340,7 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
     final theme = Theme.of(context);
     final buttonColor = color ?? theme.colorScheme.primary;
     final onButtonColor = theme.colorScheme.onPrimary;
-    bool isLoading = (label.contains('Saving...')) || (label.contains('Importing...')) || (label.contains('Clearing...'));
+    final isLoading = label.contains('Saving...') || label.contains('Importing...') || label.contains('Clearing...');
 
     return ElevatedButton.icon(
       icon: isLoading

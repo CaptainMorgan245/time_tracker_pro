@@ -250,11 +250,12 @@ class AppDatabase extends _$AppDatabase {
     ).get();
 
     final formatter = NumberFormat.currency(locale: 'en_US', symbol: '\$');
+    final normalizedPrefix = amountPrefix.replaceAll(RegExp(r'[,\$]'), '');
     return rows
         .map((row) => JobMaterials.fromMap(row.data))
         .where((record) {
-          final formatted = formatter.format(record.cost).replaceAll('\$', '');
-          return formatted.startsWith(amountPrefix);
+          final formatted = formatter.format(record.cost).replaceAll(RegExp(r'[,\$]'), '');
+          return formatted.startsWith(normalizedPrefix);
         })
         .toList();
   }

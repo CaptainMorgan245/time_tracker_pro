@@ -11,9 +11,7 @@ import 'package:time_tracker_pro/cost_code_repository.dart';
 import 'package:time_tracker_pro/timer_add_form.dart';
 import 'package:intl/intl.dart';
 import 'package:csv/csv.dart';
-import 'package:share_plus/share_plus.dart';
-import 'dart:io';
-import 'package:path_provider/path_provider.dart';
+import 'package:time_tracker_pro/data_io_helper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:time_tracker_pro/settings_service.dart';
 import 'package:time_tracker_pro/settings_model.dart';
@@ -337,13 +335,10 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
       }
 
       String csv = const ListToCsvConverter().convert(csvData);
-      final directory = await getTemporaryDirectory();
       final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-      final path = '${directory.path}/time_records_$timestamp.csv';
-      final file = File(path);
-      await file.writeAsString(csv);
+      final fileName = 'time_records_$timestamp.csv';
 
-      await Share.shareXFiles([XFile(path)], subject: 'Time Records Export');
+      await exportCsvFile(fileName, csv);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
