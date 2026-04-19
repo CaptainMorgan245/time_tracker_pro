@@ -24,6 +24,7 @@ import 'package:time_tracker_pro/screens/payroll_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'package:time_tracker_pro/settings_service.dart';
 import 'package:time_tracker_pro/settings_model.dart';
+import 'package:time_tracker_pro/widgets/browser_warning_banner.dart';
 
 // START REUSABLE DRAWER WIDGET
 class AppDrawer extends StatelessWidget {
@@ -169,10 +170,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _selectedIndex = widget.initialIndex;
     _reloadData();
+    AppDatabase.instance.databaseNotifier.addListener(_onDatabaseChanged);
   }
 
   @override
+  void _onDatabaseChanged() {
+    if (mounted) _reloadData();
+  }
+
   void dispose() {
+    AppDatabase.instance.databaseNotifier.removeListener(_onDatabaseChanged);
     _projectsNotifier.dispose();
     _employeesNotifier.dispose();
     _costCodesNotifier.dispose();
@@ -621,13 +628,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
             : null,
       ),
       drawer: const AppDrawer(),
-      body: IndexedStack(
-        index: _selectedIndex,
+      body: Column(
         children: [
-          _buildDashboardContent(),
-          CostEntryScreen(amountSearchController: _amountSearchController),
-          const AnalyticsScreen(),
-          const InvoiceListScreen(),
+          const BrowserWarningBanner(),
+          Expanded(
+            child: IndexedStack(
+              index: _selectedIndex,
+              children: [
+                _buildDashboardContent(),
+                CostEntryScreen(amountSearchController: _amountSearchController),
+                const AnalyticsScreen(),
+                const InvoiceListScreen(),
+              ],
+            ),
+          ),
         ],
       ),
       // FIX: AppBottomNavBar uses currentIndex/onTap not selectedIndex/onItemTapped

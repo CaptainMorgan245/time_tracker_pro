@@ -112,6 +112,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
     super.initState();
     _amountController.addListener(() => setState(() {}));
     _loadProjects();
+    AppDatabase.instance.databaseNotifier.addListener(_loadProjects);
 
     // Pre-populate if editing
     if (_isEditMode) {
@@ -133,6 +134,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
 
   @override
   void dispose() {
+    AppDatabase.instance.databaseNotifier.removeListener(_loadProjects);
     _amountController.dispose();
     _notesController.dispose();
     _internalNotesController.dispose();

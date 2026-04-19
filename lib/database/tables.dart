@@ -211,7 +211,6 @@ class CompanySettingsTable extends Table {
 class WorkerPayments extends Table {
   IntColumn get id => integer().autoIncrement()();
   IntColumn get employeeId => integer().references(Employees, #id)();
-  TextColumn get depthDate => text()(); // Wait, I think this was paymentDate
   TextColumn get paymentDate => text()();
   RealColumn get amount => real()();
   TextColumn get note => text().nullable()();

@@ -27,7 +27,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 20;
+  int get schemaVersion => 21;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -93,6 +93,13 @@ class AppDatabase extends _$AppDatabase {
               'hourly', 0, 1, 15.0, 5.0
             WHERE NOT EXISTS (SELECT 1 FROM projects WHERE is_internal = 1)''',
         );
+      }
+      if (from < 21) {
+        final cols = await customSelect('PRAGMA table_info(worker_payments)').get();
+        final hasDepthDate = cols.any((r) => r.data['name'] == 'depth_date');
+        if (hasDepthDate) {
+          await customStatement('ALTER TABLE worker_payments DROP COLUMN depth_date;');
+        }
       }
     },
   );
@@ -518,13 +525,20 @@ class AppDatabase extends _$AppDatabase {
 
       for (final name in tables.keys) {
         final rows = tables[name] as List<dynamic>;
+        if (rows.isEmpty) continue;
+        final schemaRows = await customSelect('PRAGMA table_info($name)').get();
+        final validColumns = schemaRows.map((r) => r.data['name'] as String).toSet();
         for (final row in rows) {
           final map = row as Map<String, dynamic>;
-          final cols = map.keys.join(', ');
-          final placeholders = map.keys.map((_) => '?').join(', ');
+          final filteredMap = Map.fromEntries(
+            map.entries.where((e) => validColumns.contains(e.key)),
+          );
+          if (filteredMap.isEmpty) continue;
+          final cols = filteredMap.keys.join(', ');
+          final placeholders = filteredMap.keys.map((_) => '?').join(', ');
           await customInsert(
             'INSERT OR REPLACE INTO $name ($cols) VALUES ($placeholders)',
-            variables: map.values
+            variables: filteredMap.values
                 .map((v) => v == null
                     ? const Variable(null)
                     : Variable(v))
@@ -585,5 +599,11 @@ class AppDatabase extends _$AppDatabase {
 // =========================================================================
 
 QueryExecutor _openConnection() {
-  return driftDatabase(name: 'time_tracker_pro');
+  return driftDatabase(
+    name: 'time_tracker_pro',
+    web: DriftWebOptions(
+      sqlite3Wasm: Uri.parse('sqlite3.wasm'),
+      driftWorker: Uri.parse('drift_worker.worker.js'),
+    ),
+  );
 }

@@ -56,6 +56,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
     super.initState();
     _loadSavedDates();
     _loadData();
+    AppDatabase.instance.databaseNotifier.addListener(_onDatabaseChanged);
   }
 
   Future<void> _loadSavedDates() async {
@@ -77,10 +78,15 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
 
   @override
   void dispose() {
+    AppDatabase.instance.databaseNotifier.removeListener(_onDatabaseChanged);
     _projectsNotifier.dispose();
     _employeesNotifier.dispose();
     _costCodesNotifier.dispose(); // NEW: Dispose phases notifier
     super.dispose();
+  }
+
+  void _onDatabaseChanged() {
+    if (mounted) _loadData();
   }
 
   Future<void> _loadData() async {

@@ -55,6 +55,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       if (mounted) setState(() {}); // Rebuild when errors change
     });
     _loadProjects();
+    AppDatabase.instance.databaseNotifier.addListener(_loadProjects);
   }
 
   void _onErrorsChanged() {
@@ -63,6 +64,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
 
   @override
   void dispose() {
+    AppDatabase.instance.databaseNotifier.removeListener(_loadProjects);
     ImportErrorsNotifier.instance.removeListener(_onErrorsChanged);
     super.dispose();
   }

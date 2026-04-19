@@ -132,73 +132,77 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   }
 
   Future<void> _saveSettings({double? currentBurdenRate}) async {
-    final bool isFirstRun = _settings.setupCompleted != true;
+    try {
+      final bool isFirstRun = _settings.setupCompleted != true;
 
-    // 1. Save App Settings
-    final settings = _settings.copyWith(
-      employeeNumberPrefix: employeeNumberPrefixController.text.isEmpty ? null : employeeNumberPrefixController.text,
-      nextEmployeeNumber: int.tryParse(nextEmployeeNumberController.text),
-      autoBackupReminderFrequency: int.tryParse(backupFrequencyController.text) ?? 10,
-      defaultReportMonths: int.tryParse(reportMonthsController.text) ?? 3,
-      expenseMarkupPercentage: double.tryParse(expenseMarkupPercentageController.text) ?? 0.0,
-      companyHourlyRate: currentBurdenRate ?? _settings.companyHourlyRate,
-      setupCompleted: true,
-    );
-
-    await _dbHelper.customUpdate(
-      'UPDATE settings SET employee_number_prefix=?, next_employee_number=?, auto_backup_reminder_frequency=?, default_report_months=?, expense_markup_percentage=?, company_hourly_rate=?, setup_completed=? WHERE id=1',
-      variables: [
-        Variable(settings.employeeNumberPrefix),
-        Variable(settings.nextEmployeeNumber),
-        Variable.withInt(settings.autoBackupReminderFrequency),
-        Variable.withInt(settings.defaultReportMonths),
-        Variable.withReal(settings.expenseMarkupPercentage),
-        Variable(settings.companyHourlyRate),
-        Variable.withInt(1),
-      ],
-      updates: {},
-    );
-
-    // 2. Save Company Settings
-    final double tax1Rate = (double.tryParse(tax1RateController.text) ?? 0.0) / 100.0;
-    final double? tax2RateStr = double.tryParse(tax2RateController.text);
-    final double? tax2Rate = tax2RateStr != null ? tax2RateStr / 100.0 : null;
-
-    final updatedCompany = _companySettings.copyWith(
-      companyName: companyNameController.text,
-      companyAddress: companyAddressController.text,
-      companyCity: companyCityController.text,
-      companyProvince: companyProvinceController.text,
-      companyPostalCode: companyPostalCodeController.text,
-      companyPhone: companyPhoneController.text,
-      companyEmail: companyEmailController.text,
-      defaultTax1Name: tax1NameController.text,
-      defaultTax1Rate: tax1Rate,
-      defaultTax1RegistrationNumber: tax1RegController.text,
-      defaultTax2Name: tax2NameController.text,
-      defaultTax2Rate: tax2Rate,
-      defaultTax2RegistrationNumber: tax2RegController.text,
-      defaultTerms: termsController.text,
-      country: countryController.text,
-      regionLabel: regionLabelController.text,
-      postalCodeLabel: postalCodeLabelController.text,
-    );
-
-    await _dbHelper.updateCompanySettings(updatedCompany);
-    _dbHelper.notifyDatabaseChanged();
-
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('All Settings Saved!')),
-    );
-
-    if (isFirstRun && mounted) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-            builder: (context) => const DashboardScreen()),
-        (route) => false,
+      // 1. Save App Settings
+      final settings = _settings.copyWith(
+        employeeNumberPrefix: employeeNumberPrefixController.text.isEmpty ? null : employeeNumberPrefixController.text,
+        nextEmployeeNumber: int.tryParse(nextEmployeeNumberController.text),
+        autoBackupReminderFrequency: int.tryParse(backupFrequencyController.text) ?? 10,
+        defaultReportMonths: int.tryParse(reportMonthsController.text) ?? 3,
+        expenseMarkupPercentage: double.tryParse(expenseMarkupPercentageController.text) ?? 0.0,
+        companyHourlyRate: currentBurdenRate ?? _settings.companyHourlyRate,
+        setupCompleted: true,
       );
+
+      await _dbHelper.customUpdate(
+        'UPDATE settings SET employee_number_prefix=?, next_employee_number=?, auto_backup_reminder_frequency=?, default_report_months=?, expense_markup_percentage=?, company_hourly_rate=?, setup_completed=? WHERE id=1',
+        variables: [
+          Variable(settings.employeeNumberPrefix),
+          Variable(settings.nextEmployeeNumber),
+          Variable.withInt(settings.autoBackupReminderFrequency),
+          Variable.withInt(settings.defaultReportMonths),
+          Variable.withReal(settings.expenseMarkupPercentage),
+          Variable(settings.companyHourlyRate),
+          Variable.withInt(1),
+        ],
+        updates: {AppDatabase.instance.settings},
+      );
+
+      // 2. Save Company Settings
+      final double tax1Rate = (double.tryParse(tax1RateController.text) ?? 0.0) / 100.0;
+      final double? tax2RateStr = double.tryParse(tax2RateController.text);
+      final double? tax2Rate = tax2RateStr != null ? tax2RateStr / 100.0 : null;
+
+      final updatedCompany = _companySettings.copyWith(
+        companyName: companyNameController.text,
+        companyAddress: companyAddressController.text,
+        companyCity: companyCityController.text,
+        companyProvince: companyProvinceController.text,
+        companyPostalCode: companyPostalCodeController.text,
+        companyPhone: companyPhoneController.text,
+        companyEmail: companyEmailController.text,
+        defaultTax1Name: tax1NameController.text,
+        defaultTax1Rate: tax1Rate,
+        defaultTax1RegistrationNumber: tax1RegController.text,
+        defaultTax2Name: tax2NameController.text,
+        defaultTax2Rate: tax2Rate,
+        defaultTax2RegistrationNumber: tax2RegController.text,
+        defaultTerms: termsController.text,
+        country: countryController.text,
+        regionLabel: regionLabelController.text,
+        postalCodeLabel: postalCodeLabelController.text,
+      );
+
+      await _dbHelper.updateCompanySettings(updatedCompany);
+      _dbHelper.notifyDatabaseChanged();
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('All Settings Saved!')),
+      );
+
+      if (isFirstRun && mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(
+              builder: (context) => const DashboardScreen()),
+          (route) => false,
+        );
+      }
+    } catch (e, st) {
+      debugPrint('_saveSettings error: $e\n$st');
     }
   }
 

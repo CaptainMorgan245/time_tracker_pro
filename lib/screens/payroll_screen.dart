@@ -36,6 +36,13 @@ class _PayrollScreenState extends State<PayrollScreen> {
     _endDate = now;
     _loadProjects();
     _loadPayrollData();
+    AppDatabase.instance.databaseNotifier.addListener(_loadPayrollData);
+  }
+
+  @override
+  void dispose() {
+    AppDatabase.instance.databaseNotifier.removeListener(_loadPayrollData);
+    super.dispose();
   }
 
   Future<void> _loadProjects() async {
