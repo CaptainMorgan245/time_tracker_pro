@@ -18,6 +18,9 @@ class CompanySettings {
   final String postalCodeLabel;
   final String regionLabel;
   final String country;
+  final String invoicePrefix;
+  final int invoiceStartingNumber;
+  final String? paymentEtransferEmail;
 
   CompanySettings({
     this.id = 1,
@@ -39,6 +42,9 @@ class CompanySettings {
     this.postalCodeLabel = 'Postal Code',
     this.regionLabel = 'Province',
     this.country = 'Canada',
+    this.invoicePrefix = 'INV',
+    this.invoiceStartingNumber = 1,
+    this.paymentEtransferEmail,
   });
 
   Map<String, dynamic> toMap() {
@@ -62,6 +68,9 @@ class CompanySettings {
       'postal_code_label': postalCodeLabel,
       'region_label': regionLabel,
       'country': country,
+      'invoice_prefix': invoicePrefix,
+      'invoice_starting_number': invoiceStartingNumber,
+      'payment_etransfer_email': paymentEtransferEmail,
     };
   }
 
@@ -86,6 +95,9 @@ class CompanySettings {
       postalCodeLabel: (map['postal_code_label'] as String?) ?? 'Postal Code',
       regionLabel: (map['region_label'] as String?) ?? 'Province',
       country: (map['country'] as String?) ?? 'Canada',
+      invoicePrefix: (map['invoice_prefix'] as String?) ?? 'INV',
+      invoiceStartingNumber: (map['invoice_starting_number'] as int?) ?? 1,
+      paymentEtransferEmail: map['payment_etransfer_email'] as String?,
     );
   }
 
@@ -109,6 +121,9 @@ class CompanySettings {
     String? postalCodeLabel,
     String? regionLabel,
     String? country,
+    String? invoicePrefix,
+    int? invoiceStartingNumber,
+    String? paymentEtransferEmail,
   }) {
     return CompanySettings(
       id: id ?? this.id,
@@ -130,6 +145,9 @@ class CompanySettings {
       postalCodeLabel: postalCodeLabel ?? this.postalCodeLabel,
       regionLabel: regionLabel ?? this.regionLabel,
       country: country ?? this.country,
+      invoicePrefix: invoicePrefix ?? this.invoicePrefix,
+      invoiceStartingNumber: invoiceStartingNumber ?? this.invoiceStartingNumber,
+      paymentEtransferEmail: paymentEtransferEmail ?? this.paymentEtransferEmail,
     );
   }
 }

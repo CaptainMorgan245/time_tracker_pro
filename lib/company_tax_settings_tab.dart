@@ -20,6 +20,9 @@ class CompanyTaxSettingsTab extends StatelessWidget {
   final TextEditingController countryController;
   final TextEditingController regionLabelController;
   final TextEditingController postalCodeLabelController;
+  final TextEditingController invoicePrefixController;
+  final TextEditingController invoiceStartingNumberController;
+  final TextEditingController paymentEtransferEmailController;
   final VoidCallback onSave;
 
   const CompanyTaxSettingsTab({
@@ -41,6 +44,9 @@ class CompanyTaxSettingsTab extends StatelessWidget {
     required this.countryController,
     required this.regionLabelController,
     required this.postalCodeLabelController,
+    required this.invoicePrefixController,
+    required this.invoiceStartingNumberController,
+    required this.paymentEtransferEmailController,
     required this.onSave,
   });
 
@@ -94,23 +100,8 @@ class CompanyTaxSettingsTab extends StatelessWidget {
                   ),
                   TextField(
                     controller: countryController,
-                    decoration: const InputDecoration(
-                      labelText: 'Country',
-                    ),
-                  ),
-                  TextField(
-                    controller: regionLabelController,
-                    decoration: const InputDecoration(
-                      labelText: 'Province/State Field Label',
-                      hintText: 'e.g. Province, State, County',
-                    ),
-                  ),
-                  TextField(
-                    controller: postalCodeLabelController,
-                    decoration: const InputDecoration(
-                      labelText: 'Postal/ZIP Field Label',
-                      hintText: 'e.g. Postal Code, ZIP Code, Postcode',
-                    ),
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(labelText: 'Country'),
                   ),
                   Row(
                     children: [
@@ -128,6 +119,33 @@ class CompanyTaxSettingsTab extends StatelessWidget {
                         ),
                       ),
                     ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildSectionTitle('Regional Settings'),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                children: [
+                  TextField(
+                    controller: regionLabelController,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Province/State Field Label',
+                      hintText: 'e.g. Province, State, County',
+                    ),
+                  ),
+                  TextField(
+                    controller: postalCodeLabelController,
+                    textCapitalization: TextCapitalization.words,
+                    decoration: const InputDecoration(
+                      labelText: 'Postal/ZIP Field Label',
+                      hintText: 'e.g. Postal Code, ZIP Code, Postcode',
+                    ),
                   ),
                 ],
               ),
@@ -224,6 +242,50 @@ class CompanyTaxSettingsTab extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(height: 16),
+          _buildSectionTitle('Invoice Settings'),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: invoicePrefixController,
+                          textCapitalization: TextCapitalization.characters,
+                          decoration: const InputDecoration(
+                            labelText: 'Invoice Prefix',
+                            hintText: 'e.g. INV or DPS, leave blank to omit',
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: invoiceStartingNumberController,
+                          decoration: const InputDecoration(
+                            labelText: 'Starting Invoice Number',
+                            hintText: 'e.g. 1001',
+                          ),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                    ],
+                  ),
+                  TextField(
+                    controller: paymentEtransferEmailController,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: 'Payment E-Transfer Email',
+                      hintText: 'shown on invoices, leave blank to omit',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
           const SizedBox(height: 32),
           Align(
             alignment: Alignment.centerLeft,
@@ -236,7 +298,7 @@ class CompanyTaxSettingsTab extends StatelessWidget {
               child: const Text('Save Company Settings'),
             ),
           ),
-          const SizedBox(height: 100), // Added extra scroll space
+          const SizedBox(height: 100),
         ],
       ),
     );

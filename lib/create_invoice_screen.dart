@@ -150,8 +150,11 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
   Future<void> _loadProjects() async {
     setState(() => _isLoading = true);
     try {
-      // Fetch active projects
+      // Fetch active fixed-price, non-internal projects
       var projects = await _invoiceRepository.getActiveProjects();
+      projects = projects
+          .where((p) => p.pricingModel == 'fixed' && !p.isInternal)
+          .toList();
       final cs = await AppDatabase.instance.getCompanySettings();
 
       // If editing, ensure the current invoice's project is in the list
@@ -755,10 +758,13 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
                       textInputAction: TextInputAction.newline,
                       maxLines: 4,
                       decoration: const InputDecoration(
-                        labelText: 'Work Description',
+                        labelText: 'Work Description *',
                         hintText: 'Describe the work performed for this invoice',
                         border: OutlineInputBorder(),
                       ),
+                      validator: (value) => (value == null || value.trim().isEmpty)
+                          ? 'Please enter a work description'
+                          : null,
                     ),
                     const SizedBox(height: 16),
                     Row(

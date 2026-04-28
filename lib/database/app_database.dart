@@ -27,7 +27,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 21;
+  int get schemaVersion => 22;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -100,6 +100,11 @@ class AppDatabase extends _$AppDatabase {
         if (hasDepthDate) {
           await customStatement('ALTER TABLE worker_payments DROP COLUMN depth_date;');
         }
+      }
+      if (from < 22) {
+        await customStatement('ALTER TABLE company_settings ADD COLUMN invoice_prefix TEXT NOT NULL DEFAULT "INV";');
+        await customStatement('ALTER TABLE company_settings ADD COLUMN invoice_starting_number INTEGER NOT NULL DEFAULT 1;');
+        await customStatement('ALTER TABLE company_settings ADD COLUMN payment_etransfer_email TEXT;');
       }
     },
   );
@@ -424,8 +429,9 @@ class AppDatabase extends _$AppDatabase {
         company_email = ?, default_tax1_name = ?, default_tax1_rate = ?,
         default_tax1_registration_number = ?, default_tax2_name = ?,
         default_tax2_rate = ?, default_tax2_registration_number = ?,
-        default_terms = ?, tax_rate = ?, postal_code_label = ?, 
-        region_label = ?, country = ?
+        default_terms = ?, tax_rate = ?, postal_code_label = ?,
+        region_label = ?, country = ?, invoice_prefix = ?,
+        invoice_starting_number = ?, payment_etransfer_email = ?
       WHERE id = 1''',
       variables: [
         Variable.withString(s.companyName ?? ''),
@@ -446,6 +452,9 @@ class AppDatabase extends _$AppDatabase {
         Variable.withString(s.postalCodeLabel),
         Variable.withString(s.regionLabel),
         Variable.withString(s.country),
+        Variable.withString(s.invoicePrefix),
+        Variable.withInt(s.invoiceStartingNumber),
+        Variable(s.paymentEtransferEmail),
       ],
       updates: {companySettingsTable},
     );

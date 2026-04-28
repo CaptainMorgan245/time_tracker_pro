@@ -148,6 +148,7 @@ class CostRecordFormTopRow extends StatelessWidget {
                   child: TextFormField(
                     key: ValueKey('itemName_${currentItemName}_${formStateKey.hashCode}'),
                     initialValue: currentItemName,
+                    textCapitalization: TextCapitalization.words,
                     style: const TextStyle(fontSize: 13),
                     decoration: InputDecoration(
                       labelText: 'Item Name',
@@ -311,14 +312,27 @@ class _CostEntryScreenState extends State<CostEntryScreen> {
 
       if (!mounted) return;
       _expenseCategoriesNotifier.value = categories.map((c) => c.name).toList();
-      _vendorsNotifier.value = List<String>.from(settings.vendors);
-      _vehicleDesignationsNotifier.value = List<String>.from(settings.vehicleDesignations);
+      _vendorsNotifier.value = List<String>.from(settings.vendors)..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      _vehicleDesignationsNotifier.value = List<String>.from(settings.vehicleDesignations)..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
 
       final internalIds = await AppDatabase.instance.getInternalRecordIds();
       _internalProjectId = internalIds['internalProjectId'];
       _companyClientId = internalIds['companyClientId'];
 
       _updateFilteredProjectsList();
+
+      // Ensure the form always has a valid project so submission doesn't silently fail.
+      // We only set the form's internal state — the screen dropdown stays at "All Projects".
+      // resetForm() already handles this after every submit, so this only matters on first load.
+      final filtered = _filteredProjectsNotifier.value;
+      if (filtered.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (_formStateKey.currentState?.selectedProjectId == null) {
+            _formStateKey.currentState?.setSelectedProjectId(filtered.first.id);
+          }
+        });
+      }
+
       setState(() => _isLoading = false);
     } catch (e) {
       if (mounted) setState(() => _isLoading = false);

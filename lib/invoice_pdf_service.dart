@@ -109,15 +109,6 @@ class InvoicePdfService {
                       style: const pw.TextStyle(fontSize: 10)),
                   pw.Text('Date: ' + _formatDate(invoice.invoiceDate),
                       style: const pw.TextStyle(fontSize: 10)),
-                  pw.Text('Terms: ' + invoice.terms,
-                      style: const pw.TextStyle(fontSize: 10)),
-                  pw.Text(
-                    'GST #: ' +
-                        (invoice.tax1RegistrationNumber ??
-                            companySettings['default_tax1_registration_number'] ??
-                            ''),
-                    style: const pw.TextStyle(fontSize: 10),
-                  ),
                 ],
               ),
             ],
@@ -316,14 +307,39 @@ class InvoicePdfService {
 
           // SECTION 6: FOOTER
           pw.Divider(color: _dyconnOrange, height: 20),
-          pw.Center(
-            child: pw.Text(
-              'Thank you for your business.  |  ' +
-                  (companySettings['company_email'] ?? '') +
-                  '  |  ' +
-                  (companySettings['company_phone'] ?? ''),
-              style: const pw.TextStyle(fontSize: 9),
-            ),
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
+            children: [
+              pw.Center(
+                child: pw.Text(
+                  'Thank you for your business.',
+                  style: const pw.TextStyle(fontSize: 9),
+                ),
+              ),
+              pw.SizedBox(height: 3),
+              pw.Center(
+                child: pw.Text(
+                  'Payment Terms: ' + invoice.terms,
+                  style: const pw.TextStyle(fontSize: 9),
+                ),
+              ),
+              if (((companySettings['payment_etransfer_email'] as String?) ?? '').trim().isNotEmpty)
+                pw.Center(
+                  child: pw.Text(
+                    'E-Transfer: ' + ((companySettings['payment_etransfer_email'] as String?) ?? ''),
+                    style: const pw.TextStyle(fontSize: 9),
+                  ),
+                ),
+              if (((invoice.tax1RegistrationNumber ?? companySettings['default_tax1_registration_number']) as String?) != null)
+                pw.Center(
+                  child: pw.Text(
+                    'GST Registration #: ' +
+                        ((invoice.tax1RegistrationNumber ??
+                            companySettings['default_tax1_registration_number']) as String),
+                    style: const pw.TextStyle(fontSize: 9),
+                  ),
+                ),
+            ],
           ),
         ],
       ),

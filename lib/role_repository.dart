@@ -20,7 +20,7 @@ class RoleRepository {
   }
 
   Future<List<Role>> getRoles() async {
-    final rows = await _db.customSelect('SELECT * FROM roles').get();
+    final rows = await _db.customSelect('SELECT * FROM roles ORDER BY name COLLATE NOCASE ASC').get();
     return rows.map((r) => Role.fromMap(r.data)).toList();
   }
 

@@ -202,6 +202,10 @@ class CompanySettingsTable extends Table {
   TextColumn get regionLabel => text().withDefault(const Constant('Province'))();
   TextColumn get country => text().withDefault(const Constant('Canada'))();
 
+  TextColumn get invoicePrefix => text().withDefault(const Constant('INV'))();
+  IntColumn get invoiceStartingNumber => integer().withDefault(const Constant(1))();
+  TextColumn get paymentEtransferEmail => text().nullable()();
+
   @override
   Set<Column> get primaryKey => {id};
 }

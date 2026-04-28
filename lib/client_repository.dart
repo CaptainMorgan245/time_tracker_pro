@@ -22,7 +22,7 @@ class ClientRepository {
   }
 
   Future<List<Client>> getClients() async {
-    final rows = await _db.customSelect('SELECT * FROM clients').get();
+    final rows = await _db.customSelect('SELECT * FROM clients ORDER BY name COLLATE NOCASE ASC').get();
     return rows.map((r) => Client.fromMap(r.data)).toList();
   }
 

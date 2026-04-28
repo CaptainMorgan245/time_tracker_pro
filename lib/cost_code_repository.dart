@@ -8,7 +8,7 @@ class CostCodeRepository {
   final _db = AppDatabase.instance;
 
   Future<List<CostCode>> getAllCostCodes() async {
-    final rows = await _db.customSelect('SELECT * FROM cost_codes').get();
+    final rows = await _db.customSelect('SELECT * FROM cost_codes ORDER BY name COLLATE NOCASE ASC').get();
     return rows.map((r) => CostCode.fromMap(r.data)).toList();
   }
 

@@ -71,11 +71,13 @@ class ProjectRepository {
         Variable.withInt(project.id!),
       ],
     );
+    _db.notifyDatabaseChanged();
   }
 
   Future<void> deleteProject(int id) async {
     await _db.customUpdate('DELETE FROM projects WHERE id = ?',
         variables: [Variable.withInt(id)]);
+    _db.notifyDatabaseChanged();
   }
 
   Future<Project?> getProjectById(int id) async {

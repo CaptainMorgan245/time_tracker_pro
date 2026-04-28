@@ -55,6 +55,7 @@ class CostRecordFormState extends State<CostRecordForm> {
   String? _selectedVehicleDesignation;
   int? _selectedCostCodeId;
   bool isFuelCategory = false;
+  bool _isReturn = false;
 
   // internalProjectId is now passed in via widget.internalProjectId
   int? _editingExpenseId;
@@ -106,7 +107,8 @@ class CostRecordFormState extends State<CostRecordForm> {
     setState(() {
       _editingExpenseId = expense.id;
       _itemNameController.text = expense.itemName ?? '';
-      _costController.text = expense.cost.toStringAsFixed(2);
+      _isReturn = expense.cost < 0;
+      _costController.text = expense.cost.abs().toStringAsFixed(2);
       _quantityController.text = expense.quantity?.toStringAsFixed(2) ?? '';
       _odometerReadingController.text = expense.odometerReading?.toStringAsFixed(0) ?? '';
       _selectedPurchaseDate = expense.purchaseDate;
@@ -145,6 +147,7 @@ class CostRecordFormState extends State<CostRecordForm> {
       _editingExpenseId = null;
       _selectedPurchaseDate = DateTime.now();
       isFuelCategory = false;
+      _isReturn = false;
       selectedExpenseCategory = null;
       _selectedVendorOrSubtrade = null;
       _selectedCostCodeId = null;
@@ -188,7 +191,7 @@ class CostRecordFormState extends State<CostRecordForm> {
         id: _editingExpenseId,
         projectId: submissionProjectId,
         itemName: submittedItemName,
-        cost: double.parse(_costController.text),
+        cost: _isReturn ? -double.parse(_costController.text) : double.parse(_costController.text),
         purchaseDate: _selectedPurchaseDate,
         description: null,
         expenseCategory: selectedExpenseCategory,
@@ -277,6 +280,7 @@ class CostRecordFormState extends State<CostRecordForm> {
                     flex: 2,
                     child: TextFormField(
                       controller: _itemNameController,
+                      textCapitalization: TextCapitalization.words,
                       decoration: const InputDecoration(
                         labelText: 'Item Name',
                       ),
@@ -354,6 +358,18 @@ class CostRecordFormState extends State<CostRecordForm> {
                       return null;
                     },
                   ),
+                ),
+                const SizedBox(width: 4),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Return', style: TextStyle(fontSize: 11)),
+                    Checkbox(
+                      value: _isReturn,
+                      onChanged: (v) => setState(() => _isReturn = v ?? false),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ],
                 ),
                 const SizedBox(width: 8),
                 Expanded(

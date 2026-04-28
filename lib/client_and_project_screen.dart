@@ -359,11 +359,13 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
             children: [
               TextField(
                 controller: nameController,
+                textCapitalization: TextCapitalization.words,
                 decoration: const InputDecoration(labelText: 'Client Name'),
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: contactPersonController,
+                textCapitalization: TextCapitalization.words,
                 decoration: const InputDecoration(labelText: 'Contact Person'),
               ),
               const SizedBox(height: 16),

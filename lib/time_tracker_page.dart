@@ -106,7 +106,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
     final phases = await _costCodeRepo!.getAllCostCodes(); // NEW: Load phases
 
     // Load roles for employee rates
-    final rolesRows = await AppDatabase.instance.customSelect('SELECT * FROM roles').get();
+    final rolesRows = await AppDatabase.instance.customSelect('SELECT * FROM roles ORDER BY name COLLATE NOCASE ASC').get();
     final roles = rolesRows.map((r) => app_models.Role.fromMap(r.data)).toList();
 
     if (!mounted) return;

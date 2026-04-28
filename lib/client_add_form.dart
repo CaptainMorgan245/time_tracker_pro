@@ -80,6 +80,7 @@ class _ClientAddFormState extends State<ClientAddForm> {
                 Expanded(
                   child: TextField(
                     controller: _nameController,
+                    textCapitalization: TextCapitalization.words,
                     decoration: const InputDecoration(labelText: 'Client Name'),
                   ),
                 ),
@@ -87,6 +88,7 @@ class _ClientAddFormState extends State<ClientAddForm> {
                 Expanded(
                   child: TextField(
                     controller: _contactPersonController,
+                    textCapitalization: TextCapitalization.words,
                     decoration: const InputDecoration(labelText: 'Contact Person'),
                   ),
                 ),

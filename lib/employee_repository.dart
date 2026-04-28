@@ -77,7 +77,7 @@ class EmployeeRepository {
   }
 
   Future<List<Employee>> getEmployees() async {
-    final rows = await _db.customSelect('SELECT * FROM employees WHERE is_deleted = 0').get();
+    final rows = await _db.customSelect('SELECT * FROM employees WHERE is_deleted = 0 ORDER BY name COLLATE NOCASE ASC').get();
     return rows.map((r) => Employee.fromMap(r.data)).toList();
   }
 

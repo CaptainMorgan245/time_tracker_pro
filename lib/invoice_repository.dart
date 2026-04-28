@@ -181,19 +181,35 @@ class InvoiceRepository {
   }
 
   Future<String> getNextInvoiceNumber() async {
+    final settings = await _db.getCompanySettings();
     final year = DateTime.now().year;
-    final prefix = 'INV-$year-';
+    final prefix = settings.invoicePrefix.trim();
+
     final rows = await _db.customSelect(
-      "SELECT invoice_number FROM invoices WHERE invoice_number LIKE '$prefix%' ORDER BY invoice_number DESC LIMIT 1",
+      'SELECT invoice_number FROM invoices',
     ).get();
-    if (rows.isEmpty) return '${prefix}001';
-    final last = rows.first.data['invoice_number'] as String;
-    final parts = last.split('-');
-    if (parts.length == 3) {
-      final next = (int.tryParse(parts[2]) ?? 0) + 1;
-      return '$prefix${next.toString().padLeft(3, '0')}';
+
+    int highest = 0;
+    for (final row in rows) {
+      final n = _extractYearSequence(row.data['invoice_number'] as String, year);
+      if (n > highest) highest = n;
     }
-    return '${prefix}001';
+
+    final seq = highest == 0 ? settings.invoiceStartingNumber : highest + 1;
+    final seqStr = seq.toString().padLeft(3, '0');
+
+    return prefix.isEmpty ? '$year-$seqStr' : '$prefix-$year-$seqStr';
+  }
+
+  // Extracts the sequence number from an invoice number containing the given year.
+  // Handles both "{prefix}-{year}-{number}" and "{year}-{number}" formats.
+  int _extractYearSequence(String invoiceNumber, int year) {
+    final parts = invoiceNumber.split('-');
+    final yearStr = year.toString();
+    for (int i = 0; i < parts.length - 1; i++) {
+      if (parts[i] == yearStr) return int.tryParse(parts[i + 1]) ?? 0;
+    }
+    return 0;
   }
 
   Future<List<Project>> getProjectsForClient(int clientId) async {
@@ -309,22 +325,18 @@ class InvoiceRepository {
     await markMaterialsBilled(materialIds, invoiceId);
   }
 
-  // Used by create_invoice_screen.dart
+  // Used by create_invoice_screen.dart to calculate remaining balance on fixed-price contracts.
+  // Only sums progress and deposit invoices — extras are above-contract billing and must not
+  // count against the contract value.
   Future<Map<String, dynamic>> getProjectBillingSummary(int projectId) async {
-    final teRows = await _db.customSelect(
-      'SELECT SUM(final_billed_duration_seconds * hourly_rate / 3600.0) as labour_total '
-      'FROM time_entries WHERE project_id = ? AND is_deleted = 0',
-      variables: [Variable.withInt(projectId)],
-    ).get();
-    final matRows = await _db.customSelect(
-      'SELECT SUM(cost) as materials_total FROM materials WHERE project_id = ? AND is_deleted = 0',
+    final rows = await _db.customSelect(
+      'SELECT SUM(subtotal) as total_billed, SUM(tax1_amount) as total_gst '
+      "FROM invoices WHERE project_id = ? AND is_deleted = 0 AND invoice_type IN ('progress', 'deposit')",
       variables: [Variable.withInt(projectId)],
     ).get();
     return {
-      'labour_total':
-          (teRows.first.data['labour_total'] as num? ?? 0).toDouble(),
-      'materials_total':
-          (matRows.first.data['materials_total'] as num? ?? 0).toDouble(),
+      'total_billed': (rows.first.data['total_billed'] as num? ?? 0).toDouble(),
+      'total_gst': (rows.first.data['total_gst'] as num? ?? 0).toDouble(),
     };
   }
 }

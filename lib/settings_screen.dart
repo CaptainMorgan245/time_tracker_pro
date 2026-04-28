@@ -51,6 +51,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   final TextEditingController countryController = TextEditingController();
   final TextEditingController regionLabelController = TextEditingController();
   final TextEditingController postalCodeLabelController = TextEditingController();
+  final TextEditingController invoicePrefixController = TextEditingController();
+  final TextEditingController invoiceStartingNumberController = TextEditingController();
+  final TextEditingController paymentEtransferEmailController = TextEditingController();
 
   @override
   void initState() {
@@ -86,6 +89,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     countryController.dispose();
     regionLabelController.dispose();
     postalCodeLabelController.dispose();
+    invoicePrefixController.dispose();
+    invoiceStartingNumberController.dispose();
+    paymentEtransferEmailController.dispose();
     super.dispose();
   }
 
@@ -128,6 +134,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       countryController.text = _companySettings.country;
       regionLabelController.text = _companySettings.regionLabel;
       postalCodeLabelController.text = _companySettings.postalCodeLabel;
+      invoicePrefixController.text = _companySettings.invoicePrefix;
+      invoiceStartingNumberController.text = _companySettings.invoiceStartingNumber.toString();
+      paymentEtransferEmailController.text = _companySettings.paymentEtransferEmail ?? '';
     });
   }
 
@@ -183,6 +192,11 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
         country: countryController.text,
         regionLabel: regionLabelController.text,
         postalCodeLabel: postalCodeLabelController.text,
+        invoicePrefix: invoicePrefixController.text.trim(),
+        invoiceStartingNumber: int.tryParse(invoiceStartingNumberController.text) ?? 1,
+        paymentEtransferEmail: paymentEtransferEmailController.text.trim().isEmpty
+            ? null
+            : paymentEtransferEmailController.text.trim(),
       );
 
       await _dbHelper.updateCompanySettings(updatedCompany);
@@ -282,6 +296,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             countryController: countryController,
             regionLabelController: regionLabelController,
             postalCodeLabelController: postalCodeLabelController,
+            invoicePrefixController: invoicePrefixController,
+            invoiceStartingNumberController: invoiceStartingNumberController,
+            paymentEtransferEmailController: paymentEtransferEmailController,
             onSave: _saveSettings,
           ),
         ],
@@ -316,7 +333,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Expanded(child: TextField(controller: employeeNumberPrefixController, decoration: const InputDecoration(labelText: 'Prefix'))),
+                      Expanded(child: TextField(controller: employeeNumberPrefixController, textCapitalization: TextCapitalization.characters, decoration: const InputDecoration(labelText: 'Prefix'))),
                       const SizedBox(width: 12),
                       Expanded(child: TextField(controller: nextEmployeeNumberController, decoration: const InputDecoration(labelText: 'Next #'), keyboardType: TextInputType.number)),
                     ],
