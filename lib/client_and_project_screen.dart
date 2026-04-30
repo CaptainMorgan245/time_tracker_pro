@@ -191,7 +191,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                         DropdownButtonFormField<Client>(
                           initialValue: selectedClient,
                           decoration: const InputDecoration(labelText: 'Client'),
-                          items: clients
+                          items: { for (final c in clients) c.id: c }.values
                               .map((c) => DropdownMenuItem(
                                     value: c,
                                     child: Text(c.name),
@@ -481,7 +481,7 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
                       DropdownButtonFormField<int>(
                         decoration: const InputDecoration(labelText: 'Client'),
                         initialValue: selectedClientId,
-                        items: _clients.where((c) => c.isActive || c.id == selectedClientId).map((client) {
+                        items: { for (final c in _clients.where((c) => c.isActive || c.id == selectedClientId)) c.id: c }.values.map((client) {
                           return DropdownMenuItem<int>(
                             value: client.id,
                             child: Text(client.name),

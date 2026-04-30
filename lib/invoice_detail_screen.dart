@@ -146,6 +146,19 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     }
   }
 
+  // ── Payment display helpers ───────────────────────────────────────────────
+
+  String _paymentMethodLabel(String method) {
+    const labels = {'cheque': 'Cheque', 'cash': 'Cash', 'etransfer': 'E-Transfer'};
+    return labels[method] ?? method;
+  }
+
+  String _referenceFieldLabel(String? method) {
+    if (method == 'cheque') return 'Cheque #';
+    if (method == 'etransfer') return 'Confirmation #';
+    return 'Reference';
+  }
+
   // ── Status chip ───────────────────────────────────────────────────────────
 
   Widget _buildStatusChip() {
@@ -159,6 +172,9 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     } else if (invoice.isPaid) {
       label = 'Paid';
       color = Colors.green;
+    } else if ((invoice.amountPaid ?? 0) > 0) {
+      label = 'Partial';
+      color = Colors.orange;
     } else if (invoice.isSent) {
       label = 'Sent';
       color = Colors.blue;
@@ -279,26 +295,16 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                       bold: true,
                       color: inv.isPaid ? Colors.green : Theme.of(context).primaryColor,
                       fontSize: 18),
-                  if (inv.isPaid && inv.amountPaid != null) ...[
-                    const SizedBox(height: 8),
-                    _buildAmountRow('Amount Paid', inv.amountPaid!,
-                        color: Colors.green),
-                    if (inv.paymentDate != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          'Paid ${_dateFormat.format(inv.paymentDate!)}'
-                              '${inv.paymentMethod != null ? ' via ${inv.paymentMethod}' : ''}',
-                          style: TextStyle(
-                              color: Colors.green.shade700, fontSize: 12),
-                          textAlign: TextAlign.right,
-                        ),
-                      ),
-                  ],
                 ],
               ),
             ),
           ),
+
+          // Payment info card
+          if (inv.isPaid || (inv.amountPaid ?? 0) > 0) ...[
+            const SizedBox(height: 12),
+            _buildPaymentInfoCard(),
+          ],
 
           // Internal notes (VISUALLY DISTINCT)
           const SizedBox(height: 12),
@@ -464,6 +470,97 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     );
   }
 
+  // ── Payment info card ────────────────────────────────────────────────────
+
+  Widget _buildPaymentInfoCard() {
+    final inv = _invoice!;
+    final isPartial = !inv.isPaid && (inv.amountPaid ?? 0) > 0;
+    final accentColor = inv.isPaid ? Colors.green : Colors.orange;
+
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: accentColor.withValues(alpha: 0.35)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  inv.isPaid ? Icons.check_circle_outline : Icons.payments_outlined,
+                  color: accentColor,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  inv.isPaid ? 'Payment Information' : 'Partial Payment',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: accentColor,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (inv.paymentMethod != null) ...[
+              _buildDetailRow('Method', _paymentMethodLabel(inv.paymentMethod!)),
+              const SizedBox(height: 6),
+            ],
+            if (inv.paymentReference != null && inv.paymentReference!.isNotEmpty) ...[
+              _buildDetailRow(
+                _referenceFieldLabel(inv.paymentMethod),
+                inv.paymentReference!,
+              ),
+              const SizedBox(height: 6),
+            ],
+            if (inv.paymentDate != null) ...[
+              _buildDetailRow('Date Received', _dateFormat.format(inv.paymentDate!)),
+              const SizedBox(height: 6),
+            ],
+            if (inv.amountPaid != null) ...[
+              _buildDetailRow('Amount', _currencyFormat.format(inv.amountPaid!)),
+            ],
+            if (isPartial && inv.amountPaid != null) ...[
+              const SizedBox(height: 6),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(
+                    width: 100,
+                    child: Text(
+                      'Balance Due',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      _currencyFormat.format(inv.totalAmount - inv.amountPaid!),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (inv.paymentNotes != null && inv.paymentNotes!.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              _buildDetailRow('Notes', inv.paymentNotes!),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   // ── Action buttons ────────────────────────────────────────────────────────
 
   Widget _buildActionButtons() {
@@ -621,90 +718,183 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
   }
 
   Future<void> _onMarkPaid() async {
-    final paymentMethodController = TextEditingController();
+    if (_invoice == null) return;
+
+    String selectedMethod = 'etransfer';
+    final referenceController = TextEditingController();
+    final amountController = TextEditingController(
+        text: _invoice!.totalAmount.toStringAsFixed(2));
+    final notesController = TextEditingController();
     DateTime selectedDate = DateTime.now();
 
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Mark as Paid?'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('The invoice will be locked and cannot be edited.'),
-                const SizedBox(height: 20),
-                
-                // Date Picker
-                InkWell(
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: selectedDate,
-                      firstDate: DateTime(2020),
-                      lastDate: DateTime.now(),
-                    );
-                    if (picked != null) {
-                      setDialogState(() => selectedDate = picked);
-                    }
-                  },
-                  child: InputDecorator(
-                    decoration: const InputDecoration(
-                      labelText: 'Payment Date',
-                      border: OutlineInputBorder(),
-                      suffixIcon: Icon(Icons.calendar_today),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          final entered =
+              double.tryParse(amountController.text.replaceAll(',', '')) ?? 0.0;
+          final isPartial = entered < _invoice!.totalAmount - 0.005;
+          final remaining = _invoice!.totalAmount - entered;
+
+          return AlertDialog(
+            title: const Text('Record Payment'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // -- Method chips
+                  const Text('Payment Method',
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 13)),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final pair in [
+                        ['cheque', 'Cheque'],
+                        ['cash', 'Cash'],
+                        ['etransfer', 'E-Transfer'],
+                      ])
+                        ChoiceChip(
+                          label: Text(pair[1]),
+                          selected: selectedMethod == pair[0],
+                          onSelected: (_) =>
+                              setDialogState(() => selectedMethod = pair[0]),
+                        ),
+                    ],
+                  ),
+                  // -- Reference (hidden for cash)
+                  if (selectedMethod != 'cash') ...[
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: referenceController,
+                      decoration: InputDecoration(
+                        labelText: selectedMethod == 'cheque'
+                            ? 'Cheque #'
+                            : 'Confirmation #',
+                        border: const OutlineInputBorder(),
+                      ),
                     ),
-                    child: Text(_dateFormat.format(selectedDate)),
+                  ],
+                  const SizedBox(height: 16),
+                  // -- Amount received
+                  TextField(
+                    controller: amountController,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Amount Received',
+                      prefixText: '\$ ',
+                      border: OutlineInputBorder(),
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
                   ),
-                ),
-                
-                const SizedBox(height: 16),
-                
-                TextField(
-                  controller: paymentMethodController,
-                  decoration: const InputDecoration(
-                    labelText: 'Payment Method (optional)',
-                    hintText: 'e.g. E-transfer, Cheque, Cash',
-                    border: OutlineInputBorder(),
+                  if (isPartial && entered > 0) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade50,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange.shade300),
+                      ),
+                      child: Text(
+                        'Partial payment — Remaining: ${_currencyFormat.format(remaining)}',
+                        style: TextStyle(
+                            color: Colors.orange.shade800, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  // -- Date
+                  InkWell(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: ctx,
+                        initialDate: selectedDate,
+                        firstDate: DateTime(2020),
+                        lastDate:
+                            DateTime.now().add(const Duration(days: 1)),
+                      );
+                      if (picked != null) {
+                        setDialogState(() => selectedDate = picked);
+                      }
+                    },
+                    child: InputDecorator(
+                      decoration: const InputDecoration(
+                        labelText: 'Payment Date',
+                        border: OutlineInputBorder(),
+                        suffixIcon: Icon(Icons.calendar_today),
+                      ),
+                      child: Text(_dateFormat.format(selectedDate)),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
+                  const SizedBox(height: 16),
+                  // -- Notes
+                  TextField(
+                    controller: notesController,
+                    maxLines: 2,
+                    decoration: const InputDecoration(
+                      labelText: 'Notes (optional)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
               ),
-              child: const Text('Mark Paid'),
             ),
-          ],
-        ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  foregroundColor: Colors.white,
+                ),
+                child: Text(isPartial && entered > 0
+                    ? 'Record Partial Payment'
+                    : 'Mark Paid'),
+              ),
+            ],
+          );
+        },
       ),
     );
 
     if (confirm != true) return;
     try {
-      await _invoiceRepository.markPaid(
-        _invoice!.id!,
-        _invoice!.totalAmount,
-        paymentMethodController.text.trim().isEmpty
-            ? ''
-            : paymentMethodController.text.trim(),
-        selectedDate,
+      final entered =
+          double.tryParse(amountController.text.replaceAll(',', '')) ??
+              _invoice!.totalAmount;
+      final fullyPaid = entered >= _invoice!.totalAmount - 0.005;
+
+      final updated = _invoice!.copyWith(
+        isPaid: fullyPaid,
+        amountPaid: entered,
+        paymentMethod: selectedMethod,
+        paymentReference: referenceController.text.trim().isEmpty
+            ? null
+            : referenceController.text.trim(),
+        paymentDate: selectedDate,
+        paymentNotes: notesController.text.trim().isEmpty
+            ? null
+            : notesController.text.trim(),
       );
+      await _invoiceRepository.updateInvoice(updated);
       await _loadInvoice();
       if (mounted) {
+        final remaining = _invoice!.totalAmount - entered;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Invoice marked as paid.'),
-              backgroundColor: Colors.green),
+          SnackBar(
+            content: Text(fullyPaid
+                ? 'Invoice marked as paid.'
+                : 'Partial payment recorded. Remaining: ${_currencyFormat.format(remaining)}'),
+            backgroundColor: Colors.green,
+          ),
         );
       }
     } catch (e) {

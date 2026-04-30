@@ -493,7 +493,7 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
               DropdownButtonFormField<int>(
                 decoration: const InputDecoration(labelText: 'Select Project'),
                 value: _selectedProject?['id'],
-                items: _projects.map((p) {
+                items: { for (final p in _projects) p['id'] as int: p }.values.map((p) {
                   return DropdownMenuItem<int>(
                     value: p['id'] as int,
                     child: Text(_getProjectDisplayName(p)),
@@ -524,11 +524,11 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
                 DropdownButtonFormField<int>(
                   decoration: const InputDecoration(labelText: 'Select Client'),
                   value: _selectedClient?['id'],
-                  items: _clients.where((c) {
+                  items: { for (final c in _clients.where((c) {
                     return _projects.any((p) =>
                     p['project_name'] == _selectedProject!['project_name'] &&
                         p['client_id'] == c['id']);
-                  }).map((c) {
+                  })) c['id'] as int: c }.values.map((c) {
                     return DropdownMenuItem<int>(
                         value: c['id'] as int, child: Text(c['name']));
                   }).toList(),

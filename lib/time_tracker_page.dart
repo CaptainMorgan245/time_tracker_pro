@@ -113,9 +113,13 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
 
     final activeEmployees = employees.where((e) => !e.isDeleted).toList();
 
-    _projectsNotifier.value = projects.where((p) => !p.isCompleted).toList();
-    _employeesNotifier.value = activeEmployees;
-    _costCodesNotifier.value = phases; // NEW: Set phases
+    final activeProjects = projects.where((p) => !p.isCompleted).toList();
+    _projectsNotifier.value =
+        { for (final p in activeProjects) p.id: p }.values.toList();
+    _employeesNotifier.value =
+        { for (final e in activeEmployees) e.id: e }.values.toList();
+    _costCodesNotifier.value =
+        { for (final c in phases) c.id: c }.values.toList();
     _allProjects = projects;
     _roles = roles;
 

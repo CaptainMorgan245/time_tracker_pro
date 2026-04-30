@@ -360,7 +360,7 @@ class _PayrollScreenState extends State<PayrollScreen> {
                           value: null,
                           child: Text('All Projects'),
                         ),
-                        ..._projects.map((p) => DropdownMenuItem<int?>(
+                        ...{ for (final p in _projects) p['id'] as int: p }.values.map((p) => DropdownMenuItem<int?>(
                           value: p['id'] as int,
                           child: Text(p['name'] as String),
                         )),

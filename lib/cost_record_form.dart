@@ -259,7 +259,7 @@ class CostRecordFormState extends State<CostRecordForm> {
                                   value: null,
                                   child: Text('-- Select Project --', style: TextStyle(fontStyle: FontStyle.italic)),
                                 ),
-                                ...projects.map((project) {
+                                ...{ for (final p in projects) p.id: p }.values.map((project) {
                                   final displayName = project.isInternal
                                       ? 'Internal Company Project'
                                       : project.projectName;
@@ -297,7 +297,7 @@ class CostRecordFormState extends State<CostRecordForm> {
                             labelText: 'Expense Category *',
                           ),
                           value: selectedExpenseCategory,
-                          items: categories.map((c) => DropdownMenuItem<String>(value: c, child: Text(c))).toList(),
+                          items: categories.toSet().toList().map((c) => DropdownMenuItem<String>(value: c, child: Text(c))).toList(),
                           onChanged: (String? newValue) {
                             setState(() {
                               selectedExpenseCategory = newValue;
@@ -325,7 +325,7 @@ class CostRecordFormState extends State<CostRecordForm> {
                         decoration: const InputDecoration(labelText: 'Vendor'),
                         value: _selectedVendorOrSubtrade,
                         onChanged: (String? newValue) => setState(() => _selectedVendorOrSubtrade = newValue),
-                        items: vendors.map((vendor) => DropdownMenuItem<String>(
+                        items: vendors.toSet().toList().map((vendor) => DropdownMenuItem<String>(
                           value: vendor,
                           child: Text(vendor),
                         )).toList(),
@@ -394,7 +394,7 @@ class CostRecordFormState extends State<CostRecordForm> {
                             value: null,
                             child: Text('None'),
                           ),
-                          ...costCodes.map((costCode) {
+                          ...{ for (final c in costCodes) c.id: c }.values.map((costCode) {
                             return DropdownMenuItem<int?>(
                               value: costCode.id,
                               child: Text(costCode.name),
@@ -431,7 +431,7 @@ class CostRecordFormState extends State<CostRecordForm> {
                                 decoration: const InputDecoration(labelText: 'Vehicle Designation'),
                                 value: _selectedVehicleDesignation,
                                 onChanged: (String? newValue) => setState(() => _selectedVehicleDesignation = newValue),
-                                items: vehicles.map((vehicle) => DropdownMenuItem<String>(
+                                items: vehicles.toSet().toList().map((vehicle) => DropdownMenuItem<String>(
                                   value: vehicle,
                                   child: Text(vehicle),
                                 )).toList(),

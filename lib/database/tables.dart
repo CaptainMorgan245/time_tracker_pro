@@ -120,6 +120,8 @@ class Invoices extends Table {
   RealColumn get amountPaid => real().nullable()();
   TextColumn get paymentDate => text().nullable()();
   TextColumn get paymentMethod => text().nullable()();
+  TextColumn get paymentReference => text().nullable()();
+  TextColumn get paymentNotes => text().nullable()();
   IntColumn get isDeleted => integer().withDefault(const Constant(0))();
   TextColumn get deletedReasonCode => text().nullable()();
   TextColumn get deletedDate => text().nullable()();

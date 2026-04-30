@@ -104,7 +104,7 @@ class _AddEmployeeFormState extends State<AddEmployeeForm> {
                 Expanded(
                   child: DropdownButtonFormField<int>(
                     value: _selectedRole?.id,
-                    items: validRoles.map((role) {
+                    items: { for (final r in validRoles) r.id: r }.values.map((role) {
                       return DropdownMenuItem<int>(
                         value: role.id,
                         child: Text(role.name),

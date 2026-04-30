@@ -118,7 +118,7 @@ class _EmployeeListScreenState extends State<EmployeeListScreen> {
                 decoration: const InputDecoration(labelText: 'Select Role'),
                 items: [
                   const DropdownMenuItem<Role?>(value: null, child: Text('No Role')),
-                  ...widget.roles.map((role) {
+                  ...{ for (final r in widget.roles) r.id: r }.values.map((role) {
                     return DropdownMenuItem<Role?>(
                       value: role,
                       child: Text(role.name),

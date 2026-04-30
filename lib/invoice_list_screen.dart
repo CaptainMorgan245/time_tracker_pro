@@ -212,6 +212,24 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
     );
   }
 
+  // ── Payment note popup ────────────────────────────────────────────────────
+
+  void _showPaymentNote(BuildContext context, Invoice invoice) {
+    showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Payment Note'),
+        content: Text(invoice.paymentNotes!),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ── Invoice card ──────────────────────────────────────────────────────────
 
   Widget _buildInvoiceCard(Invoice invoice) {
@@ -238,7 +256,24 @@ class _InvoiceListScreenState extends State<InvoiceListScreen>
                       TextSpan(text: invoice.invoiceNumber),
                     ]),
                   ),
-                  _buildStatusChip(invoice),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if ((invoice.paymentNotes ?? '').isNotEmpty)
+                        GestureDetector(
+                          onTap: () => _showPaymentNote(context, invoice),
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: Icon(
+                              Icons.comment_outlined,
+                              size: 16,
+                              color: Colors.blue.shade600,
+                            ),
+                          ),
+                        ),
+                      _buildStatusChip(invoice),
+                    ],
+                  ),
                 ],
               ),
               const SizedBox(height: 8),

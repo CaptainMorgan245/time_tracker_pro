@@ -263,7 +263,7 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
       value: _selectedClientId,
       items: [
         const DropdownMenuItem<int>(value: null, child: Text('All Clients')),
-        ..._clients.map(
+        ...{ for (final c in _clients) c.id: c }.values.map(
             (c) => DropdownMenuItem<int>(value: c.id, child: Text(c.name))),
       ],
       onChanged: _onClientChanged,
@@ -277,7 +277,7 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
       value: _selectedProjectId,
       items: [
         const DropdownMenuItem<int>(value: null, child: Text('All Projects')),
-        ..._projects.map(
+        ...{ for (final p in _projects) p.id: p }.values.map(
             (p) => DropdownMenuItem<int>(value: p.id, child: Text(p.name))),
       ],
       onChanged: (int? v) => setState(() => _selectedProjectId = v),
@@ -291,7 +291,7 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
       value: _selectedEmployeeId,
       items: [
         const DropdownMenuItem<int>(value: null, child: Text('All Employees')),
-        ..._employees.map(
+        ...{ for (final e in _employees) e.id: e }.values.map(
             (e) => DropdownMenuItem<int>(value: e.id, child: Text(e.name))),
       ],
       onChanged: (int? v) => setState(() => _selectedEmployeeId = v),
@@ -305,7 +305,7 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
       value: _selectedCostCodeId,
       items: [
         const DropdownMenuItem<int>(value: null, child: Text('All Cost Codes')),
-        ..._costCodes.map(
+        ...{ for (final c in _costCodes) c.id: c }.values.map(
             (c) => DropdownMenuItem<int>(value: c.id, child: Text(c.name))),
       ],
       onChanged: (int? v) => setState(() => _selectedCostCodeId = v),

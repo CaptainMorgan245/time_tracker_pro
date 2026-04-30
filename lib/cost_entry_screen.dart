@@ -77,7 +77,7 @@ class CostRecordFormTopRow extends StatelessWidget {
                     value: selectedClientId,
                     items: [
                       const DropdownMenuItem<int?>(value: null, child: Text('All Clients')),
-                      ...clients.where((c) => c.isActive).map((client) => DropdownMenuItem<int?>(
+                      ...{ for (final c in clients.where((c) => c.isActive)) c.id: c }.values.map((client) => DropdownMenuItem<int?>(
                         value: client.id,
                         child: Text(client.name),
                       )),
@@ -179,7 +179,7 @@ class CostRecordFormTopRow extends StatelessWidget {
                         ),
                         style: const TextStyle(fontSize: 13, color: Colors.black),
                         value: currentCategory,
-                        items: categories.map((c) => DropdownMenuItem<String>(value: c, child: Text(c, style: const TextStyle(fontSize: 12)))).toList(),
+                        items: categories.toSet().toList().map((c) => DropdownMenuItem<String>(value: c, child: Text(c, style: const TextStyle(fontSize: 12)))).toList(),
                         onChanged: (String? newValue) {
                           formStateKey.currentState?.setExpenseCategory(newValue, newValue == 'Fuel');
                         },

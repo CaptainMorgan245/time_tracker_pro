@@ -29,6 +29,8 @@ class Invoice {
   final double? amountPaid;
   final DateTime? paymentDate;
   final String? paymentMethod;
+  final String? paymentReference;
+  final String? paymentNotes;
   final bool isDeleted;
   final String? deletedReasonCode;
   final DateTime? deletedDate;
@@ -75,6 +77,8 @@ class Invoice {
     this.amountPaid,
     this.paymentDate,
     this.paymentMethod,
+    this.paymentReference,
+    this.paymentNotes,
     this.isDeleted = false,
     this.deletedReasonCode,
     this.deletedDate,
@@ -121,6 +125,8 @@ class Invoice {
       'amount_paid': amountPaid,
       'payment_date': paymentDate?.toIso8601String(),
       'payment_method': paymentMethod,
+      'payment_reference': paymentReference,
+      'payment_notes': paymentNotes,
       'is_deleted': isDeleted ? 1 : 0,
       'deleted_reason_code': deletedReasonCode,
       'deleted_date': deletedDate?.toIso8601String(),
@@ -166,6 +172,8 @@ class Invoice {
       amountPaid: (map['amount_paid'] as num?)?.toDouble(),
       paymentDate: map['payment_date'] != null ? DateTime.parse(map['payment_date'] as String) : null,
       paymentMethod: map['payment_method'] as String?,
+      paymentReference: map['payment_reference'] as String?,
+      paymentNotes: map['payment_notes'] as String?,
       isDeleted: (map['is_deleted'] as int?) == 1,
       deletedReasonCode: map['deleted_reason_code'] as String?,
       deletedDate: map['deleted_date'] != null ? DateTime.parse(map['deleted_date'] as String) : null,
@@ -212,6 +220,8 @@ class Invoice {
     double? amountPaid,
     DateTime? paymentDate,
     String? paymentMethod,
+    String? paymentReference,
+    String? paymentNotes,
     bool? isDeleted,
     String? deletedReasonCode,
     DateTime? deletedDate,
@@ -256,6 +266,8 @@ class Invoice {
       amountPaid: amountPaid ?? this.amountPaid,
       paymentDate: paymentDate ?? this.paymentDate,
       paymentMethod: paymentMethod ?? this.paymentMethod,
+      paymentReference: paymentReference ?? this.paymentReference,
+      paymentNotes: paymentNotes ?? this.paymentNotes,
       isDeleted: isDeleted ?? this.isDeleted,
       deletedReasonCode: deletedReasonCode ?? this.deletedReasonCode,
       deletedDate: deletedDate ?? this.deletedDate,

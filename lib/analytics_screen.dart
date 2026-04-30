@@ -488,7 +488,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                 value: null,
                 child: Text('All Projects'),
               ),
-              ..._projectsForDropdown.map((item) => DropdownMenuItem<int>(
+              ...{ for (final p in _projectsForDropdown) p.id: p }.values.map((item) => DropdownMenuItem<int>(
                 value: item.id,
                 child: Text(item.name),
               )),

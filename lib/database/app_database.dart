@@ -27,7 +27,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 22;
+  int get schemaVersion => 23;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -105,6 +105,10 @@ class AppDatabase extends _$AppDatabase {
         await customStatement('ALTER TABLE company_settings ADD COLUMN invoice_prefix TEXT NOT NULL DEFAULT "INV";');
         await customStatement('ALTER TABLE company_settings ADD COLUMN invoice_starting_number INTEGER NOT NULL DEFAULT 1;');
         await customStatement('ALTER TABLE company_settings ADD COLUMN payment_etransfer_email TEXT;');
+      }
+      if (from < 23) {
+        await customStatement('ALTER TABLE invoices ADD COLUMN payment_reference TEXT;');
+        await customStatement('ALTER TABLE invoices ADD COLUMN payment_notes TEXT;');
       }
     },
   );

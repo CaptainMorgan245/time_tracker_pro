@@ -384,7 +384,7 @@ class _CreateInvoiceScreenState extends State<CreateInvoiceScreen> {
         border: OutlineInputBorder(),
       ),
       hint: const Text('Select a project'),
-      items: _projects.map((p) {
+      items: { for (final p in _projects) p.id: p }.values.map((p) {
         return DropdownMenuItem<int>(
           value: p.id,
           child: Text(p.projectName),
