@@ -109,6 +109,9 @@ class InvoicePdfService {
                       style: const pw.TextStyle(fontSize: 10)),
                   pw.Text('Date: ' + _formatDate(invoice.invoiceDate),
                       style: const pw.TextStyle(fontSize: 10)),
+                  if (invoice.poNumber != null && invoice.poNumber!.trim().isNotEmpty)
+                    pw.Text('PO #: ' + invoice.poNumber!.trim(),
+                        style: const pw.TextStyle(fontSize: 10)),
                 ],
               ),
             ],

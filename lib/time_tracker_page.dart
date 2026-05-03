@@ -8,6 +8,7 @@ import 'package:time_tracker_pro/employee_repository.dart';
 import 'package:time_tracker_pro/time_entry_repository.dart';
 import 'package:time_tracker_pro/client_repository.dart';
 import 'package:time_tracker_pro/cost_code_repository.dart';
+import 'package:time_tracker_pro/widgets/browser_warning_banner.dart';
 import 'package:time_tracker_pro/timer_add_form.dart';
 import 'package:intl/intl.dart';
 import 'package:csv/csv.dart';
@@ -566,6 +567,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
           ? const Center(child: CircularProgressIndicator())
           : Column(
         children: [
+          const BrowserWarningBanner(),
           // FILTERS SECTION
           Card(
             margin: const EdgeInsets.all(8),

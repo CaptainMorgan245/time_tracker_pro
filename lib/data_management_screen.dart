@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:time_tracker_pro/data_io_helper.dart';
 import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/dashboard_screen.dart';
+import 'package:time_tracker_pro/widgets/browser_warning_banner.dart';
 
 class DataManagementScreen extends StatefulWidget {
   const DataManagementScreen({super.key});
@@ -265,9 +266,13 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Theme.of(context).colorScheme.onPrimary,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: ListView(
+      body: Column(
+        children: [
+          const BrowserWarningBanner(),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: ListView(
           children: [
             _buildSectionHeader(context, 'Database Backup & Restore'),
             const SizedBox(height: 8),
@@ -299,7 +304,10 @@ class _DataManagementScreenState extends State<DataManagementScreen> {
               color: Colors.red.shade700,
             ),
           ],
-        ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

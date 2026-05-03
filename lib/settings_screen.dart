@@ -8,6 +8,7 @@ import 'package:time_tracker_pro/expenses_screen.dart';
 import 'package:time_tracker_pro/personnel_screen.dart';
 import 'package:time_tracker_pro/burden_rate_settings_screen.dart';
 import 'package:time_tracker_pro/help_support_screen.dart';
+import 'package:time_tracker_pro/widgets/browser_warning_banner.dart';
 import 'package:time_tracker_pro/company_tax_settings_tab.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/dashboard_screen.dart';
@@ -262,8 +263,12 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           ],
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
+      body: Column(
+        children: [
+          const BrowserWarningBanner(),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
         children: [
           // Tab 1: General & Reports
           _buildGeneralTab(),
@@ -300,6 +305,9 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
             invoiceStartingNumberController: invoiceStartingNumberController,
             paymentEtransferEmailController: paymentEtransferEmailController,
             onSave: _saveSettings,
+          ),
+        ],
+            ),
           ),
         ],
       ),

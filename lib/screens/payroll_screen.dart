@@ -7,6 +7,7 @@ import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/settings_service.dart';
 import 'package:time_tracker_pro/settings_model.dart';
+import 'package:time_tracker_pro/widgets/browser_warning_banner.dart';
 
 class PayrollScreen extends StatefulWidget {
   const PayrollScreen({super.key});
@@ -315,6 +316,7 @@ class _PayrollScreenState extends State<PayrollScreen> {
       body: SelectionArea(
         child: Column(
           children: [
+            const BrowserWarningBanner(),
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Row(

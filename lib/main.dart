@@ -1,6 +1,7 @@
 // lib/main.dart
 
 import 'package:flutter/material.dart';
+import 'package:time_tracker_pro/analytics_service.dart';
 import 'package:time_tracker_pro/dashboard_screen.dart';
 import 'package:time_tracker_pro/settings_screen.dart';
 import 'package:time_tracker_pro/database/app_database.dart';
@@ -8,6 +9,7 @@ import 'package:time_tracker_pro/settings_model.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  trackEvent('visit');
   runApp(const TimeTrackerProApp());
 }
 

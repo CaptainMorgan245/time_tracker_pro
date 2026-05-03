@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:time_tracker_pro/cost_code_repository.dart';
 import 'package:time_tracker_pro/models.dart';
+import 'package:time_tracker_pro/widgets/browser_warning_banner.dart';
 
 // start class: ManageCostCodesPage
 class ManageCostCodesPage extends StatefulWidget {
@@ -129,10 +130,14 @@ class _ManageCostCodesPageState extends State<ManageCostCodesPage> {
       appBar: AppBar(
         title: const Text('Manage Cost Codes'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
+      body: Column(
+        children: [
+          const BrowserWarningBanner(),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
             AddCostCodeForm(onCostCodeAdded: () => setState(() => _refreshKey++)),
             const SizedBox(height: 16),
             Expanded(
@@ -179,6 +184,9 @@ class _ManageCostCodesPageState extends State<ManageCostCodesPage> {
           ],
         ),
       ),
+    ),
+  ],
+),
     );
   }
 // end method: build

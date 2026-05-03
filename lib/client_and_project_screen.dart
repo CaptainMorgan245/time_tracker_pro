@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/client_repository.dart';
 import 'package:time_tracker_pro/project_repository.dart';
+import 'package:time_tracker_pro/widgets/browser_warning_banner.dart';
 
 class ClientAndProjectScreen extends StatefulWidget {
   const ClientAndProjectScreen({super.key});
@@ -727,9 +728,13 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
       appBar: AppBar(
         title: const Text('Clients & Projects'),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : LayoutBuilder(
+      body: Column(
+        children: [
+          const BrowserWarningBanner(),
+          Expanded(
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : LayoutBuilder(
         builder: (context, constraints) {
           if (constraints.maxWidth > 800) { // WIDE LAYOUT
             return Column(
@@ -900,6 +905,9 @@ class _ClientAndProjectScreenState extends State<ClientAndProjectScreen> {
             );
           }
         },
+      ),
+          ),
+        ],
       ),
     );
   }

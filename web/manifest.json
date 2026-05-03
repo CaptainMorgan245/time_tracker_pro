@@ -1,7 +1,9 @@
 {
-    "name": "time_tracker_pro",
-    "short_name": "time_tracker_pro",
-    "start_url": ".",
+    "name": "Time Tracker Pro",
+    "short_name": "Time Tracker Pro",
+    "id": "/timetrackerpro/",
+    "start_url": "/timetrackerpro/",
+    "scope": "/timetrackerpro/",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
