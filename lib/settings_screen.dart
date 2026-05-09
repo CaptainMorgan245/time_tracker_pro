@@ -30,8 +30,6 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
   // App Settings Controllers
   final TextEditingController employeeNumberPrefixController = TextEditingController();
   final TextEditingController nextEmployeeNumberController = TextEditingController();
-  final TextEditingController backupFrequencyController = TextEditingController();
-  final TextEditingController reportMonthsController = TextEditingController();
   final TextEditingController expenseMarkupPercentageController = TextEditingController();
 
   // Company Settings Controllers
@@ -69,8 +67,6 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     _tabController.dispose();
     employeeNumberPrefixController.dispose();
     nextEmployeeNumberController.dispose();
-    backupFrequencyController.dispose();
-    reportMonthsController.dispose();
     expenseMarkupPercentageController.dispose();
 
     companyNameController.dispose();
@@ -105,9 +101,7 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
     setState(() {
       _settings = loadedSettings;
       employeeNumberPrefixController.text = _settings.employeeNumberPrefix ?? '';
-      nextEmployeeNumberController.text = (_settings.nextEmployeeNumber ?? 1).toString();
-      backupFrequencyController.text = _settings.autoBackupReminderFrequency.toString();
-      reportMonthsController.text = _settings.defaultReportMonths.toString();
+      nextEmployeeNumberController.text = _settings.nextEmployeeNumber?.toString() ?? '001';
       expenseMarkupPercentageController.text = _settings.expenseMarkupPercentage.toStringAsFixed(2);
     });
   }
@@ -149,20 +143,16 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
       final settings = _settings.copyWith(
         employeeNumberPrefix: employeeNumberPrefixController.text.isEmpty ? null : employeeNumberPrefixController.text,
         nextEmployeeNumber: int.tryParse(nextEmployeeNumberController.text),
-        autoBackupReminderFrequency: int.tryParse(backupFrequencyController.text) ?? 10,
-        defaultReportMonths: int.tryParse(reportMonthsController.text) ?? 3,
         expenseMarkupPercentage: double.tryParse(expenseMarkupPercentageController.text) ?? 0.0,
         companyHourlyRate: currentBurdenRate ?? _settings.companyHourlyRate,
         setupCompleted: true,
       );
 
       await _dbHelper.customUpdate(
-        'UPDATE settings SET employee_number_prefix=?, next_employee_number=?, auto_backup_reminder_frequency=?, default_report_months=?, expense_markup_percentage=?, company_hourly_rate=?, setup_completed=? WHERE id=1',
+        'UPDATE settings SET employee_number_prefix=?, next_employee_number=?, expense_markup_percentage=?, company_hourly_rate=?, setup_completed=? WHERE id=1',
         variables: [
           Variable(settings.employeeNumberPrefix),
           Variable(settings.nextEmployeeNumber),
-          Variable.withInt(settings.autoBackupReminderFrequency),
-          Variable.withInt(settings.defaultReportMonths),
           Variable.withReal(settings.expenseMarkupPercentage),
           Variable(settings.companyHourlyRate),
           Variable.withInt(1),
@@ -278,8 +268,6 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
           BurdenRateSettingsScreen(
             employeeNumberPrefixController: employeeNumberPrefixController,
             nextEmployeeNumberController: nextEmployeeNumberController,
-            backupFrequencyController: backupFrequencyController,
-            reportMonthsController: reportMonthsController,
             settingsModel: _settings,
           ),
           // Tab 6: Company & Tax
@@ -398,16 +386,8 @@ class _SettingsScreenState extends State<SettingsScreen> with SingleTickerProvid
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Backup & Reports', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  const Text('Expenses', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(child: TextField(controller: backupFrequencyController, decoration: const InputDecoration(labelText: 'Backup Freq'), keyboardType: TextInputType.number)),
-                      const SizedBox(width: 12),
-                      Expanded(child: TextField(controller: reportMonthsController, decoration: const InputDecoration(labelText: 'Report Months'), keyboardType: TextInputType.number)),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
                   TextField(controller: expenseMarkupPercentageController, decoration: const InputDecoration(labelText: 'Expense Markup %'), keyboardType: const TextInputType.numberWithOptions(decimal: true)),
                 ],
               ),

@@ -13,10 +13,7 @@ class SettingsModel {
 
   // New settings fields
   final int timeRoundingInterval; // 0 = no rounding, 15 or 30 minutes
-  final int autoBackupReminderFrequency; // Show reminder every X app runs (0 = disabled)
-  final int appRunsSinceBackup; // Counter for backup reminder
   final String measurementSystem; // 'metric' or 'imperial'
-  final int defaultReportMonths; // Default lookback period for reports
   final double expenseMarkupPercentage;
   final bool setupCompleted; // Setup completion flag
 
@@ -29,10 +26,7 @@ class SettingsModel {
     this.companyHourlyRate,
     this.burdenRate = 0.0,
     this.timeRoundingInterval = 0,
-    this.autoBackupReminderFrequency = 10,
-    this.appRunsSinceBackup = 0,
     this.measurementSystem = 'metric',
-    this.defaultReportMonths = 3,
     this.expenseMarkupPercentage = 0.0,
     this.setupCompleted = false,
   }) : vehicleDesignations = vehicleDesignations ?? [],
@@ -56,10 +50,7 @@ class SettingsModel {
           : null,
       burdenRate: (map['burden_rate'] as num?)?.toDouble() ?? 0.0,
       timeRoundingInterval: map['time_rounding_interval'] ?? 15,
-      autoBackupReminderFrequency: map['auto_backup_reminder_frequency'] ?? 10,
-      appRunsSinceBackup: map['app_runs_since_backup'] ?? 0,
       measurementSystem: map['measurement_system'] ?? 'metric',
-      defaultReportMonths: map['default_report_months'] ?? 3,
       setupCompleted: (map['setup_completed'] as int?) == 1,
       expenseMarkupPercentage: (map['expense_markup_percentage'] as num?)?.toDouble() ?? 0.0,
     );
@@ -77,10 +68,7 @@ class SettingsModel {
       'company_hourly_rate': companyHourlyRate,
       'burden_rate': burdenRate,
       'time_rounding_interval': timeRoundingInterval,
-      'auto_backup_reminder_frequency': autoBackupReminderFrequency,
-      'app_runs_since_backup': appRunsSinceBackup,
       'measurement_system': measurementSystem,
-      'default_report_months': defaultReportMonths,
       'setup_completed': setupCompleted ? 1 : 0,
       'expense_markup_percentage': expenseMarkupPercentage,
     };
@@ -97,10 +85,7 @@ class SettingsModel {
     double? companyHourlyRate,
     double? burdenRate,
     int? timeRoundingInterval,
-    int? autoBackupReminderFrequency,
-    int? appRunsSinceBackup,
     String? measurementSystem,
-    int? defaultReportMonths,
     double? expenseMarkupPercentage,
     bool? setupCompleted,
   }) {
@@ -113,10 +98,7 @@ class SettingsModel {
       companyHourlyRate: companyHourlyRate ?? this.companyHourlyRate,
       burdenRate: burdenRate ?? this.burdenRate,
       timeRoundingInterval: timeRoundingInterval ?? this.timeRoundingInterval,
-      autoBackupReminderFrequency: autoBackupReminderFrequency ?? this.autoBackupReminderFrequency,
-      appRunsSinceBackup: appRunsSinceBackup ?? this.appRunsSinceBackup,
       measurementSystem: measurementSystem ?? this.measurementSystem,
-      defaultReportMonths: defaultReportMonths ?? this.defaultReportMonths,
       expenseMarkupPercentage: expenseMarkupPercentage ?? this.expenseMarkupPercentage,
       setupCompleted: setupCompleted ?? this.setupCompleted,
     );

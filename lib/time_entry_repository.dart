@@ -96,11 +96,11 @@ class TimeEntryRepository {
     final includes = settings.includes;
 
     // Labour (time entries) WHERE clauses
-    final List<String> labourWhere = ['te.is_deleted = 0', 'te.end_time IS NOT NULL'];
+    final List<String> labourWhere = ['te.is_deleted = 0', 'te.end_time IS NOT NULL', '(te.cost_code_id IN (SELECT id FROM cost_codes WHERE is_billable = 1) OR te.cost_code_id IS NULL)'];
     final List<Variable> labourVars = [];
 
     // Material WHERE clauses
-    final List<String> materialWhere = ['m.is_deleted = 0'];
+    final List<String> materialWhere = ['m.is_deleted = 0', 'm.is_company_expense = 0', '(m.cost_code_id IN (SELECT id FROM cost_codes WHERE is_billable = 1) OR m.cost_code_id IS NULL)'];
     final List<Variable> materialVars = [];
 
     if (settings.clientId != null) {

@@ -11,17 +11,12 @@ class BurdenRateSettingsScreen extends StatefulWidget {
   // **** ADDED ****: These are the controllers from the parent screen.
   final TextEditingController employeeNumberPrefixController;
   final TextEditingController nextEmployeeNumberController;
-  final TextEditingController backupFrequencyController;
-  final TextEditingController reportMonthsController;
-  final SettingsModel settingsModel; // And the settings model for dropdowns
+  final SettingsModel settingsModel;
 
-  // **** MODIFIED ****: The constructor now requires these new parameters.
   const BurdenRateSettingsScreen({
     super.key,
     required this.employeeNumberPrefixController,
     required this.nextEmployeeNumberController,
-    required this.backupFrequencyController,
-    required this.reportMonthsController,
     required this.settingsModel,
   });
 
@@ -76,8 +71,6 @@ class _BurdenRateSettingsScreenState extends State<BurdenRateSettingsScreen> {
           ? null
           : widget.employeeNumberPrefixController.text,
       nextEmployeeNumber: int.tryParse(widget.nextEmployeeNumberController.text),
-      autoBackupReminderFrequency: int.tryParse(widget.backupFrequencyController.text) ?? 10,
-      defaultReportMonths: int.tryParse(widget.reportMonthsController.text) ?? 3,
     );
 
     // 2. Create the final, fully updated settings object.
@@ -89,12 +82,10 @@ class _BurdenRateSettingsScreenState extends State<BurdenRateSettingsScreen> {
 
     // 3. Save directly to database using Drift
     await _dbHelper.customUpdate(
-      'UPDATE settings SET employee_number_prefix=?, next_employee_number=?, auto_backup_reminder_frequency=?, default_report_months=?, burden_rate=?, company_hourly_rate=? WHERE id=1',
+      'UPDATE settings SET employee_number_prefix=?, next_employee_number=?, burden_rate=?, company_hourly_rate=? WHERE id=1',
       variables: [
         Variable(updatedSettings.employeeNumberPrefix),
         Variable(updatedSettings.nextEmployeeNumber),
-        Variable.withInt(updatedSettings.autoBackupReminderFrequency),
-        Variable.withInt(updatedSettings.defaultReportMonths),
         Variable.withReal(updatedSettings.burdenRate),
         Variable(updatedSettings.companyHourlyRate),
       ],

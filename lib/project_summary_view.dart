@@ -27,11 +27,11 @@ class ProjectSummaryView extends StatelessWidget {
     if ((includes['Total Hours'] ?? false) ||
         (includes['Billed Labor'] ?? false) ||
         (includes['Total Billable'] ?? false)) {
-      joins.add('LEFT JOIN time_entries te ON p.id = te.project_id AND te.is_deleted = 0');
+      joins.add('LEFT JOIN time_entries te ON p.id = te.project_id AND te.is_deleted = 0 AND (te.cost_code_id IN (SELECT id FROM cost_codes WHERE is_billable = 1) OR te.cost_code_id IS NULL)');
     }
     if ((includes['Expense Totals'] ?? false) ||
         (includes['Total Billable'] ?? false)) {
-      joins.add('LEFT JOIN materials m ON p.id = m.project_id AND m.is_deleted = 0');
+      joins.add('LEFT JOIN materials m ON p.id = m.project_id AND m.is_deleted = 0 AND m.is_company_expense = 0 AND (m.cost_code_id IN (SELECT id FROM cost_codes WHERE is_billable = 1) OR m.cost_code_id IS NULL)');
     }
 
     if (includes['Total Hours'] ?? false) {
