@@ -21,6 +21,7 @@ import 'package:time_tracker_pro/cost_code_repository.dart';
 import 'package:time_tracker_pro/manage_cost_codes_page.dart';
 import 'package:time_tracker_pro/invoice_list_screen.dart';
 import 'package:time_tracker_pro/screens/payroll_screen.dart';
+import 'package:time_tracker_pro/screens/client_statement_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'package:time_tracker_pro/settings_service.dart';
 import 'package:time_tracker_pro/settings_model.dart';
@@ -97,6 +98,16 @@ class AppDrawer extends StatelessWidget {
               Navigator.pop(context);
               Navigator.of(context).push(
                 MaterialPageRoute(builder: (context) => const PayrollScreen()),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.receipt_long),
+            title: const Text('Client Statement'),
+            onTap: () {
+              Navigator.pop(context);
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const ClientStatementScreen()),
               );
             },
           ),

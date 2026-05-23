@@ -2,6 +2,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:drift/drift.dart' hide Column;
+import 'package:time_tracker_pro/database/app_database.dart';
 import 'package:time_tracker_pro/dropdown_repository.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/models/analytics_models.dart';
@@ -21,6 +23,7 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
   List<DropdownItem> _projects = [];
   List<DropdownItem> _employees = [];
   List<DropdownItem> _costCodes = [];
+  List<DropdownItem> _billableCostCodes = [];
 
   // Selected filter values
   int? _selectedClientId;
@@ -71,11 +74,15 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
     final projects = await _repo.getProjects(clientId: clientId);
     final employees = await _repo.getEmployees();
     final costCodes = await _repo.getCostCodes();
+    final billableRows = await AppDatabase.instance.customSelect(
+      'SELECT id, name FROM cost_codes WHERE is_billable = 1 ORDER BY name',
+    ).get();
     setState(() {
       _clients = clients;
       _projects = projects;
       _employees = employees;
       _costCodes = costCodes;
+      _billableCostCodes = billableRows.map((r) => DropdownItem(id: r.data['id'] as int, name: r.data['name'] as String)).toList();
       _isLoading = false;
     });
   }
@@ -299,13 +306,14 @@ class _SelectDataDialogState extends State<SelectDataDialog> {
   }
 
   Widget _buildCostCodeDropdown() {
+    final codes = _subject == ReportSubject.projectDetail ? _billableCostCodes : _costCodes;
     return DropdownButtonFormField<int>(
       decoration: const InputDecoration(
           labelText: 'Cost Code', border: OutlineInputBorder()),
       value: _selectedCostCodeId,
       items: [
         const DropdownMenuItem<int>(value: null, child: Text('All Cost Codes')),
-        ...{ for (final c in _costCodes) c.id: c }.values.map(
+        ...{ for (final c in codes) c.id: c }.values.map(
             (c) => DropdownMenuItem<int>(value: c.id, child: Text(c.name))),
       ],
       onChanged: (int? v) => setState(() => _selectedCostCodeId = v),

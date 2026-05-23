@@ -172,6 +172,8 @@ class _CustomReportViewState extends State<CustomReportView> {
         Text('Filters: Project ID=${widget.settings.projectId ?? "All"}, Client ID=${widget.settings.clientId ?? "All"}'),
         Text('Date Range: ${widget.settings.startDate != null ? DateFormat('yyyy-MM-dd').format(widget.settings.startDate!) : 'All Time'} to ${widget.settings.endDate != null ? DateFormat('yyyy-MM-dd').format(widget.settings.endDate!) : 'Current'}'),
         Text('Included Fields: $fields'),
+        if (widget.settings.subject == ReportSubject.projectDetail)
+          const Text('Billable entries only', style: TextStyle(fontStyle: FontStyle.italic, color: Colors.grey)),
       ],
     );
   }
