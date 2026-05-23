@@ -408,7 +408,17 @@ class TimerAddFormState extends State<TimerAddForm> {
                   child: ValueListenableBuilder<List<CostCode>>(
                     valueListenable: widget.costCodesNotifier,
                     builder: (context, costCodes, child) {
-                      if (_selectedCostCode != null && !costCodes.any((c) => c.id == _selectedCostCode!.id)) {
+                      final uniqueCostCodes =
+                          {for (final c in costCodes) c.id: c}.values.toList();
+                      final selectedValue = _selectedCostCode == null
+                          ? null
+                          : uniqueCostCodes.firstWhere(
+                              (c) => c.id == _selectedCostCode!.id,
+                              orElse: () => _selectedCostCode!,
+                            );
+                      if (_selectedCostCode != null &&
+                          !uniqueCostCodes
+                              .any((c) => c.id == _selectedCostCode!.id)) {
                         WidgetsBinding.instance.addPostFrameCallback((_) {
                           setState(() {
                             _selectedCostCode = null;
@@ -421,18 +431,18 @@ class TimerAddFormState extends State<TimerAddForm> {
                           contentPadding: EdgeInsets.symmetric(horizontal: 12),
                           labelText: 'Cost Code',
                         ),
-                        value: _selectedCostCode,
+                        value: selectedValue,
                         items: [
                           const DropdownMenuItem<CostCode?>(
                             value: null,
                             child: Text('None'),
                           ),
-                          ...costCodes.map((costCode) {
+                          ...uniqueCostCodes.map((costCode) {
                             return DropdownMenuItem<CostCode?>(
                               value: costCode,
                               child: Text(costCode.name),
                             );
-                          }).toList(),
+                          }),
                         ],
                         onChanged: (CostCode? newValue) {
                           setState(() {
