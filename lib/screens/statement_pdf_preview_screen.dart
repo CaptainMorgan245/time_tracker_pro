@@ -5,6 +5,7 @@
 // AppBar back button (which cancels without printing).
 
 import 'package:flutter/material.dart';
+import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 
 import 'package:time_tracker_pro/models.dart';
@@ -39,6 +40,7 @@ class StatementPdfPreviewScreen extends StatelessWidget {
           companySettings: companySettings,
         ),
         pdfFileName: _pdfName(),
+        initialPageFormat: PdfPageFormat.letter,
         canChangePageFormat: false,
         canChangeOrientation: false,
         canDebug: false,

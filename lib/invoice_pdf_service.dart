@@ -60,6 +60,7 @@ class InvoicePdfService {
 
     pdf.addPage(
       pw.MultiPage(
+        pageFormat: PdfPageFormat.letter,
         margin: const pw.EdgeInsets.all(_pageMargin),
         build: (context) => [
           // SECTION 1: HEADER

@@ -266,8 +266,16 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
     return roundedSeconds / 3600.0;
   }
 
+  /// Project's billed_hourly_rate when set, else the company default rate.
+  double get _effectiveHourlyRate {
+    final projectRate =
+        (_selectedProject?['billed_hourly_rate'] as num?)?.toDouble();
+    if (projectRate != null && projectRate > 0) return projectRate;
+    return _burdenRate;
+  }
+
   double get _labourSubtotal {
-    return _totalHours * _burdenRate;
+    return _totalHours * _effectiveHourlyRate;
   }
 
   double get _materialsSubtotal {
@@ -665,7 +673,7 @@ class _ExtrasInvoiceScreenState extends State<ExtrasInvoiceScreen> {
                   child: Column(
                     children: [
                       _buildSummaryRow('Total Hours:', _totalHours.toStringAsFixed(2)),
-                      _buildSummaryRow('Labour Total (@ ${_currencyFormat.format(_burdenRate)}/hr):',
+                      _buildSummaryRow('Labour Total (@ ${_currencyFormat.format(_effectiveHourlyRate)}/hr):',
                           _currencyFormat.format(_labourSubtotal)),
                       _buildSummaryRow('Materials Total:', _currencyFormat.format(_materialsSubtotal)),
                       const Divider(),

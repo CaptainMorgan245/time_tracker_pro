@@ -323,7 +323,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       costCodeId: costCode?.id,
       workDetails: workDetails,
       startTime: startTime,
-      hourlyRate: employee.hourlyRate ?? 0.0,
+      // Snapshot the client billing rate at start. This is always the
+      // project's billed rate — employee.hourlyRate is payroll only and must
+      // never appear on an entry that feeds a client invoice. Fall back to 0
+      // only as a never-null guard.
+      hourlyRate: project.billedHourlyRate ?? 0.0,
     );
 
     final id = await _timeEntryRepo.insertTimeEntry(newEntry);

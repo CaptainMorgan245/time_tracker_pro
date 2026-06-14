@@ -5,6 +5,9 @@
     "start_url": "/timetrackerpro/",
     "scope": "/timetrackerpro/",
     "display": "standalone",
+    "launch_handler": {
+        "client_mode": "focus-existing"
+    },
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
     "description": "Time Tracker App",

@@ -50,7 +50,7 @@ class DropdownRepository {
     return rows.map((r) => DropdownItem(id: r.data['id'], name: r.data['name'])).toList();
   }
 
-  /// CRITICAL FIX: SQL now calculates the true labor cost.
+  /// CRITICAL FIX: SQL now calculates the true labour cost.
   Future<Map<String, dynamic>> getProjectSummaryDetails(int projectId) async {
     final rows = await _db.customSelect('''
     SELECT
@@ -60,14 +60,18 @@ class DropdownRepository {
       p.project_price, 
       c.name AS client_name,
       -- Sums final billed seconds and converts to hours
-      (SELECT IFNULL(SUM(t.final_billed_duration_seconds / 3600.0), 0.0) 
-       FROM time_entries t 
+      (SELECT IFNULL(SUM(t.final_billed_duration_seconds / 3600.0), 0.0)
+       FROM time_entries t
        WHERE t.project_id = p.id AND t.is_deleted = 0) AS total_hours,
+      -- Contract Work hours only (cost_code_id = 1) — used for fixed-price labour cost
+      (SELECT IFNULL(SUM(t.final_billed_duration_seconds / 3600.0), 0.0)
+       FROM time_entries t
+       WHERE t.project_id = p.id AND t.is_deleted = 0 AND t.cost_code_id = 1) AS contract_hours,
       -- Sums all material costs for the project
       (SELECT IFNULL(SUM(m.cost), 0.0) 
        FROM materials m 
        WHERE m.project_id = p.id AND m.is_deleted = 0) AS total_expenses,
-      -- total_hours is used by the caller to calculate labor cost at the correct rate
+      -- total_hours is used by the caller to calculate labour cost at the correct rate
       0.0 AS total_labor_cost
     FROM projects p
     LEFT JOIN clients c ON p.client_id = c.id

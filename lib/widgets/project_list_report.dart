@@ -24,10 +24,10 @@ class ProjectListReport extends StatelessWidget {
           'Client',
           'Pricing Model',
           'Hours',
-          'Labor Cost',
+          'Labour Cost',
           'Materials Cost',
           'Total Cost',
-          'Billed Value',
+          'Billed Labour / Contract',
           'Profit/Loss'
         ],
         // Data rows
@@ -127,7 +127,7 @@ class ProjectListReport extends StatelessWidget {
                           style: TextStyle(fontWeight: FontWeight.bold),
                           textAlign: TextAlign.right)),
                   DataColumn(
-                      label: Text('Labor Cost',
+                      label: Text('Labour Cost',
                           style: TextStyle(fontWeight: FontWeight.bold),
                           textAlign: TextAlign.right)),
                   DataColumn(
@@ -139,7 +139,7 @@ class ProjectListReport extends StatelessWidget {
                           style: TextStyle(fontWeight: FontWeight.bold),
                           textAlign: TextAlign.right)),
                   DataColumn(
-                      label: Text('Billed Value',
+                      label: Text('Billed Labour / Contract',
                           style: TextStyle(fontWeight: FontWeight.bold),
                           textAlign: TextAlign.right)),
                   DataColumn(

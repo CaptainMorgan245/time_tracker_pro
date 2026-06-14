@@ -258,7 +258,7 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
       return project.billedHourlyRate!;
     }
 
-    // For fixed-price projects, use employee's rate to calculate labor cost
+    // For fixed-price projects, use employee's rate to calculate labour cost
     if (employeeId != null) {
       try {
         final employee = _employeesNotifier.value.firstWhere((e) => e.id == employeeId);
@@ -495,6 +495,9 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
       endTime: stopTime,
       workDetails: workDetails,
       finalBilledDurationSeconds: _applyTimeRounding(duration.inSeconds.toDouble()),
+      // Snapshot the client billing rate (project's billed rate only —
+      // employee.hourlyRate is payroll). Never persist a null rate.
+      hourlyRate: project.billedHourlyRate ?? 0.0,
     );
 
     await _timeEntryRepo.insertTimeEntry(newEntry);
@@ -532,6 +535,9 @@ class _TimeTrackerPageState extends State<TimeTrackerPage> {
       endTime: stopTime,
       workDetails: workDetails,
       finalBilledDurationSeconds: _applyTimeRounding(duration.inSeconds.toDouble()),
+      // Snapshot the client billing rate (project's billed rate only —
+      // employee.hourlyRate is payroll). Never persist a null rate.
+      hourlyRate: project.billedHourlyRate ?? 0.0,
     );
 
     await _timeEntryRepo.updateTimeEntry(updatedEntry);

@@ -29,6 +29,13 @@ class ProjectSummaryCard extends StatelessWidget {
     return 'Fixed Price:';
   }
 
+  // Hourly → labour revenue (hours × billed rate). Fixed-price → the contract
+  // price (materials and margin are baked in), so "labour" would be wrong here.
+  String getBilledValueLabel() {
+    if (summaryData.pricingModel == 'hourly') return 'Billed Labour:';
+    return 'Contract Price:';
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -53,12 +60,12 @@ class ProjectSummaryCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
 
-            // Row 2: Total Hours | Labor Cost | Materials Cost
+            // Row 2: Total Hours | Labour Cost | Materials Cost
             _buildInfoRow(
               context,
               [
                 _InfoPair('Total Hours:', summaryData.totalHours.toStringAsFixed(2)),
-                _InfoPair('Labor Cost:', _currencyFormat.format(summaryData.laborCost)),
+                _InfoPair('Labour Cost:', _currencyFormat.format(summaryData.laborCost)),
                 _InfoPair('Materials Cost:', _currencyFormat.format(summaryData.materialsCost)),
               ],
             ),
@@ -69,7 +76,7 @@ class ProjectSummaryCard extends StatelessWidget {
               context,
               [
                 _InfoPair('Total Cost:', _currencyFormat.format(summaryData.totalCost)),
-                _InfoPair('Total Billed Value:', _currencyFormat.format(summaryData.totalBilledValue)),
+                _InfoPair(getBilledValueLabel(), _currencyFormat.format(summaryData.totalBilledValue)),
                 _InfoPair('Profit/Loss:', _currencyFormat.format(summaryData.profitLoss), valueColor: pLColor),
               ],
             ),

@@ -772,7 +772,7 @@ class ProjectSummaryViewModel {
   @override
   String toString() {
     // UPDATED: toString for better debugging
-    return 'ProjectSummary(name: $projectName, Hours: ${totalHours.toStringAsFixed(2)}, Labor: ${laborCost.toStringAsFixed(2)}, Materials: ${materialsCost.toStringAsFixed(2)}, Total Cost: ${totalCost.toStringAsFixed(2)}, P/L: ${profitLoss.toStringAsFixed(2)})';
+    return 'ProjectSummary(name: $projectName, Hours: ${totalHours.toStringAsFixed(2)}, Labour: ${laborCost.toStringAsFixed(2)}, Materials: ${materialsCost.toStringAsFixed(2)}, Total Cost: ${totalCost.toStringAsFixed(2)}, P/L: ${profitLoss.toStringAsFixed(2)})';
   }
 }
 

@@ -133,6 +133,7 @@ class ProjectRepository {
     final String pricingModel = projectMap['pricing_model'] as String? ?? 'hourly';
     final String? clientName = summaryDetails['client_name'] as String?;
     final double totalHours = (summaryDetails['total_hours'] as num? ?? 0.0).toDouble();
+    final double contractHours = (summaryDetails['contract_hours'] as num? ?? 0.0).toDouble();
     final double totalExpenses = (summaryDetails['total_expenses'] as num? ?? 0.0).toDouble();
     final double billedHourlyRate = (projectMap['billed_hourly_rate'] as num? ?? 0.0).toDouble();
     final double fixedPrice = (projectMap['project_price'] as num? ?? 0.0).toDouble();
@@ -145,16 +146,29 @@ class ProjectRepository {
         ? (settingsRows.first.data['burden_rate'] as num? ?? 0.0).toDouble()
         : 0.0;
 
-    // Use project rate if set, otherwise fall back to burden rate
-    final double effectiveRate = billedHourlyRate > 0 ? billedHourlyRate : burdenRate;
-    final double laborCost = totalHours * effectiveRate;
+    final bool isFixedPrice = pricingModel == 'fixed' || pricingModel == 'project_based';
+    // On fixed-price projects, only Contract Work hours (cost_code_id = 1) count toward
+    // the contract's labour cost. Other cost codes (extras, no-charge, etc.) are billed
+    // separately and shouldn't erode contract margin.
+    final double hoursForLabor = isFixedPrice ? contractHours : totalHours;
+    // Labour COST is the company's all-in cost of labour: the settings burden rate
+    // × hours, for every pricing model. The burden rate — not the billed rate or any
+    // employee payroll rate — is the true cost basis, so employee.hourly_rate (payroll)
+    // never enters analytics.
+    final double laborCost = hoursForLabor * burdenRate;
 
     final double billedRate = (pricingModel == 'hourly') ? billedHourlyRate : fixedPrice;
-    final double totalBilledValue = (pricingModel == 'fixed' || pricingModel == 'project_based')
+    final double totalBilledValue = isFixedPrice
         ? fixedPrice
         : totalHours * billedHourlyRate;
 
-    final double materialsCost = totalExpenses * (1 + (markupPercentage / 100));
+    // Markup is a T&M billing concept — it's what you charge clients above raw cost
+    // on hourly/T&M work. On fixed-price contracts the markup is already baked into
+    // the contract price, so applying it again on the cost side double-counts and
+    // makes the margin look worse than it is. Use raw cost on fixed-price.
+    final double materialsCost = isFixedPrice
+        ? totalExpenses
+        : totalExpenses * (1 + (markupPercentage / 100));
     final double totalCost = laborCost + materialsCost;
     final double profitLoss = totalBilledValue - totalCost;
 
@@ -165,7 +179,9 @@ class ProjectRepository {
       pricingModel: pricingModel,
       billedRate: billedRate,
       fixedPrice: fixedPrice,
-      totalHours: totalHours,
+      // Display hours consistent with labour cost: fixed-price projects show
+      // Contract Work hours only (cost_code_id = 1); hourly projects show all hours.
+      totalHours: hoursForLabor,
       laborCost: laborCost,
       materialsCost: materialsCost,
       totalCost: totalCost,

@@ -1,10 +1,13 @@
 // lib/invoice_detail_screen.dart
 
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:time_tracker_pro/models.dart';
 import 'package:time_tracker_pro/invoice_repository.dart';
 import 'package:time_tracker_pro/create_invoice_screen.dart';
+import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:time_tracker_pro/invoice_pdf_service.dart';
 import 'package:time_tracker_pro/project_repository.dart';
@@ -182,36 +185,69 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
     }
   }
 
-  Future<void> _onSharePdf() async {
+  /// Builds the invoice PDF bytes once so both the print and share actions
+  /// can reuse it. Returns null if there is no invoice loaded.
+  Future<Uint8List?> _buildInvoicePdfBytes() async {
+    if (_invoice == null) return null;
+    final settingsMap = _companySettings ?? (await AppDatabase.instance.getCompanySettings()).toMap();
+    final client = _client ?? await _invoiceRepository.getClientById(_invoice!.clientId);
+    final project = _project ?? await _projectRepository.getProjectById(_invoice!.projectId);
+
+    return InvoicePdfService.generateInvoicePdf(
+      invoice: _invoice!,
+      companySettings: settingsMap,
+      clientName: client?.name ?? '',
+      clientCity: project?.city ?? '',
+      clientPhone: client?.phoneNumber ?? '',
+      projectName: project?.projectName ?? '',
+      projectStreetAddress: project?.streetAddress ?? '',
+      projectCity: project?.city ?? '',
+      projectRegion: project?.region ?? '',
+      projectPostalCode: project?.postalCode ?? '',
+    );
+  }
+
+  /// Opens the native print dialog for the invoice.
+  Future<void> _onPrintPdf() async {
     if (_invoice == null) return;
     setState(() => _isLoading = true);
     try {
-      final settingsMap = _companySettings ?? (await AppDatabase.instance.getCompanySettings()).toMap();
-      final client = _client ?? await _invoiceRepository.getClientById(_invoice!.clientId);
-      final project = _project ?? await _projectRepository.getProjectById(_invoice!.projectId);
-
-      final pdfBytes = await InvoicePdfService.generateInvoicePdf(
-        invoice: _invoice!,
-        companySettings: settingsMap,
-        clientName: client?.name ?? '',
-        clientCity: project?.city ?? '',
-        clientPhone: client?.phoneNumber ?? '',
-        projectName: project?.projectName ?? '',
-        projectStreetAddress: project?.streetAddress ?? '',
-        projectCity: project?.city ?? '',
-        projectRegion: project?.region ?? '',
-        projectPostalCode: project?.postalCode ?? '',
-      );
+      final pdfBytes = await _buildInvoicePdfBytes();
       setState(() => _isLoading = false);
+      if (pdfBytes == null) return;
       await Printing.layoutPdf(
         onLayout: (_) async => pdfBytes,
         name: 'Invoice_${_invoice!.invoiceNumber}',
+        format: PdfPageFormat.letter,
       );
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error generating PDF: $e')),
+        );
+      }
+    }
+  }
+
+  /// Opens the platform share sheet so the invoice PDF can be emailed,
+  /// saved, or sent to another app.
+  Future<void> _onSharePdf() async {
+    if (_invoice == null) return;
+    setState(() => _isLoading = true);
+    try {
+      final pdfBytes = await _buildInvoicePdfBytes();
+      setState(() => _isLoading = false);
+      if (pdfBytes == null) return;
+      await Printing.sharePdf(
+        bytes: pdfBytes,
+        filename: 'Invoice_${_invoice!.invoiceNumber}.pdf',
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error sharing PDF: $e')),
         );
       }
     }
@@ -864,12 +900,28 @@ class _InvoiceDetailScreenState extends State<InvoiceDetailScreen> {
                 ),
               if (!isLocked) const SizedBox(width: 8),
               Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _onSharePdf,
-                  icon: const Icon(Icons.share),
-                  label: const Text('Share'),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.purple, foregroundColor: Colors.white),
+                child: Tooltip(
+                  message: 'Print Invoice',
+                  child: ElevatedButton.icon(
+                    onPressed: _onPrintPdf,
+                    icon: const Icon(Icons.print),
+                    label: const Text('Print'),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple, foregroundColor: Colors.white),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Tooltip(
+                  message: 'Share Invoice PDF',
+                  child: ElevatedButton.icon(
+                    onPressed: _onSharePdf,
+                    icon: const Icon(Icons.share),
+                    label: const Text('Share'),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.purple, foregroundColor: Colors.white),
+                  ),
                 ),
               ),
             ],

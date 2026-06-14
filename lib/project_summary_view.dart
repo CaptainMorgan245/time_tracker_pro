@@ -16,7 +16,7 @@ class ProjectSummaryView extends StatelessWidget {
     final Map<String, bool> includes = {
       'Total Hours': true,
       'Billed Rate': true,
-      'Billed Labor': true,
+      'Billed Labour': true,
       'Expense Totals': true,
       'Total Billable': true,
     };
@@ -25,7 +25,7 @@ class ProjectSummaryView extends StatelessWidget {
     Set<String> joins = {'LEFT JOIN clients c ON p.client_id = c.id'};
 
     if ((includes['Total Hours'] ?? false) ||
-        (includes['Billed Labor'] ?? false) ||
+        (includes['Billed Labour'] ?? false) ||
         (includes['Total Billable'] ?? false)) {
       joins.add('LEFT JOIN time_entries te ON p.id = te.project_id AND te.is_deleted = 0 AND (te.cost_code_id IN (SELECT id FROM cost_codes WHERE is_billable = 1) OR te.cost_code_id IS NULL)');
     }
@@ -54,13 +54,13 @@ class ProjectSummaryView extends StatelessWidget {
     final laborCalculation = '(COALESCE(SUM(DISTINCT te.final_billed_duration_seconds), 0) / 3600.0) * p.billed_hourly_rate';
     final expenseCalculation = 'COALESCE(SUM(DISTINCT m.cost), 0)';
 
-    if (includes['Billed Labor'] ?? false) {
+    if (includes['Billed Labour'] ?? false) {
       selectClauses.add('''
         CASE
           WHEN p.pricing_model = 'hourly' 
           THEN ${laborCalculation}
           ELSE 0.0
-        END AS "Billed Labor"
+        END AS "Billed Labour"
       ''');
     }
 
@@ -87,7 +87,7 @@ class ProjectSummaryView extends StatelessWidget {
 
     if (data.isEmpty) return [];
 
-    final columnOrder = ['Project', 'Total Hours', 'Billed Rate', 'Billed Labor', 'Expense Totals', 'Total Billable'];
+    final columnOrder = ['Project', 'Total Hours', 'Billed Rate', 'Billed Labour', 'Expense Totals', 'Total Billable'];
     final orderedData = data.map((originalMap) {
       final orderedMap = <String, dynamic>{};
       for (var col in columnOrder) {
@@ -156,7 +156,7 @@ class ProjectSummaryView extends StatelessWidget {
   List<DataColumn> _buildHeaders(List<Map<String, dynamic>> data) {
     if (data.isEmpty) return [];
     return data.first.keys.map((key) {
-      final isNumeric = key == 'Total Hours' || key == 'Expense Totals' || key == 'Billed Labor' || key == 'Total Billable';
+      final isNumeric = key == 'Total Hours' || key == 'Expense Totals' || key == 'Billed Labour' || key == 'Total Billable';
       return DataColumn(
         label: Text(key),
         numeric: isNumeric,
