@@ -380,7 +380,10 @@ class TimerAddFormState extends State<TimerAddForm> {
                           contentPadding: EdgeInsets.symmetric(horizontal: 12),
                           labelText: 'Employee',
                         ),
-                        initialValue: _selectedEmployee,
+                        initialValue: _selectedEmployee != null &&
+                                employees.any((e) => e.id == _selectedEmployee!.id)
+                            ? employees.firstWhere((e) => e.id == _selectedEmployee!.id)
+                            : null,
                         items: [
                           const DropdownMenuItem<Employee?>(
                             value: null,
